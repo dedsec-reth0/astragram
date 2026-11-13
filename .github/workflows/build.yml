@@ -168,20 +168,37 @@ jobs:
           cp "$IPA" "$GITHUB_WORKSPACE/out/AyuGram.ipa"
           python3 ayugram/ci/verify_ipa.py "$GITHUB_WORKSPACE/out/AyuGram.ipa"
 
-      - name: Upload IPA artifact
-        if: steps.build.outcome == 'success' && env.CONFIGURATION == 'release_arm64'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.AYU_CONFIGURED == 'true' && 'AyuGram' || 'AyuGram-UNCONFIGURED' }}
-          path: out/AyuGram.ipa
-          if-no-files-found: error
-
-      - name: Publish release
+      # The repository is public, and an IPA built with your API credentials contains them. It is therefore never
+      # published as is: it is packed into a 7z archive encrypted (AES-256, file names included) with the
+      # IPA_PASSWORD secret. An IPA built without credentials contains nothing private and is uploaded as is.
+      - name: Encrypt IPA
         if: steps.build.outcome == 'success' && env.CONFIGURATION == 'release_arm64' && env.AYU_CONFIGURED == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IPA_PASSWORD: ${{ secrets.IPA_PASSWORD }}
         run: |
-          gh release create "v${APP_VERSION}-${BUILD_NUMBER}" out/AyuGram.ipa \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "AyuGram ${APP_VERSION} (${BUILD_NUMBER})" \
-            --notes "Unsigned AyuGram IPA for SideStore. Commit ${GITHUB_SHA}."
+          set -euo pipefail
+          if [ -z "${IPA_PASSWORD:-}" ]; then
+            echo "::error::The IPA_PASSWORD secret is not set: the IPA with your API credentials is not uploaded."
+            exit 1
+          fi
+          cd out
+          7z a -t7z -mhe=on -p"$IPA_PASSWORD" "AyuGram-${APP_VERSION}-${BUILD_NUMBER}.7z" AyuGram.ipa >/dev/null
+          rm AyuGram.ipa
+          ls -l
+
+      - name: Upload encrypted IPA
+        if: steps.build.outcome == 'success' && env.CONFIGURATION == 'release_arm64' && env.AYU_CONFIGURED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AyuGram-encrypted
+          path: out/*.7z
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload IPA without credentials
+        if: steps.build.outcome == 'success' && env.CONFIGURATION == 'release_arm64' && env.AYU_CONFIGURED != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AyuGram-UNCONFIGURED
+          path: out/AyuGram.ipa
+          if-no-files-found: error

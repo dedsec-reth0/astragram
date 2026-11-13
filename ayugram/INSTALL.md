@@ -22,7 +22,13 @@ IPA собирается без подписи Apple, с тестовой под
 ```powershell
 gh secret set TELEGRAM_API_ID --repo dedsec-reth0/ayugram
 gh secret set TELEGRAM_API_HASH --repo dedsec-reth0/ayugram
+gh secret set IPA_PASSWORD --repo dedsec-reth0/ayugram
 ```
+
+**Почему нужен пароль.** Репозиторий публичный (иначе сборка платная), а готовый IPA содержит ваши api_id и
+api_hash. Поэтому IPA никогда не публикуется открыто: он упаковывается в архив 7z, зашифрованный паролем
+`IPA_PASSWORD` (AES-256, имена файлов тоже скрыты). Скачать архив может любой, открыть — только вы. Секреты GitHub
+никто не видит, в логах они заменяются на `***`.
 
 ## 2. Сборка
 
@@ -31,8 +37,9 @@ cd D:\Desktop\PYProject\ayugram-telegram
 .\ayugram\scripts\build.ps1
 ```
 
-Скрипт запустит сборку и дождётся релиза, затем скачает `.\out\AyuGram.ipa`. Готовый IPA также появляется в разделе
-**Releases** репозитория.
+Скрипт запустит сборку, дождётся её, скачает зашифрованный архив и распакует `.\out\AyuGram.ipa` через 7-Zip
+(`winget install 7zip.7zip`). Вручную: страница запуска в **Actions** → **Artifacts** → `AyuGram-encrypted`,
+затем откройте архив в 7-Zip и введите пароль.
 
 ## 3. Установка через SideStore
 

@@ -9,7 +9,7 @@
       1. checks the GitHub CLI and your login,
       2. optionally stores your Telegram API ID / API hash as repository secrets,
       3. starts the workflow and waits until an IPA is published,
-      4. downloads AyuGram.ipa into .\out and checks it.
+      4. downloads the password-protected AyuGram archive into .\out and extracts AyuGram.ipa with 7-Zip.
 
 .EXAMPLE
     .\ayugram\scripts\build.ps1 -SetSecrets
@@ -62,26 +62,31 @@ if ($LASTEXITCODE -ne 0) { Fail "Could not start the workflow" }
 Write-Host "Build started: https://github.com/$Repo/actions"
 if ($NoWait) { exit 0 }
 
-# Wait for a release newer than the start (the build may continue over several jobs).
-Write-Host "Waiting for the IPA (this takes hours; you can close this window and run the script with -NoWait later)..."
+# Wait until no build job is running (a build may continue over several jobs), then take the newest
+# encrypted IPA artifact.
+Write-Host "Waiting for the build (this takes hours; you can close this window and run the script with -NoWait later)..."
 while ($true) {
     Start-Sleep -Seconds 300
-    $release = gh release list --repo $Repo --limit 1 --json tagName,createdAt | ConvertFrom-Json
-    if ($release -and [DateTime]::Parse($release[0].createdAt).ToUniversalTime() -gt $started) {
-        New-Item -ItemType Directory -Force $OutDir | Out-Null
-        gh release download $release[0].tagName --repo $Repo --pattern "AyuGram.ipa" --dir $OutDir --clobber
-        $ipa = Join-Path $OutDir "AyuGram.ipa"
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        $zip = [System.IO.Compression.ZipFile]::OpenRead($ipa)
-        $ok = $zip.Entries | Where-Object { $_.FullName -match '^Payload/[^/]+\.app/Info\.plist$' }
-        $zip.Dispose()
-        if (-not $ok) { Fail "$ipa is not a valid IPA" }
-        Write-Host ("Done: {0} ({1} MB). Install it with SideStore (see ayugram/INSTALL.md)." -f $ipa, [math]::Round((Get-Item $ipa).Length / 1MB, 1)) -ForegroundColor Green
+    $running = gh run list --repo $Repo --workflow build.yml --limit 10 --json status --jq '[.[] | select(.status != "completed")] | length'
+    if ($running -ne "0") { continue }
+    $runs = gh run list --repo $Repo --workflow build.yml --status success --limit 5 --json databaseId,createdAt | ConvertFrom-Json
+    $run = $runs | Where-Object { [DateTime]::Parse($_.createdAt).ToUniversalTime() -gt $started.AddMinutes(-1) } | Select-Object -First 1
+    if (-not $run) {
+        $last = gh run list --repo $Repo --workflow build.yml --limit 1 --json conclusion,url | ConvertFrom-Json
+        Fail "The build did not succeed. Last run: $($last[0].conclusion) $($last[0].url)"
+    }
+    New-Item -ItemType Directory -Force $OutDir | Out-Null
+    gh run download $run.databaseId --repo $Repo --name AyuGram-encrypted --dir $OutDir
+    $archive = Get-ChildItem -Path $OutDir -Filter "AyuGram-*.7z" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $archive) { Fail "The encrypted IPA was not found in run $($run.databaseId)" }
+    $sevenZip = @("C:\Program Files\7-Zip\7z.exe", "C:\Program Files (x86)\7-Zip\7z.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $sevenZip) {
+        Write-Host "Downloaded $($archive.FullName). Install 7-Zip (winget install 7zip.7zip) and open it with your IPA_PASSWORD." -ForegroundColor Yellow
         exit 0
     }
-    $running = gh run list --repo $Repo --workflow build.yml --limit 5 --json status --jq '[.[] | select(.status != "completed")] | length'
-    if ($running -eq "0") {
-        $last = gh run list --repo $Repo --workflow build.yml --limit 1 --json conclusion,url | ConvertFrom-Json
-        Fail "No build is running and no new release was published. Last run: $($last[0].conclusion) $($last[0].url)"
-    }
+    & $sevenZip x $archive.FullName "-o$OutDir" -y
+    if ($LASTEXITCODE -ne 0) { Fail "Could not extract the archive (wrong password?)" }
+    $ipa = Join-Path $OutDir "AyuGram.ipa"
+    Write-Host ("Done: {0} ({1} MB). Install it with SideStore (see ayugram/INSTALL.md)." -f $ipa, [math]::Round((Get-Item $ipa).Length / 1MB, 1)) -ForegroundColor Green
+    exit 0
 }
