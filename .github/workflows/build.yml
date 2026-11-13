@@ -1,109 +1,185 @@
-name: CI
+name: Build AyuGram
+
+# The full Telegram-iOS build takes longer than one GitHub job may run. The Bazel disk cache is saved after
+# every attempt, and an attempt that runs out of time starts the next one itself, which continues from the cache.
 
 on:
-  push:
-    branches: [ master ]
-
   workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'release_arm64 = installable IPA, debug_sim_arm64 = faster compile check'
+        type: choice
+        options: [release_arm64, debug_sim_arm64]
+        default: release_arm64
+      attempt:
+        description: 'Continuation attempt (set automatically)'
+        default: '1'
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**.md'
+      - 'ayugram/scripts/**'
+
+concurrency:
+  group: build-${{ github.ref }}-${{ inputs.configuration || 'release_arm64' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  SOURCE_DIR: /Users/Shared/telegram-ios
+  CACHE_DIR: /Users/Shared/bazel-cache
+  BAZEL_USER_ROOT: /private/var/tmp/_bazel_containerhost
+  CONFIGURATION: ${{ inputs.configuration || 'release_arm64' }}
+  ATTEMPT: ${{ inputs.attempt || '1' }}
+  MAX_ATTEMPTS: '6'
 
 jobs:
   build:
-    runs-on: macos-13
+    runs-on: xcode-27
+    timeout-minutes: 355
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
-          fetch-depth: '0'
+          submodules: recursive
+          fetch-depth: 1
 
-      - name: Set active Xcode path
+      - name: Free disk space
         run: |
-          XCODE_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["xcode"]);')
+          df -h /
+          XCODE_VERSION=$(python3 -c 'import json;print(json.load(open("versions.json"))["xcode"])')
+          for x in /Applications/Xcode_*.app; do
+            case "$x" in
+              /Applications/Xcode_${XCODE_VERSION}.app|/Applications/Xcode_${XCODE_VERSION}.0.app) ;;
+              *) [ -L "$x" ] || sudo rm -rf "$x" & ;;
+            esac
+          done
+          sudo rm -rf ~/Library/Android /usr/local/share/dotnet ~/.dotnet ~/Library/Developer/CoreSimulator/Caches &
+          wait
+          df -h /
+
+      - name: Select Xcode
+        run: |
+          XCODE_VERSION=$(python3 -c 'import json;print(json.load(open("versions.json"))["xcode"])')
           sudo xcode-select -s /Applications/Xcode_$XCODE_VERSION.app/Contents/Developer
+          xcodebuild -version
+          echo "cpus=$(sysctl -n hw.ncpu) memory=$(( $(sysctl -n hw.memsize) / 1073741824 ))GB"
 
-      - name: Create canonical source directory
+      - name: Restore Bazel cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: bazel-${{ env.CONFIGURATION }}-${{ github.sha }}-${{ github.run_id }}
+          restore-keys: |
+            bazel-${{ env.CONFIGURATION }}-${{ github.sha }}-
+            bazel-${{ env.CONFIGURATION }}-
+
+      - name: Prepare canonical source directory
         run: |
-          set -x
-          sudo mkdir -p /Users/Shared
-          cp -R $GITHUB_WORKSPACE /Users/Shared/
-          mv /Users/Shared/$(basename $GITHUB_WORKSPACE) /Users/Shared/telegram-ios
+          sudo mkdir -p /Users/Shared "$CACHE_DIR"
+          sudo chown -R "$(whoami)" /Users/Shared
+          rsync -a --delete "$GITHUB_WORKSPACE/" "$SOURCE_DIR/"
+          du -sh "$CACHE_DIR" || true
 
-      - name: Build the App
+      - name: Generate configuration
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         run: |
-          set -x
+          mkdir -p "$SOURCE_DIR/build-input"
+          python3 ayugram/ci/make_configuration.py "$SOURCE_DIR/build-input/ayugram-configuration.json"
 
-          # source code paths are included in the final binary, so we need to make them stable across builds
-          SOURCE_DIR=/Users/Shared/telegram-ios
-
-          # use canonical bazel root
-          BAZEL_USER_ROOT="/private/var/tmp/_bazel_containerhost"
-
-          cd $SOURCE_DIR
-
-          BUILD_NUMBER_OFFSET="$(cat build_number_offset)"
-
-          export APP_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["app"]);')
-          export COMMIT_COUNT=$(git rev-list --count HEAD)
-          export COMMIT_COUNT="$(($COMMIT_COUNT+$BUILD_NUMBER_OFFSET))"
-          export BUILD_NUMBER="$COMMIT_COUNT"
-          echo "BUILD_NUMBER=$(echo $BUILD_NUMBER)" >> $GITHUB_ENV
-          echo "APP_VERSION=$(echo $APP_VERSION)" >> $GITHUB_ENV
+      - name: Build
+        id: build
+        run: |
+          set -uo pipefail
+          cd "$SOURCE_DIR"
+          APP_VERSION=$(python3 -c 'import json;print(json.load(open("versions.json"))["app"])')
+          BUILD_NUMBER=$(( $(cat build_number_offset) + 100000 + ${{ github.run_number }} ))
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
 
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
-          python3 -u build-system/Make/Make.py \
+
+          # Make.py ignores --bazelArguments, so resource limits go into the CI copy's .bazelrc.
+          printf '\nbuild --local_resources=memory=HOST_RAM*.85\nbuild --jobs=%s\n' "$(sysctl -n hw.ncpu)" >> .bazelrc
+
+          # Stop in time to save the cache (the job limit is 6 hours).
+          python3 ayugram/ci/run_with_timeout.py 17100 -- python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
+            --cacheDir="$CACHE_DIR" \
             build \
-            --configurationPath="build-system/appstore-configuration.json" \
+            --continueOnError \
+            --configurationPath="build-input/ayugram-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
-            --configuration=release_arm64 \
-            --buildNumber="$BUILD_NUMBER"
+            --configuration="$CONFIGURATION" \
+            --buildNumber="$BUILD_NUMBER" 2>&1 | tee build.log
+          STATUS=${PIPESTATUS[0]}
+          echo "exit status $STATUS"
+          if [ "$STATUS" = "124" ] || [ "$STATUS" = "137" ]; then
+            echo "timed_out=true" >> "$GITHUB_OUTPUT"
+          fi
+          exit $STATUS
 
-          # collect ipa
-          OUTPUT_PATH="build/artifacts"
-          rm -rf "$OUTPUT_PATH"
-          mkdir -p "$OUTPUT_PATH"
-          for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa; do
-            cp "$f" $OUTPUT_PATH/
-          done
+      - name: Errors summary
+        if: failure()
+        run: grep -E "error:|ERROR:" "$SOURCE_DIR/build.log" | sort -u | head -n 120 || true
 
-          # collect dsym
-          mkdir -p build/DSYMs
-          for f in bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/*.dSYM; do
-            cp -R "$f" build/DSYMs/
-          done
-          zip -r "./$OUTPUT_PATH/Telegram.DSYMs.zip" build/DSYMs 1>/dev/null
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Save Bazel cache
+        if: always() && steps.build.outcome != 'skipped'
+        uses: actions/cache/save@v4
         with:
-          tag_name: build-${{ env.BUILD_NUMBER }}
-          release_name: Telegram ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
-          body: |
-            An unsigned build of Telegram for iOS ${{ env.APP_VERSION }} (${{ env.BUILD_NUMBER }})
-          draft: false
-          prerelease: false
+          path: ${{ env.CACHE_DIR }}
+          key: bazel-${{ env.CONFIGURATION }}-${{ github.sha }}-${{ github.run_id }}
 
-      - name: Upload Release IPA
-        id: upload-release-ipa 
-        uses: actions/upload-release-asset@v1
+      - name: Continue in a new job
+        if: always() && steps.build.outputs.timed_out == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /Users/Shared/telegram-ios/build/artifacts/Telegram.ipa
-          asset_name: Telegram.ipa
-          asset_content_type: application/zip
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
+            echo "Reached $MAX_ATTEMPTS attempts, not continuing."
+            exit 0
+          fi
+          gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" \
+            -f configuration="$CONFIGURATION" -f attempt=$(( ATTEMPT + 1 ))
+          echo "Started attempt $(( ATTEMPT + 1 ))."
 
-      - name: Upload Release DSYM
-        id: upload-release-dsym 
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /Users/Shared/telegram-ios/build/artifacts/Telegram.DSYMs.zip
-          asset_name: Telegram.DSYMs.zip
-          asset_content_type: application/zip
+          name: build-log-${{ github.run_id }}
+          path: ${{ env.SOURCE_DIR }}/build.log
+          if-no-files-found: ignore
+
+      - name: Collect IPA
+        if: steps.build.outcome == 'success' && env.CONFIGURATION == 'release_arm64'
+        run: |
+          set -euo pipefail
+          cd "$SOURCE_DIR"
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          IPA=$(ls bazel-out/applebin_ios-ios_arm64-opt-ST-*/bin/Telegram/Telegram.ipa | head -1)
+          cp "$IPA" "$GITHUB_WORKSPACE/out/AyuGram.ipa"
+          python3 ayugram/ci/verify_ipa.py "$GITHUB_WORKSPACE/out/AyuGram.ipa"
+
+      - name: Upload IPA artifact
+        if: steps.build.outcome == 'success' && env.CONFIGURATION == 'release_arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.AYU_CONFIGURED == 'true' && 'AyuGram' || 'AyuGram-UNCONFIGURED' }}
+          path: out/AyuGram.ipa
+          if-no-files-found: error
+
+      - name: Publish release
+        if: steps.build.outcome == 'success' && env.CONFIGURATION == 'release_arm64' && env.AYU_CONFIGURED == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${APP_VERSION}-${BUILD_NUMBER}" out/AyuGram.ipa \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "AyuGram ${APP_VERSION} (${BUILD_NUMBER})" \
+            --notes "Unsigned AyuGram IPA for SideStore. Commit ${GITHUB_SHA}."
