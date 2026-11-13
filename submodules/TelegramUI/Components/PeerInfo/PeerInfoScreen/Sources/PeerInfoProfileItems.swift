@@ -972,6 +972,12 @@ func infoItems(
         }, requestLayout: { animated in
             interaction.requestLayout(animated)
         }))
+        // AyuGram: the approximate registration date, derived from the user ID.
+        if AyuGramSettings.current.showRegistrationDate, peer.id.namespace == Namespaces.Peer.CloudUser, let registrationText = ayuApproximateRegistrationDate(userId: rawId) {
+            items[.peerInfo]!.append(PeerInfoScreenLabeledValueItem(id: "ayugram.registration", label: AyuStrings(presentationData.strings).registrationDate, text: registrationText, textColor: .primary, action: nil, requestLayout: { animated in
+                interaction.requestLayout(animated)
+            }))
+        }
     }
 
     var result: [(AnyHashable, [PeerInfoScreenItem])] = []

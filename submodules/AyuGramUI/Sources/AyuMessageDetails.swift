@@ -98,3 +98,69 @@ public func ayuMessageDetailsText(message: Message, strings: PresentationStrings
     }
     return lines.joined(separator: "\n")
 }
+
+/// Known (user ID, registration time) points; the date of other IDs is interpolated between them.
+private let ayuRegistrationPoints: [(Int64, Double)] = [
+    (1000000, 1380326400),
+    (2768409, 1383264000),
+    (7679610, 1388448000),
+    (11538514, 1391212000),
+    (15835244, 1392940000),
+    (23646077, 1393459000),
+    (38015510, 1393632000),
+    (44634663, 1399334000),
+    (46145305, 1400198000),
+    (54845238, 1411257000),
+    (63263518, 1414454000),
+    (101260938, 1425600000),
+    (111220210, 1429574000),
+    (116812045, 1437696000),
+    (122600695, 1437782000),
+    (124872445, 1439856000),
+    (130029930, 1441324000),
+    (133909606, 1444176000),
+    (157242073, 1446768000),
+    (171295414, 1457481000),
+    (181783990, 1460246000),
+    (222021233, 1465344000),
+    (225034354, 1466208000),
+    (278941742, 1473465000),
+    (285253072, 1476835000),
+    (294851037, 1479600000),
+    (328594461, 1482969000),
+    (369669043, 1490918000),
+    (400169472, 1501459000),
+    (805158066, 1563208000),
+    (1974255900, 1634000000),
+    (5000000000, 1640995200),
+    (6000000000, 1675209600),
+    (7000000000, 1709251200),
+    (8000000000, 1743465600)
+]
+
+/// The approximate registration month of a user, from the ID ("≈ 03.2016").
+public func ayuApproximateRegistrationDate(userId: Int64) -> String? {
+    guard userId > 0, let first = ayuRegistrationPoints.first, let last = ayuRegistrationPoints.last else {
+        return nil
+    }
+    let timestamp: Double
+    if userId <= first.0 {
+        timestamp = first.1
+    } else if userId >= last.0 {
+        timestamp = last.1
+    } else {
+        var value = last.1
+        for i in 1 ..< ayuRegistrationPoints.count where userId <= ayuRegistrationPoints[i].0 {
+            let (lowerId, lowerTime) = ayuRegistrationPoints[i - 1]
+            let (upperId, upperTime) = ayuRegistrationPoints[i]
+            let fraction = Double(userId - lowerId) / Double(upperId - lowerId)
+            value = lowerTime + (upperTime - lowerTime) * fraction
+            break
+        }
+        timestamp = value
+    }
+    let formatter = DateFormatter()
+    formatter.dateFormat = "MM.yyyy"
+    let text = formatter.string(from: Date(timeIntervalSince1970: timestamp))
+    return userId >= last.0 ? "≥ \(text)" : "≈ \(text)"
+}

@@ -1427,6 +1427,42 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         controllerInteraction?.displayUndo(.info(title: nil, text: ayuStrings.readUntilDone, timeout: 2.0, customUndoText: nil))
                     })))
                 }
+                if ayuMessage.flags.contains(.Incoming) && ayuMessage.containsSecretMedia && AyuGramSettings.current.keepSelfDestructingMedia {
+                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.burnNow, textColor: .destructive, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Timer"), color: theme.actionSheet.destructiveActionTextColor)
+                    }, action: { [weak controllerInteraction] _, f in
+                        f(.default)
+                        let _ = AyuMessageActions.expireSelfDestructingMedia(account: context.account, id: ayuMessage.id).startStandalone()
+                        controllerInteraction?.displayUndo(.info(title: nil, text: ayuStrings.burnDone, timeout: 2.0, customUndoText: nil))
+                    })))
+                }
+                if let ayuMessageNode = messageNode {
+                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.messageShot, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Image"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { [weak ayuMessageNode] c, _ in
+                        c?.dismiss(completion: {
+                            Queue.mainQueue().after(0.3, {
+                                guard let ayuMessageNode, let window = ayuMessageNode.view.window else {
+                                    return
+                                }
+                                let view = ayuMessageNode.view
+                                let backgroundColor = chatPresentationInterfaceState.theme.list.plainBackgroundColor
+                                let image = UIGraphicsImageRenderer(bounds: view.bounds).image { rendererContext in
+                                    backgroundColor.setFill()
+                                    rendererContext.fill(view.bounds)
+                                    view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
+                                }
+                                let activityController = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+                                activityController.popoverPresentationController?.sourceView = view
+                                var presenter = window.rootViewController
+                                while let presented = presenter?.presentedViewController {
+                                    presenter = presented
+                                }
+                                presenter?.present(activityController, animated: true)
+                            })
+                        })
+                    })))
+                }
                 subItems.append(.action(ContextMenuActionItem(text: ayuStrings.hideMessage, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/EyeLocked"), color: theme.actionSheet.primaryTextColor)
                 }, action: { [weak controllerInteraction] _, f in

@@ -1,4 +1,5 @@
 import Foundation
+import Postbox
 import SwiftSignalKit
 
 /// AyuGram client-side settings.
@@ -59,6 +60,10 @@ public struct AyuGramSettingsValues: Codable, Equatable {
     public var increaseRecentStickers: Bool
     /// Ask before sending any message.
     public var confirmMessageSend: Bool
+    /// Show your own accounts as Premium on this device (client-side features only).
+    public var localPremium: Bool
+    /// Show the approximate registration date in profiles.
+    public var showRegistrationDate: Bool
 
     // MARK: Appearance and chats
     /// Text shown next to the time of a deleted message.
@@ -109,6 +114,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         hideAllChatsFolder: false,
         increaseRecentStickers: true,
         confirmMessageSend: false,
+        localPremium: false,
+        showRegistrationDate: true,
         deletedMark: "🧹",
         editedMark: "",
         showMessageSeconds: false,
@@ -146,6 +153,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         hideAllChatsFolder: Bool,
         increaseRecentStickers: Bool,
         confirmMessageSend: Bool,
+        localPremium: Bool,
+        showRegistrationDate: Bool,
         deletedMark: String,
         editedMark: String,
         showMessageSeconds: Bool,
@@ -181,6 +190,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.hideAllChatsFolder = hideAllChatsFolder
         self.increaseRecentStickers = increaseRecentStickers
         self.confirmMessageSend = confirmMessageSend
+        self.localPremium = localPremium
+        self.showRegistrationDate = showRegistrationDate
         self.deletedMark = deletedMark
         self.editedMark = editedMark
         self.showMessageSeconds = showMessageSeconds
@@ -221,6 +232,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.hideAllChatsFolder = try container.decodeIfPresent(Bool.self, forKey: .hideAllChatsFolder) ?? d.hideAllChatsFolder
         self.increaseRecentStickers = try container.decodeIfPresent(Bool.self, forKey: .increaseRecentStickers) ?? d.increaseRecentStickers
         self.confirmMessageSend = try container.decodeIfPresent(Bool.self, forKey: .confirmMessageSend) ?? d.confirmMessageSend
+        self.localPremium = try container.decodeIfPresent(Bool.self, forKey: .localPremium) ?? d.localPremium
+        self.showRegistrationDate = try container.decodeIfPresent(Bool.self, forKey: .showRegistrationDate) ?? d.showRegistrationDate
         self.deletedMark = try container.decodeIfPresent(String.self, forKey: .deletedMark) ?? d.deletedMark
         self.editedMark = try container.decodeIfPresent(String.self, forKey: .editedMark) ?? d.editedMark
         self.showMessageSeconds = try container.decodeIfPresent(Bool.self, forKey: .showMessageSeconds) ?? d.showMessageSeconds
@@ -337,4 +350,25 @@ public final class AyuGramSettings {
 /// How many recent stickers are kept ("Up to 100 recent stickers"; Telegram keeps 20).
 var ayuRecentStickersLimit: Int {
     return AyuGramSettings.current.increaseRecentStickers ? 100 : 20
+}
+
+/// "Local Premium": the accounts logged in on this device are shown as Premium here. Only the client is affected:
+/// features the server checks keep working as for a regular account.
+public enum AyuLocalPremium {
+    private static let accountPeerIds = Atomic<Set<PeerId>>(value: Set())
+
+    static func registerAccount(_ peerId: PeerId) {
+        let _ = AyuLocalPremium.accountPeerIds.modify { current in
+            var current = current
+            current.insert(peerId)
+            return current
+        }
+    }
+
+    public static func applies(to peerId: PeerId) -> Bool {
+        guard AyuGramSettings.current.localPremium else {
+            return false
+        }
+        return AyuLocalPremium.accountPeerIds.with { $0.contains(peerId) }
+    }
 }

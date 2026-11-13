@@ -175,4 +175,11 @@ public struct AyuStrings {
     public var pluginsInvalid: String { t("Не удалось загрузить плагин", "Could not load the plugin") }
     public var pluginsInstalledDone: String { t("Плагин установлен", "Plugin installed") }
     public var pluginsHelp: String { t("Как писать плагины", "Writing Plugins") }
+    public var burnNow: String { t("Сжечь сейчас", "Burn Now") }
+    public var burnDone: String { t("Медиа сожжено", "Media burned") }
+    public var messageShot: String { t("Скриншот сообщения", "Message Shot") }
+    public var registrationDate: String { t("Регистрация", "Registered") }
+    public var localPremium: String { t("Локальный Premium", "Local Premium") }
+    public var showRegistrationDate: String { t("Дата регистрации в профиле", "Registration date in profiles") }
+    public var localPremiumFooter: String { t("Локальный Premium отображает ваш аккаунт как Premium только на этом устройстве: открываются функции интерфейса, но то, что проверяет сервер (большие файлы, премиум-стикеры для других), работать не будет.", "Local Premium shows your account as Premium on this device only: interface features unlock, but anything the server checks (large files, premium stickers for others) will not work.") }
 }

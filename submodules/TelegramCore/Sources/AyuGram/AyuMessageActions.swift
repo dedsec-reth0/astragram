@@ -62,4 +62,29 @@ public enum AyuMessageActions {
             })
         }
     }
+
+    /// "Burn now": expires a kept self-destructing or view-once media right away, as Telegram would have.
+    public static func expireSelfDestructingMedia(account: Account, id: MessageId) -> Signal<Void, NoError> {
+        return account.postbox.transaction { transaction -> Void in
+            transaction.updateMessage(id, update: { currentMessage in
+                let storeForwardInfo = currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init)
+                var updatedMedia = currentMessage.media
+                for i in 0 ..< updatedMedia.count {
+                    if updatedMedia[i] is TelegramMediaImage {
+                        updatedMedia[i] = TelegramMediaExpiredContent(data: .image)
+                    } else if let file = updatedMedia[i] as? TelegramMediaFile {
+                        if file.isInstantVideo {
+                            updatedMedia[i] = TelegramMediaExpiredContent(data: .videoMessage)
+                        } else if file.isVoice {
+                            updatedMedia[i] = TelegramMediaExpiredContent(data: .voiceMessage)
+                        } else {
+                            updatedMedia[i] = TelegramMediaExpiredContent(data: .file)
+                        }
+                    }
+                }
+                let updatedAttributes = currentMessage.attributes.filter { !($0 is AutoclearTimeoutMessageAttribute) }
+                return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: updatedAttributes, media: updatedMedia))
+            })
+        }
+    }
 }

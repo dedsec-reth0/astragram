@@ -82,6 +82,7 @@ private enum AyuGramSettingsSection: Int32 {
     case privacy
     case chats
     case plugins
+    case extra
 }
 
 private enum AyuGramSettingsEntry: ItemListNodeEntry {
@@ -404,6 +405,10 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.header(id: 73, section: .plugins, text: strings.plugins.uppercased()))
     entries.append(.button(id: 74, section: .plugins, title: strings.plugins, label: "\(AyuPluginManager.shared.enabledCount)", kind: .plugins))
     entries.append(.footer(id: 75, section: .plugins, text: strings.pluginsFooter))
+
+    entries.append(.flag(id: 76, section: .extra, title: strings.showRegistrationDate, value: settings.showRegistrationDate, enabled: true, keyPath: \.showRegistrationDate))
+    entries.append(.flag(id: 77, section: .extra, title: strings.localPremium, value: settings.localPremium, enabled: true, keyPath: \.localPremium))
+    entries.append(.footer(id: 78, section: .extra, text: strings.localPremiumFooter))
 
     entries.append(.translatorHeader(strings.translatorHeader))
     entries.append(.translator(strings.translatorSettings))
