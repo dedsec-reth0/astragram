@@ -21,6 +21,12 @@ enum AyuSelfDestructingMedia {
         return AyuGramSettings.current.keepSelfDestructingMedia
     }
 
+    /// Whether `message` is self-destructing or view-once media. Opening it is reported to the sender even in ghost
+    /// mode, so for them it looks viewed as usual while AyuGram keeps it on this device.
+    static func isSelfDestructing(_ message: Message) -> Bool {
+        return message.containsSecretMedia
+    }
+
     /// The attributes with the self-destruct countdown of `message` stopped (the timeout itself is kept, so the media is
     /// still shown and opened as self-destructing).
     static func attributesWithoutCountdown(_ attributes: [MessageAttribute]) -> [MessageAttribute] {

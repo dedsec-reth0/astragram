@@ -6893,7 +6893,68 @@ private final class ChatListLocationContext {
         if let proxyButton = self.proxyButton {
             result.append(proxyButton)
         }
+        if let ayuGhostButton = self.ayuGhostButton {
+            result.append(ayuGhostButton)
+        }
         return result
+    }
+
+    // MARK: AyuGram ghost mode button
+
+    private var ayuSettingsDisposable: Disposable?
+
+    private static let ayuGhostImages: (enabled: UIImage, disabled: UIImage) = {
+        func make(alpha: CGFloat) -> UIImage {
+            let size = CGSize(width: 26.0, height: 26.0)
+            return UIGraphicsImageRenderer(size: size).image { _ in
+                let text = NSAttributedString(string: "👻", attributes: [.font: UIFont.systemFont(ofSize: 20.0)])
+                let textSize = text.size()
+                UIGraphicsGetCurrentContext()?.setAlpha(alpha)
+                text.draw(at: CGPoint(x: (size.width - textSize.width) / 2.0, y: (size.height - textSize.height) / 2.0))
+            }.withRenderingMode(.alwaysOriginal)
+        }
+        return (make(alpha: 1.0), make(alpha: 0.3))
+    }()
+
+    /// Turns the whole ghost mode on and off from the chat list header (bright: on, faded: off).
+    private var ayuGhostButton: NavigationBarComponent.Button? {
+        guard case .chatList(.root) = self.location, self.rightButton != nil else {
+            return nil
+        }
+        let enabled = AyuGramSettings.current.isGhostModeFullyEnabled
+        let isRussian = self.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+        return NavigationBarComponent.Button(
+            id: "ayu-ghost",
+            content: .image(enabled ? ChatListLocationContext.ayuGhostImages.enabled : ChatListLocationContext.ayuGhostImages.disabled),
+            action: { [weak self] _ in
+                self?.toggleAyuGhostMode()
+            },
+            accessibilityValue: enabled ? (isRussian ? "Включён" : "On") : (isRussian ? "Выключен" : "Off"),
+            accessibilityLabel: isRussian ? "Режим призрака" : "Ghost Mode"
+        )
+    }
+
+    private func toggleAyuGhostMode() {
+        let enabled = !AyuGramSettings.current.isGhostModeFullyEnabled
+        AyuGramSettings.update { settings in
+            settings.setGhostMode(enabled)
+        }
+        if AyuGramSettings.current.hapticFeedback {
+            HapticFeedback().tap()
+        }
+        guard let parentController = self.parentController else {
+            return
+        }
+        let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+        let isRussian = presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+        let text: String
+        if enabled {
+            text = isRussian ? "👻 Режим призрака включён" : "👻 Ghost Mode is on"
+        } else {
+            text = isRussian ? "Режим призрака выключен" : "Ghost Mode is off"
+        }
+        parentController.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: 2.0, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), in: .window(.root))
+        parentController.requestLayout(transition: .immediate)
     }
     
     private(set) var toolbar: Toolbar?
@@ -7281,11 +7342,20 @@ private final class ChatListLocationContext {
                 }
             }
         })
+
+        // AyuGram: the ghost mode button follows changes made in the settings too.
+        self.ayuSettingsDisposable = (AyuGramSettings.signal
+        |> map { $0.isGhostModeFullyEnabled }
+        |> distinctUntilChanged
+        |> deliverOnMainQueue).startStrict(next: { [weak self] _ in
+            self?.parentController?.requestLayout(transition: .immediate)
+        })
     }
                                 
     deinit {
         self.titleDisposable?.dispose()
         self.stateDisposable?.dispose()
+        self.ayuSettingsDisposable?.dispose()
     }
     
     private func updateChatList(

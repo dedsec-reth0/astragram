@@ -110,9 +110,20 @@ func managedSynchronizeConsumeMessageContentOperations(postbox: Postbox, network
 }
 
 private func synchronizeConsumeMessageContents(transaction: Transaction, network: Network, stateManager: AccountStateManager, peerId: PeerId, operation: SynchronizeConsumeMessageContentsOperation) -> Signal<Void, NoError> {
-    // AyuGram ghost mode: listened voice/video messages and opened media are not reported.
+    // AyuGram ghost mode: listened voice/video messages and opened media are not reported. Opened self-destructing
+    // and view-once media still are: AyuGram keeps it on this device, and the sender sees it as viewed as usual.
+    var operation = operation
     if AyuGramSettings.current.hideMessageContentsRead {
-        return .complete()
+        let reportedIds = operation.messageIds.filter { id in
+            if let message = transaction.getMessage(id) {
+                return AyuSelfDestructingMedia.isSelfDestructing(message)
+            }
+            return false
+        }
+        if reportedIds.isEmpty {
+            return .complete()
+        }
+        operation = SynchronizeConsumeMessageContentsOperation(messageIds: reportedIds)
     }
     if peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup {
         return network.request(Api.functions.messages.readMessageContents(id: operation.messageIds.map { $0.id }))

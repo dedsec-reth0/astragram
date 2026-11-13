@@ -31,8 +31,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
     /// Also save deleted messages of channels (can be a lot of data).
     public var saveDeletedInChannels: Bool
     /// Self-destructing and view-once photos, videos and voice messages stay viewable after you open them: the local
-    /// self-destruct timer is not started. Whether the sender learns that you opened them is decided by
-    /// `hideMessageContentsRead`.
+    /// self-destruct timer is not started. The sender still sees them as viewed (even in ghost mode).
     public var keepSelfDestructingMedia: Bool
 
     // MARK: Appearance and chats

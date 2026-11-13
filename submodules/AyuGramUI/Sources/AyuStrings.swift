@@ -25,7 +25,7 @@ public struct AyuStrings {
     public var hideRead: String { t("Не отправлять прочтение", "Don't send read receipts") }
     public var hideStories: String { t("Не отмечать просмотр историй", "Don't mark stories as viewed") }
     public var hideTyping: String { t("Не отправлять «печатает»", "Don't send typing status") }
-    public var hideContents: String { t("Не отмечать прослушивание и просмотр медиа", "Don't mark voice and view-once media as opened") }
+    public var hideContents: String { t("Не отмечать прослушивание голосовых и кружков", "Don't mark voice and video messages as played") }
     public var markReadAfterSend: String { t("Прочитать при отправке ответа", "Mark as read when replying") }
     public var markReadAfterSendFooter: String { t("Когда вы отправляете сообщение в чат, его входящие сообщения отмечаются прочитанными у собеседника, даже если прочтение скрыто.", "When you send a message to a chat, its incoming messages are marked as read for the other side, even with read receipts hidden.") }
 
@@ -37,7 +37,7 @@ public struct AyuStrings {
     public var saveEdits: String { t("Сохранять историю правок", "Save edit history") }
     public var keepSelfDestructing: String { t("Не сжигать одноразовые медиа", "Keep self-destructing media") }
     public var deletedMessages: String { t("Удалённые сообщения", "Deleted Messages") }
-    public var antiDeleteFooter: String { t("Сохраняются сообщения, которые удалили другие участники или сервер. Ваши удаления с этого устройства работают как обычно (удаления с других ваших устройств приходят от сервера и тоже сохраняются). Одноразовые фото, видео и голосовые после просмотра остаются в чате и открываются снова (отправитель узнает о просмотре, только если не включено «Не отмечать прослушивание и просмотр медиа»). Данные хранятся только на этом устройстве, в локальной базе SQLite.", "Messages deleted by other people or by the server are saved. Your deletions made on this device work as usual (deletions from your other devices come from the server and are saved too). View-once and self-destructing photos, videos and voice messages stay in the chat after you open them (the sender learns you opened them unless \"Don't mark voice and view-once media as opened\" is on). The data stays on this device, in a local SQLite database.") }
+    public var antiDeleteFooter: String { t("Сохраняются сообщения, которые удалили другие участники или сервер. Ваши удаления с этого устройства работают как обычно (удаления с других ваших устройств приходят от сервера и тоже сохраняются). Одноразовые фото, видео и голосовые после просмотра остаются в чате и открываются снова (у отправителя они отмечаются просмотренными, как обычно). Данные хранятся только на этом устройстве, в локальной базе SQLite.", "Messages deleted by other people or by the server are saved. Your deletions made on this device work as usual (deletions from your other devices come from the server and are saved too). View-once and self-destructing photos, videos and voice messages stay in the chat after you open them (for the sender they look viewed as usual). The data stays on this device, in a local SQLite database.") }
     public var storageUsage: String { t("Размер базы", "Database size") }
     public var clearHistory: String { t("Очистить сохранённую историю", "Clear Saved History") }
     public var clearHistoryConfirm: String { t("Удалить все сохранённые удалённые сообщения и версии правок?", "Delete all saved deleted messages and edit versions?") }
