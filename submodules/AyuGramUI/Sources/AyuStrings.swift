@@ -153,7 +153,7 @@ public struct AyuStrings {
     public var removeCopyRestrictions: String { t("Снять запрет копирования", "Remove copy restrictions") }
     public var allowScreenshots: String { t("Разрешить скриншоты", "Allow screenshots") }
     public var streamerMode: String { t("Режим стримера", "Streamer mode") }
-    public var privacyFooter: String { t("Снятие запрета позволяет копировать текст и сохранять медиа из защищённых чатов (пересылку сервер всё равно запрещает). Скриншоты секретных чатов и одноразовых медиа перестают блокироваться, собеседник не получает уведомления. Режим стримера скрывает окно приложения при записи экрана и трансляции.", "Removing restrictions lets you copy text and save media from protected chats (the server still refuses forwarding). Screenshots of secret chats and self-destructing media are no longer blocked and the other side is not notified. Streamer mode hides the app window from screen recording and sharing.") }
+    public var privacyFooter: String { t("Снятие запрета позволяет копировать текст и сохранять медиа из защищённых чатов, а пересылка из них отправляет копию (медиа скачивается и загружается заново). Скриншоты секретных чатов и одноразовых медиа перестают блокироваться, собеседник не получает уведомления. Режим стримера скрывает окно приложения при записи экрана и трансляции.", "Removing restrictions lets you copy text and save media from protected chats, and forwarding from them sends a copy (media is downloaded and uploaded again). Screenshots of secret chats and self-destructing media are no longer blocked and the other side is not notified. Streamer mode hides the app window from screen recording and sharing.") }
     public var chatsHeader: String { t("ЧАТЫ", "CHATS") }
     public var hideBlocked: String { t("Скрывать сообщения заблокированных", "Hide messages of blocked users") }
     public var hideSimilarChannels: String { t("Скрывать похожие каналы", "Hide similar channels") }
@@ -182,4 +182,8 @@ public struct AyuStrings {
     public var localPremium: String { t("Локальный Premium", "Local Premium") }
     public var showRegistrationDate: String { t("Дата регистрации в профиле", "Registration date in profiles") }
     public var localPremiumFooter: String { t("Локальный Premium отображает ваш аккаунт как Premium только на этом устройстве: открываются функции интерфейса, но то, что проверяет сервер (большие файлы, премиум-стикеры для других), работать не будет.", "Local Premium shows your account as Premium on this device only: interface features unlock, but anything the server checks (large files, premium stickers for others) will not work.") }
+    public var apiCredentials: String { t("API ID и Hash", "API ID and Hash") }
+    public var viewHeader: String { t("ВИД СООБЩЕНИЙ", "MESSAGES") }
+    public var wideMessages: String { t("Широкие сообщения", "Wide messages") }
+    public var channelBadge: String { t("Значок 📢 у пишущих от имени канала", "📢 badge for posting as a channel") }
 }

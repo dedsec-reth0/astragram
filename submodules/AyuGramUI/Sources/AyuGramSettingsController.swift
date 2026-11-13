@@ -8,6 +8,7 @@ import ItemListUI
 import PresentationDataUtils
 import AccountContext
 import UndoUI
+import BuildConfig
 
 /// Sections of Telegram's own settings that the AyuGram screen links to.
 public enum AyuLinkedTelegramSettings {
@@ -47,6 +48,7 @@ private final class AyuGramSettingsArguments {
     let reset: () -> Void
     let openPlugins: () -> Void
     let unhideMessages: () -> Void
+    let openApiCredentials: () -> Void
 
     init(
         update: @escaping ((inout AyuGramSettingsValues) -> Void) -> Void,
@@ -56,7 +58,8 @@ private final class AyuGramSettingsArguments {
         clearHistory: @escaping () -> Void,
         reset: @escaping () -> Void,
         openPlugins: @escaping () -> Void,
-        unhideMessages: @escaping () -> Void
+        unhideMessages: @escaping () -> Void,
+        openApiCredentials: @escaping () -> Void
     ) {
         self.update = update
         self.openDeletedMessages = openDeletedMessages
@@ -66,6 +69,7 @@ private final class AyuGramSettingsArguments {
         self.reset = reset
         self.openPlugins = openPlugins
         self.unhideMessages = unhideMessages
+        self.openApiCredentials = openApiCredentials
     }
 }
 
@@ -83,6 +87,7 @@ private enum AyuGramSettingsSection: Int32 {
     case chats
     case plugins
     case extra
+    case view
 }
 
 private enum AyuGramSettingsEntry: ItemListNodeEntry {
@@ -201,8 +206,8 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
         case .translator: return 71
         case .translatorFooter: return 72
         case .aboutHeader: return 80
-        case .reset: return 81
-        case .version: return 82
+        case .reset: return 83
+        case .version: return 84
         case let .flag(id, _, _, _, _, _), let .header(id, _, _), let .footer(id, _, _), let .button(id, _, _, _, _):
             return id
         }
@@ -318,6 +323,10 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openPlugins()
                 })
+            case .apiCredentials:
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
+                    arguments.openApiCredentials()
+                })
             case .unhideMessages:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, action: {
                     arguments.unhideMessages()
@@ -330,6 +339,7 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
 private enum AyuGramSettingsButtonKind: Equatable {
     case plugins
     case unhideMessages
+    case apiCredentials
 }
 
 private func formatFileSize(_ size: Int64) -> String {
@@ -402,6 +412,10 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     let hiddenCount = AyuHiddenMessages.count
     entries.append(.button(id: 62, section: .filters, title: strings.unhideMessages, label: hiddenCount > 0 ? "\(hiddenCount)" : "", kind: .unhideMessages))
 
+    entries.append(.header(id: 63, section: .view, text: strings.viewHeader))
+    entries.append(.flag(id: 64, section: .view, title: strings.wideMessages, value: settings.wideMessages, enabled: true, keyPath: \.wideMessages))
+    entries.append(.flag(id: 65, section: .view, title: strings.channelBadge, value: settings.channelBadge, enabled: true, keyPath: \.channelBadge))
+
     entries.append(.header(id: 73, section: .plugins, text: strings.plugins.uppercased()))
     entries.append(.button(id: 74, section: .plugins, title: strings.plugins, label: "\(AyuPluginManager.shared.enabledCount)", kind: .plugins))
     entries.append(.footer(id: 75, section: .plugins, text: strings.pluginsFooter))
@@ -415,6 +429,7 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.translatorFooter(strings.translatorFooter))
 
     entries.append(.aboutHeader(strings.aboutHeader))
+    entries.append(.button(id: 81, section: .about, title: strings.apiCredentials, label: "\(BuildConfig(baseAppBundleId: Bundle.main.bundleIdentifier ?? "").apiId)", kind: .apiCredentials))
     entries.append(.reset(strings.resetSettings))
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
     let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
@@ -427,6 +442,7 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
 public func ayuGramSettingsController(context: AccountContext, makeLinked: @escaping (AyuLinkedTelegramSettings) -> ViewController) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
     var presentControllerImpl: ((ViewController) -> Void)?
+    var presentNativeControllerImpl: ((UIViewController) -> Void)?
 
     let store = AyuMessageStore.forAccount(context.account)
 
@@ -478,6 +494,9 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
             AyuHiddenMessages.removeAll()
             AyuHaptics.success()
             presentControllerImpl?(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: strings.unhideMessagesDone, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }))
+        },
+        openApiCredentials: {
+            presentNativeControllerImpl?(AyuApiCredentialsController(baseAppBundleId: Bundle.main.bundleIdentifier ?? "", isInitialSetup: false, completion: {}))
         }
     )
 
@@ -501,6 +520,13 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
     }
     presentControllerImpl = { [weak controller] c in
         controller?.present(c, in: .window(.root))
+    }
+    presentNativeControllerImpl = { [weak controller] c in
+        var presenter = controller?.view.window?.rootViewController
+        while let presented = presenter?.presentedViewController {
+            presenter = presented
+        }
+        presenter?.present(c, animated: true)
     }
     return controller
 }

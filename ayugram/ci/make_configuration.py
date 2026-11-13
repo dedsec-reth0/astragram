@@ -36,8 +36,8 @@ def main():
         configuration['api_id'] = api_id
         configuration['api_hash'] = api_hash.lower()
     else:
-        print('WARNING: TELEGRAM_API_ID / TELEGRAM_API_HASH secrets are not set; '
-              'building an unconfigured compile-check IPA.')
+        print('No API credentials are built in; '
+              'the app asks every user for their own API ID and hash on the first launch.')
 
     # A sideloaded build cannot use App Store purchases or the iCloud/Siri entitlements of Telegram's team.
     configuration['is_appstore_build'] = 'false'

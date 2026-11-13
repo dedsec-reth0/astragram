@@ -346,7 +346,36 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     
     private var recaptchaClientsBySiteKey: [String: Promise<RecaptchaClient>] = [:]
         
+    // AyuGram: the first-launch screen for the user's own API ID and hash.
+    private var ayuApiSetupWindow: UIWindow?
+    private var ayuConnectedScene: (UIWindowScene, UIScene.ConnectionOptions)?
+
+    var ayuIsWaitingForApiCredentials: Bool {
+        return self.ayuApiSetupWindow != nil
+    }
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // AyuGram: nothing starts until the user has entered their API ID and hash.
+        if !BuildConfig.ayuHasApiCredentials(baseAppBundleId: Bundle.main.bundleIdentifier!) && !CommandLine.arguments.contains("--ui-test") {
+            let window = UIWindow(frame: UIScreen.main.bounds)
+            window.rootViewController = AyuApiCredentialsController(baseAppBundleId: Bundle.main.bundleIdentifier!, isInitialSetup: true, completion: { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.ayuApiSetupWindow?.isHidden = true
+                self.ayuApiSetupWindow = nil
+                let _ = self.application(application, didFinishLaunchingWithOptions: launchOptions)
+                if let (scene, connectionOptions) = self.ayuConnectedScene {
+                    self.attach(scene: scene, connectionOptions: connectionOptions)
+                    if application.applicationState == .active {
+                        self.handleDidBecomeActive()
+                    }
+                }
+            })
+            self.ayuApiSetupWindow = window
+            self.window = window
+            return true
+        }
         precondition(!testIsLaunched)
         testIsLaunched = true
         CrashReportCollector.shared.start()
@@ -1811,6 +1840,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     }
 
     func attach(scene: UIWindowScene, connectionOptions: UIScene.ConnectionOptions) {
+        self.ayuConnectedScene = (scene, connectionOptions)
+        if let setupWindow = self.ayuApiSetupWindow {
+            setupWindow.windowScene = scene
+            setupWindow.makeKeyAndVisible()
+            return
+        }
         self.statusBarHost?.scene = scene
         self.window?.windowScene = scene
 

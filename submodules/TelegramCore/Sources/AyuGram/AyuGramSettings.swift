@@ -64,6 +64,10 @@ public struct AyuGramSettingsValues: Codable, Equatable {
     public var localPremium: Bool
     /// Show the approximate registration date in profiles.
     public var showRegistrationDate: Bool
+    /// Let message bubbles use more of the screen width.
+    public var wideMessages: Bool
+    /// Mark people writing to groups on behalf of a channel with 📢.
+    public var channelBadge: Bool
 
     // MARK: Appearance and chats
     /// Text shown next to the time of a deleted message.
@@ -116,6 +120,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         confirmMessageSend: false,
         localPremium: false,
         showRegistrationDate: true,
+        wideMessages: false,
+        channelBadge: true,
         deletedMark: "🧹",
         editedMark: "",
         showMessageSeconds: false,
@@ -155,6 +161,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         confirmMessageSend: Bool,
         localPremium: Bool,
         showRegistrationDate: Bool,
+        wideMessages: Bool,
+        channelBadge: Bool,
         deletedMark: String,
         editedMark: String,
         showMessageSeconds: Bool,
@@ -192,6 +200,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.confirmMessageSend = confirmMessageSend
         self.localPremium = localPremium
         self.showRegistrationDate = showRegistrationDate
+        self.wideMessages = wideMessages
+        self.channelBadge = channelBadge
         self.deletedMark = deletedMark
         self.editedMark = editedMark
         self.showMessageSeconds = showMessageSeconds
@@ -234,6 +244,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.confirmMessageSend = try container.decodeIfPresent(Bool.self, forKey: .confirmMessageSend) ?? d.confirmMessageSend
         self.localPremium = try container.decodeIfPresent(Bool.self, forKey: .localPremium) ?? d.localPremium
         self.showRegistrationDate = try container.decodeIfPresent(Bool.self, forKey: .showRegistrationDate) ?? d.showRegistrationDate
+        self.wideMessages = try container.decodeIfPresent(Bool.self, forKey: .wideMessages) ?? d.wideMessages
+        self.channelBadge = try container.decodeIfPresent(Bool.self, forKey: .channelBadge) ?? d.channelBadge
         self.deletedMark = try container.decodeIfPresent(String.self, forKey: .deletedMark) ?? d.deletedMark
         self.editedMark = try container.decodeIfPresent(String.self, forKey: .editedMark) ?? d.editedMark
         self.showMessageSeconds = try container.decodeIfPresent(Bool.self, forKey: .showMessageSeconds) ?? d.showMessageSeconds

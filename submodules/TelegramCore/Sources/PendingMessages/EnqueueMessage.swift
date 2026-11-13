@@ -759,6 +759,14 @@ private func opportunisticallyTransformOutgoingMedia(network: Network, postbox: 
 }
 
 public func enqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {
+    // AyuForward: forwards from chats that forbid forwarding are sent as copies.
+    return AyuForward.prepare(account: account, messages: messages)
+    |> mapToSignal { messages -> Signal<[MessageId?], NoError> in
+        return ayuEnqueuePreparedMessages(account: account, peerId: peerId, messages: messages)
+    }
+}
+
+private func ayuEnqueuePreparedMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {
     // AyuGram plugins may change the text of outgoing messages, or handle a command and drop the message.
     let ayuMessages = AyuPluginHooks.transformOutgoing(messages, peerId: peerId)
     if ayuMessages.isEmpty {

@@ -128,11 +128,51 @@ API_AVAILABLE(ios(10))
     return instance;
 }
 
+// AyuGram: every user enters their own API ID and hash in the app (stored in the app group's defaults, so the app
+// extensions use them too); they are not built into the app.
+static NSString * const ayuApiIdKey = @"ayugram.api.id";
+static NSString * const ayuApiHashKey = @"ayugram.api.hash";
+
+static NSUserDefaults *ayuApiDefaults(NSString *baseAppBundleId) {
+    NSUserDefaults *defaults = [[NSUserDefaults alloc] initWithSuiteName:[@"group." stringByAppendingString:baseAppBundleId]];
+    return defaults != nil ? defaults : [NSUserDefaults standardUserDefaults];
+}
+
+static bool ayuIsValidApiHash(NSString *apiHash) {
+    if (apiHash.length != 32) {
+        return false;
+    }
+    NSCharacterSet *invalid = [[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdef"] invertedSet];
+    return [apiHash rangeOfCharacterFromSet:invalid].location == NSNotFound;
+}
+
++ (bool)ayuHasApiCredentialsWithBaseAppBundleId:(NSString * _Nonnull)baseAppBundleId {
+    NSUserDefaults *defaults = ayuApiDefaults(baseAppBundleId);
+    return [defaults integerForKey:ayuApiIdKey] > 0 && ayuIsValidApiHash([defaults stringForKey:ayuApiHashKey]);
+}
+
++ (bool)ayuStoreApiId:(int32_t)apiId apiHash:(NSString * _Nonnull)apiHash baseAppBundleId:(NSString * _Nonnull)baseAppBundleId {
+    NSString *normalizedHash = [[apiHash stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] lowercaseString];
+    if (apiId <= 0 || !ayuIsValidApiHash(normalizedHash)) {
+        return false;
+    }
+    NSUserDefaults *defaults = ayuApiDefaults(baseAppBundleId);
+    [defaults setInteger:apiId forKey:ayuApiIdKey];
+    [defaults setObject:normalizedHash forKey:ayuApiHashKey];
+    [defaults synchronize];
+    return true;
+}
+
 - (instancetype _Nonnull)initWithBaseAppBundleId:(NSString * _Nonnull)baseAppBundleId {
     self = [super init];
     if (self != nil) {
         _apiId = APP_CONFIG_API_ID;
         _apiHash = @(APP_CONFIG_API_HASH);
+        if (baseAppBundleId != nil && [BuildConfig ayuHasApiCredentialsWithBaseAppBundleId:baseAppBundleId]) {
+            NSUserDefaults *defaults = ayuApiDefaults(baseAppBundleId);
+            _apiId = (int32_t)[defaults integerForKey:ayuApiIdKey];
+            _apiHash = [defaults stringForKey:ayuApiHashKey];
+        }
         
         _dataDict = [[NSMutableDictionary alloc] init];
         
