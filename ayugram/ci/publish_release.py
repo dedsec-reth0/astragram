@@ -13,6 +13,7 @@ The IPA has no API credentials in it (every user enters their own in the app), s
 import datetime
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -36,7 +37,11 @@ def main():
     commit_title = subprocess.run(['git', 'log', '-1', '--pretty=%s'], capture_output=True, text=True).stdout.strip()
 
     notes = '{}\n\nУстановка: AltStore → Browse → Sources → + → {}\n\nПри первом запуске введите свои API ID и API Hash с my.telegram.org.'.format(commit_title, source_url)
-    gh('release', 'create', tag, '{}#{}'.format(ipa, asset_name), '--repo', repo, '--title', 'AyuGram {} ({})'.format(version, build), '--notes', notes, '--latest')
+    # The uploaded file keeps its own name (a `#label` only changes the label), so it is copied under the asset name.
+    upload_dir = tempfile.mkdtemp()
+    upload_path = os.path.join(upload_dir, asset_name)
+    shutil.copyfile(ipa, upload_path)
+    gh('release', 'create', tag, upload_path, '--repo', repo, '--title', 'AyuGram {} ({})'.format(version, build), '--notes', notes, '--latest')
     print('released', tag)
 
     # The current source, if there is one.
