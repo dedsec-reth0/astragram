@@ -34,6 +34,32 @@ public enum AyuGhostMode {
         return allowed
     }
 
+    /// The read states fetched from the server (chat list hole fill, account reset) with the local incoming read
+    /// mark kept wherever it is ahead of the server's: while read receipts are hidden the server stays behind, and
+    /// applying its state would make chats read in ghost mode unread again.
+    static func keepingLocalReadMarks(transaction: Transaction, _ readStates: [PeerId: [MessageId.Namespace: PeerReadState]]) -> [PeerId: [MessageId.Namespace: PeerReadState]] {
+        if !AyuGramSettings.current.hideReadReceipts {
+            return readStates
+        }
+        var result = readStates
+        for (peerId, states) in readStates {
+            guard case let .idBased(serverMaxIncomingReadId, maxOutgoingReadId, maxKnownId, serverCount, serverMarkedUnread)? = states[Namespaces.Message.Cloud] else {
+                continue
+            }
+            guard let currentReadState = transaction.getCombinedPeerReadState(peerId) else {
+                continue
+            }
+            for (namespace, currentState) in currentReadState.states where namespace == Namespaces.Message.Cloud {
+                if case let .idBased(localMaxIncomingReadId, _, _, localCount, localMarkedUnread) = currentState, localReadMarkIsAheadOfServer(localMaxIncomingReadId: localMaxIncomingReadId, serverMaxIncomingReadId: serverMaxIncomingReadId, serverCount: serverCount, serverMarkedUnread: serverMarkedUnread) {
+                    var updatedStates = states
+                    updatedStates[Namespaces.Message.Cloud] = .idBased(maxIncomingReadId: localMaxIncomingReadId, maxOutgoingReadId: maxOutgoingReadId, maxKnownId: maxKnownId, count: localCount, markedUnread: localMarkedUnread)
+                    result[peerId] = updatedStates
+                }
+            }
+        }
+        return result
+    }
+
     /// Called when the user sends a message: with "mark read after send" on, the chat's read state is pushed once.
     static func didSendMessage(account: Account, peerId: PeerId) {
         let settings = AyuGramSettings.current
@@ -54,6 +80,14 @@ public enum AyuGhostMode {
         let _ = (synchronizePeerReadState(network: account.network, postbox: account.postbox, stateManager: stateManager, peerId: peerId, push: true, validate: false)
         |> `catch` { _ -> Signal<Never, NoError> in
             return .complete()
-        }).start()
+        }).start(completed: {
+            // The allowance is for this push only: when the push did not happen (no read state to push), it must not
+            // let a later read through.
+            let _ = AyuGhostMode.readAllowances.modify { current in
+                var current = current
+                current.remove(peerId)
+                return current
+            }
+        })
     }
 }

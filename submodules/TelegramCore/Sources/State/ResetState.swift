@@ -115,7 +115,7 @@ func _internal_resetAccountState(postbox: Postbox, network: Network, accountPeer
                 let deletedIds = deleteStoredMessagesAsReceivedDeletion(transaction: transaction, mediaBox: postbox.mediaBox, ids: ghostTail)
                 Logger.shared.log("State", "account reset: deleted \(deletedIds.count) stored message(s) above the fetched top messages")
             }
-            transaction.resetIncomingReadStates(fetchedChats.readStates)
+            transaction.resetIncomingReadStates(AyuGhostMode.keepingLocalReadMarks(transaction: transaction, fetchedChats.readStates))
             
             for (peerId, autoremoveValue) in fetchedChats.ttlPeriods {
                 transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, current in

@@ -19,7 +19,8 @@ private final class AyuEditHistoryArguments {
 }
 
 private enum AyuEditHistoryEntry: ItemListNodeEntry {
-    case version(index: Int, title: String, date: String, text: String, entities: [MessageTextEntity])
+    /// `text` is the shown preview (with the media kind), `rawText` the message text that is copied.
+    case version(index: Int, title: String, date: String, text: String, rawText: String, entities: [MessageTextEntity])
     case current(title: String, date: String, text: String, entities: [MessageTextEntity])
     case empty(String)
 
@@ -36,7 +37,7 @@ private enum AyuEditHistoryEntry: ItemListNodeEntry {
 
     var stableId: Int {
         switch self {
-        case let .version(index, _, _, _, _):
+        case let .version(index, _, _, _, _, _):
             return index
         case .current:
             return 100000
@@ -47,8 +48,8 @@ private enum AyuEditHistoryEntry: ItemListNodeEntry {
 
     static func ==(lhs: AyuEditHistoryEntry, rhs: AyuEditHistoryEntry) -> Bool {
         switch lhs {
-        case let .version(index, title, date, text, entities):
-            if case let .version(rIndex, rTitle, rDate, rText, rEntities) = rhs, index == rIndex, title == rTitle, date == rDate, text == rText, entities == rEntities {
+        case let .version(index, title, date, text, rawText, entities):
+            if case let .version(rIndex, rTitle, rDate, rText, rRawText, rEntities) = rhs, index == rIndex, title == rTitle, date == rDate, text == rText, rawText == rRawText, entities == rEntities {
                 return true
             }
             return false
@@ -72,7 +73,11 @@ private enum AyuEditHistoryEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! AyuEditHistoryArguments
         switch self {
-        case let .version(_, title, date, text, entities), let .current(title, date, text, entities):
+        case let .version(_, title, date, text, rawText, entities):
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: date, labelStyle: .detailText, additionalDetailLabel: text, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: {
+                arguments.copy(rawText, entities)
+            })
+        case let .current(title, date, text, entities):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: date, labelStyle: .detailText, additionalDetailLabel: text, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: {
                 arguments.copy(text, entities)
             })
@@ -120,7 +125,7 @@ public func ayuEditHistoryController(context: AccountContext, message: EngineMes
         for (index, version) in versions.enumerated() {
             let title = index == 0 ? strings.originalVersion : strings.versionN(index + 1)
             let text = ayuPreviewText(text: version.text, mediaKind: version.mediaKind, fileName: nil, strings: strings)
-            entries.append(.version(index: index, title: title, date: ayuFormatDate(version.versionDate, withSeconds: true), text: text, entities: version.entities))
+            entries.append(.version(index: index, title: title, date: ayuFormatDate(version.versionDate, withSeconds: true), text: text, rawText: version.text, entities: version.entities))
         }
         if versions.isEmpty {
             entries.append(.empty(strings.noEditHistory))

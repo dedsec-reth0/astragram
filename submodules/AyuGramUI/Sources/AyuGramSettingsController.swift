@@ -92,6 +92,7 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
     case keepInChat(String, Bool)
     case saveInChannels(String, Bool, enabled: Bool)
     case saveEdits(String, Bool)
+    case keepSelfDestructing(String, Bool)
     case antiDeleteFooter(String)
 
     case deletedMessages(String, String)
@@ -127,7 +128,7 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
             return AyuGramSettingsSection.ghostMaster.rawValue
         case .hideOnline, .hideRead, .hideStories, .hideTyping, .hideContents, .markReadAfterSend, .ghostFooter:
             return AyuGramSettingsSection.ghost.rawValue
-        case .antiDeleteHeader, .saveDeleted, .keepInChat, .saveInChannels, .saveEdits, .antiDeleteFooter:
+        case .antiDeleteHeader, .saveDeleted, .keepInChat, .saveInChannels, .saveEdits, .keepSelfDestructing, .antiDeleteFooter:
             return AyuGramSettingsSection.antiDelete.rawValue
         case .deletedMessages, .storageSize, .clearHistory:
             return AyuGramSettingsSection.storage.rawValue
@@ -159,7 +160,8 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
         case .keepInChat: return 22
         case .saveInChannels: return 23
         case .saveEdits: return 24
-        case .antiDeleteFooter: return 25
+        case .keepSelfDestructing: return 25
+        case .antiDeleteFooter: return 26
         case .deletedMessages: return 30
         case .storageSize: return 31
         case .clearHistory: return 32
@@ -231,6 +233,8 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
             return toggle(title, value, enabled: enabled) { $0.saveDeletedInChannels = $1 }
         case let .saveEdits(title, value):
             return toggle(title, value) { $0.saveEditHistory = $1 }
+        case let .keepSelfDestructing(title, value):
+            return toggle(title, value) { $0.keepSelfDestructingMedia = $1 }
         case let .deletedMessages(title, label):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                 arguments.openDeletedMessages()
@@ -309,6 +313,7 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.keepInChat(strings.keepDeletedInChat, settings.keepDeletedMessagesInChat))
     entries.append(.saveInChannels(strings.saveInChannels, settings.saveDeletedInChannels, enabled: settings.saveDeletedMessages || settings.keepDeletedMessagesInChat))
     entries.append(.saveEdits(strings.saveEdits, settings.saveEditHistory))
+    entries.append(.keepSelfDestructing(strings.keepSelfDestructing, settings.keepSelfDestructingMedia))
     entries.append(.antiDeleteFooter(strings.antiDeleteFooter))
 
     entries.append(.deletedMessages(strings.deletedMessages, statistics.flatMap { "\($0.deletedCount)" } ?? ""))

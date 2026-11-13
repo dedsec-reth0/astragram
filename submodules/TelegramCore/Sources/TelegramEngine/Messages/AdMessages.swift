@@ -454,7 +454,8 @@ private class AdMessagesHistoryContextImpl {
         if messageId == nil {
             self.state.set(CachedState.getCached(postbox: account.postbox, peerId: peerId)
             |> mapToSignal { cachedState -> Signal<State, NoError> in
-                if let cachedState = cachedState, cachedState.timestamp >= Int32(Date().timeIntervalSince1970) - 5 * 60 {
+                // AyuGram: cached sponsored messages are hidden too.
+                if let cachedState = cachedState, cachedState.timestamp >= Int32(Date().timeIntervalSince1970) - 5 * 60, !AyuGramSettings.current.hideSponsoredMessages {
                     return account.postbox.transaction { transaction -> State in
                         return State(interPostInterval: cachedState.interPostInterval, messages: cachedState.messages.compactMap { message -> Message? in
                             return message.toMessage(peerId: peerId, transaction: transaction)

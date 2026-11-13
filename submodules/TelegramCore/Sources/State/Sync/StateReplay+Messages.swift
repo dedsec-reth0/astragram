@@ -304,6 +304,10 @@ extension ReplayContext {
         if let message = transaction.getMessage(id) {
             updatePeerChatInclusionWithMinTimestamp(transaction: transaction, id: id.peerId, minTimestamp: message.timestamp, forceRootGroupIfNotExists: false)
         }
+        // AyuGram anti-delete: the history cleared by an admin is saved (at most the newest 1000 messages of the range).
+        if id.namespace == Namespaces.Message.Cloud && id.id >= 1 {
+            AyuAntiDelete.saveBeforeDeletion(transaction: transaction, mediaBox: mediaBox, ids: transaction.messageIdsInRange(peerId: id.peerId, namespace: id.namespace, range: 1 ... id.id, limit: 1000, fromUpperBound: true))
+        }
         var resourceIds: [MediaResourceId] = []
         transaction.deleteMessagesInRange(peerId: id.peerId, namespace: id.namespace, minId: 1, maxId: id.id, forEachMedia: { media in
             addMessageMediaResourceIdsToRemove(media: media, resourceIds: &resourceIds)

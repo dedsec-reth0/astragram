@@ -829,6 +829,12 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
     }
     
+    // AyuGram: a message kept as deleted no longer exists on the server, so it cannot be replied to or pinned.
+    if messages.contains(where: { $0.ayuDeletedAt != nil }) {
+        canReply = false
+        canPin = false
+    }
+    
     var loadStickerSaveStatusSignal: Signal<Bool?, NoError> = .single(nil)
     if let loadStickerSaveStatus = loadStickerSaveStatus {
         loadStickerSaveStatusSignal = context.engine.stickers.isStickerSaved(id: loadStickerSaveStatus)
@@ -912,7 +918,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     |> map { limitsAndAppConfig, stickerSaveStatus, resourceStatus, messageActions, updatingMessageMedia, infoSummaryData, isMessageRead, messageViewsPrivacyTips, availableReactions, sharedData, notificationSoundList, accountPeer -> (MessageContextMenuData, [EngineMessage.Id: ChatUpdatingMessageMedia], InfoSummaryData, AppConfiguration, Bool, Int32, AvailableReactions?, TranslationSettings, LoggingSettings, NotificationSoundList?, EnginePeer?) in
         let (limitsConfiguration, appConfig) = limitsAndAppConfig
         var canEdit = false
-        if !isAction {
+        if !isAction && messages[0].ayuDeletedAt == nil {
             let message = messages[0]
             canEdit = canEditMessage(context: context, limitsConfiguration: limitsConfiguration, message: message)
         }

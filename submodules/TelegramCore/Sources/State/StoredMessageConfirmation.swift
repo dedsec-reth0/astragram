@@ -211,12 +211,13 @@ func confirmStoredMessages(accountPeerId: PeerId, postbox: Postbox, source: Fetc
 /// Returns the ids it deleted: the private-chat and basic-group ones, then the channel ones, each in the order given.
 @discardableResult
 func deleteStoredMessagesAsReceivedDeletion(transaction: Transaction, mediaBox: MediaBox, ids: [MessageId]) -> [MessageId] {
-    // AyuGram anti-delete: the messages are deleted anyway (keeping them would make the history fill ask for them
-    // again), but their content is saved first.
-    AyuAntiDelete.saveBeforeDeletion(transaction: transaction, mediaBox: mediaBox, ids: ids)
+    // AyuGram anti-delete: these were deleted on the server while the app was away. They are saved and, with "keep in
+    // chat", kept as deleted like any received deletion; kept messages are left out of later confirmations
+    // (`historyFillReconciliation`, `storedCloudMessagesAboveTopMessages`), so they are not asked for again.
+    let ayuRemainingIds = AyuAntiDelete.interceptReceivedDeletion(transaction: transaction, mediaBox: mediaBox, ids: ids)
     var regularIds: [MessageId] = []
     var channelIds: [MessageId] = []
-    for id in ids {
+    for id in ayuRemainingIds {
         if id.peerId.namespace == Namespaces.Peer.CloudChannel {
             channelIds.append(id)
         } else {
@@ -326,7 +327,8 @@ func storedCloudMessagesAboveTopMessages(transaction: Transaction, fetchedChats:
         var lowerBound = topId
         while lowerBound < Int32.max {
             let page = transaction.messageIdsInRange(peerId: peerId, namespace: Namespaces.Message.Cloud, range: (lowerBound + 1) ... Int32.max, limit: pageLimit)
-            ids.append(contentsOf: page)
+            // AyuGram: messages kept as deleted are above the server's top by design.
+            ids.append(contentsOf: page.filter { !AyuAntiDelete.isKept(transaction: transaction, id: $0) })
             guard page.count >= pageLimit, let last = page.last, last.id > lowerBound else {
                 break
             }

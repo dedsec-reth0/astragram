@@ -292,7 +292,21 @@ public func ayuDeletedMessagesController(context: AccountContext, peerId: Engine
         if !records.isEmpty {
             rightButton = ItemListNavigationButton(content: .text(strings.clearChatHistory), style: .regular, enabled: true, action: {
                 AyuHaptics.warning()
-                store.clearDeletedMessages(peerId: peerId)
+                // The saved messages cannot be restored: ask first.
+                let actionSheet = ActionSheetController(presentationData: presentationData)
+                actionSheet.setItemGroups([ActionSheetItemGroup(items: [
+                    ActionSheetTextItem(title: strings.clearDeletedConfirm),
+                    ActionSheetButtonItem(title: strings.clearChatHistory, color: .destructive, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                        store.clearDeletedMessages(peerId: peerId)
+                        AyuHaptics.success()
+                    })
+                ]), ActionSheetItemGroup(items: [
+                    ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                    })
+                ])])
+                presentControllerImpl?(actionSheet)
             })
         }
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(title), leftNavigationButton: nil, rightNavigationButton: rightButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))

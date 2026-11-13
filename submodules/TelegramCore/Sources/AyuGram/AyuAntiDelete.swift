@@ -1,6 +1,17 @@
 import Foundation
 import Postbox
 
+/// Applies a deletion the notification service extension received while the app was not running, through
+/// anti-delete like any received deletion. Returns the ids that were actually deleted.
+public func ayuApplyReceivedDeletionInExtension(transaction: Transaction, mediaBox: MediaBox, ids: [MessageId]) -> [MessageId] {
+    AyuGramSettings.reload()
+    let remaining = AyuAntiDelete.interceptReceivedDeletion(transaction: transaction, mediaBox: mediaBox, ids: ids)
+    if !remaining.isEmpty {
+        _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: remaining, deleteMedia: true)
+    }
+    return remaining
+}
+
 /// Anti-delete and edit history: the hooks the update replay and the history confirmation call.
 ///
 /// Only deletions that come from the server pass through here (updates, getDifference, history fills that found a
@@ -11,8 +22,36 @@ enum AyuAntiDelete {
         guard message.id.namespace == Namespaces.Message.Cloud else {
             return false
         }
-        if message.id.peerId.namespace == Namespaces.Peer.CloudChannel && !settings.saveDeletedInChannels {
+        // "Also in channels" covers broadcast channels only; supergroups are chats.
+        if !settings.saveDeletedInChannels, let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info {
             return false
+        }
+        return true
+    }
+
+    /// Whether the message is kept in the chat as deleted. Such a message no longer exists on the server, so history
+    /// synchronization must not treat it as a stored message the server lost.
+    static func isKept(transaction: Transaction, id: MessageId) -> Bool {
+        return transaction.getMessage(id)?.ayuDeletedAt != nil
+    }
+
+    /// For history validation, which found `id` gone on the server: keeps it in the chat as deleted when anti-delete
+    /// wants that (or already did), and marks it validated at `channelPts` so validation does not ask again. Returns
+    /// false when the message must be deleted as usual.
+    static func keepOnValidation(transaction: Transaction, mediaBox: MediaBox, id: MessageId, channelPts: Int32?) -> Bool {
+        if !AyuAntiDelete.interceptReceivedDeletion(transaction: transaction, mediaBox: mediaBox, ids: [id]).isEmpty {
+            return false
+        }
+        guard transaction.getMessage(id) != nil else {
+            return true
+        }
+        if let channelPts = channelPts {
+            transaction.updateMessage(id, update: { currentMessage in
+                let storeForwardInfo = currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init)
+                var attributes = currentMessage.attributes.filter { !($0 is ChannelMessageStateVersionAttribute) }
+                attributes.append(ChannelMessageStateVersionAttribute(pts: channelPts))
+                return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
+            })
         }
         return true
     }
@@ -48,7 +87,14 @@ enum AyuAntiDelete {
                     let storeForwardInfo = currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init)
                     var attributes = currentMessage.attributes
                     attributes.append(AyuDeletedMessageAttribute(deletedAt: now))
-                    return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
+                    // The server no longer has it: it is no longer pinned, and no unseen mention or reaction badge leads
+                    // to it.
+                    var tags = currentMessage.tags
+                    tags.remove(.unseenPersonalMessage)
+                    tags.remove(.unseenReaction)
+                    tags.remove(.unseenPollVote)
+                    tags.remove(.pinned)
+                    return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
                 })
             } else {
                 remaining.append(id)

@@ -30,6 +30,10 @@ public struct AyuGramSettingsValues: Codable, Equatable {
     public var saveEditHistory: Bool
     /// Also save deleted messages of channels (can be a lot of data).
     public var saveDeletedInChannels: Bool
+    /// Self-destructing and view-once photos, videos and voice messages stay viewable after you open them: the local
+    /// self-destruct timer is not started. Whether the sender learns that you opened them is decided by
+    /// `hideMessageContentsRead`.
+    public var keepSelfDestructingMedia: Bool
 
     // MARK: Appearance and chats
     /// Text shown next to the time of a deleted message.
@@ -66,6 +70,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         keepDeletedMessagesInChat: true,
         saveEditHistory: true,
         saveDeletedInChannels: true,
+        keepSelfDestructingMedia: true,
         deletedMark: "🧹",
         editedMark: "",
         showMessageSeconds: false,
@@ -89,6 +94,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         keepDeletedMessagesInChat: Bool,
         saveEditHistory: Bool,
         saveDeletedInChannels: Bool,
+        keepSelfDestructingMedia: Bool,
         deletedMark: String,
         editedMark: String,
         showMessageSeconds: Bool,
@@ -110,6 +116,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.keepDeletedMessagesInChat = keepDeletedMessagesInChat
         self.saveEditHistory = saveEditHistory
         self.saveDeletedInChannels = saveDeletedInChannels
+        self.keepSelfDestructingMedia = keepSelfDestructingMedia
         self.deletedMark = deletedMark
         self.editedMark = editedMark
         self.showMessageSeconds = showMessageSeconds
@@ -136,6 +143,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.keepDeletedMessagesInChat = try container.decodeIfPresent(Bool.self, forKey: .keepDeletedMessagesInChat) ?? d.keepDeletedMessagesInChat
         self.saveEditHistory = try container.decodeIfPresent(Bool.self, forKey: .saveEditHistory) ?? d.saveEditHistory
         self.saveDeletedInChannels = try container.decodeIfPresent(Bool.self, forKey: .saveDeletedInChannels) ?? d.saveDeletedInChannels
+        self.keepSelfDestructingMedia = try container.decodeIfPresent(Bool.self, forKey: .keepSelfDestructingMedia) ?? d.keepSelfDestructingMedia
         self.deletedMark = try container.decodeIfPresent(String.self, forKey: .deletedMark) ?? d.deletedMark
         self.editedMark = try container.decodeIfPresent(String.self, forKey: .editedMark) ?? d.editedMark
         self.showMessageSeconds = try container.decodeIfPresent(Bool.self, forKey: .showMessageSeconds) ?? d.showMessageSeconds
@@ -172,14 +180,38 @@ public final class AyuGramSettings {
     private static let state: Atomic<AyuGramSettingsValues> = Atomic(value: AyuGramSettings.load())
     private static let promise: ValuePromise<AyuGramSettingsValues> = ValuePromise(AyuGramSettings.state.with { $0 }, ignoreRepeated: true)
 
+    /// The settings live in the app group's defaults, so the app extensions (the notification service extension
+    /// applies deletions while the app is not running) see the same values as the app.
+    private static let defaults: UserDefaults = {
+        if let bundleId = Bundle.main.bundleIdentifier {
+            var baseAppBundleId = bundleId
+            if Bundle.main.bundlePath.hasSuffix(".appex"), let lastDotRange = bundleId.range(of: ".", options: [.backwards]) {
+                baseAppBundleId = String(bundleId[..<lastDotRange.lowerBound])
+            }
+            if let defaults = UserDefaults(suiteName: "group.\(baseAppBundleId)") {
+                return defaults
+            }
+        }
+        return UserDefaults.standard
+    }()
+
     private static func load() -> AyuGramSettingsValues {
-        guard let data = UserDefaults.standard.data(forKey: AyuGramSettings.defaultsKey) else {
+        // Settings saved by builds that kept them in the app's own defaults are picked up once.
+        guard let data = AyuGramSettings.defaults.data(forKey: AyuGramSettings.defaultsKey) ?? UserDefaults.standard.data(forKey: AyuGramSettings.defaultsKey) else {
             return .default
         }
         if let value = try? JSONDecoder().decode(AyuGramSettingsValues.self, from: data) {
             return value
         }
         return .default
+    }
+
+    /// Reads the settings again from storage (an app extension calls this, since the app may have changed them since
+    /// the extension process started).
+    public static func reload() {
+        let value = AyuGramSettings.load()
+        let _ = AyuGramSettings.state.swap(value)
+        AyuGramSettings.promise.set(value)
     }
 
     /// The current settings. Safe to call from any queue.
@@ -200,7 +232,7 @@ public final class AyuGramSettings {
             return current
         }
         if let data = try? JSONEncoder().encode(updated) {
-            UserDefaults.standard.set(data, forKey: AyuGramSettings.defaultsKey)
+            AyuGramSettings.defaults.set(data, forKey: AyuGramSettings.defaultsKey)
         }
         AyuGramSettings.promise.set(updated)
     }
