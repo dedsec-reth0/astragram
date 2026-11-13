@@ -102,6 +102,8 @@ jobs:
           echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
 
+          # The fake provisioning profiles in the repository have expired: re-sign them with a future date.
+          python3 ayugram/ci/refresh_profiles.py "$SOURCE_DIR" || exit 1
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
 
           # Make.py ignores --bazelArguments, so resource limits go into the CI copy's .bazelrc.
