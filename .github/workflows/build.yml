@@ -19,6 +19,9 @@ on:
     paths-ignore:
       - '**.md'
       - 'ayugram/scripts/**'
+      - 'ayugram/uitest/**'
+      - 'Telegram/Tests/**'
+      - '.github/workflows/ui-test.yml'
 
 concurrency:
   group: build-${{ github.ref }}-${{ inputs.configuration || 'release_arm64' }}

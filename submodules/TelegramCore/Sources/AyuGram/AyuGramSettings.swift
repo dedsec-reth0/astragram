@@ -237,6 +237,19 @@ public final class AyuGramSettings {
         AyuGramSettings.promise.set(updated)
     }
 
+    /// Replaces the settings with values encoded as JSON (keys left out keep their default values). Used by the
+    /// automated UI tests, which pass the settings to test in a launch argument. Returns false for invalid JSON.
+    @discardableResult
+    public static func replace(withJSON data: Data) -> Bool {
+        guard let value = try? JSONDecoder().decode(AyuGramSettingsValues.self, from: data) else {
+            return false
+        }
+        AyuGramSettings.update { current in
+            current = value
+        }
+        return true
+    }
+
     public static func reset() {
         AyuGramSettings.update { value in
             value = .default

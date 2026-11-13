@@ -1,0 +1,184 @@
+name: AyuGram UI tests
+
+# Builds the app for the iOS simulator and runs Telegram/Tests/Sources/AyuGramTests.swift against Telegram's test
+# servers. The other side of the chat is ayugram/uitest/peer_controller.py. The report and screenshots are uploaded
+# as the uitest-results artifact (test accounts only: nothing from your real account is involved).
+
+on:
+  workflow_dispatch:
+    inputs:
+      attempt:
+        description: 'Continuation attempt (set automatically)'
+        default: '1'
+
+concurrency:
+  group: uitest-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  SOURCE_DIR: /Users/Shared/telegram-ios
+  CACHE_DIR: /Users/Shared/bazel-cache
+  BAZEL_USER_ROOT: /private/var/tmp/_bazel_containerhost
+  CONFIGURATION: debug_sim_arm64
+  ATTEMPT: ${{ inputs.attempt || '1' }}
+  MAX_ATTEMPTS: '6'
+  OUT_DIR: ${{ github.workspace }}/uitest-out
+
+jobs:
+  uitest:
+    runs-on: xcode-27
+    timeout-minutes: 355
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Free disk space
+        run: |
+          XCODE_VERSION=$(python3 -c 'import json;print(json.load(open("versions.json"))["xcode"])')
+          for x in /Applications/Xcode_*.app; do
+            case "$x" in
+              /Applications/Xcode_${XCODE_VERSION}.app|/Applications/Xcode_${XCODE_VERSION}.0.app) ;;
+              *) [ -L "$x" ] || sudo rm -rf "$x" & ;;
+            esac
+          done
+          sudo rm -rf ~/Library/Android /usr/local/share/dotnet ~/.dotnet &
+          wait
+          df -h /
+
+      - name: Select Xcode
+        run: |
+          XCODE_VERSION=$(python3 -c 'import json;print(json.load(open("versions.json"))["xcode"])')
+          sudo xcode-select -s /Applications/Xcode_$XCODE_VERSION.app/Contents/Developer
+          xcodebuild -version
+          xcrun simctl list runtimes
+
+      - name: Restore Bazel cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: bazel-${{ env.CONFIGURATION }}-${{ github.sha }}-${{ github.run_id }}
+          restore-keys: |
+            bazel-${{ env.CONFIGURATION }}-${{ github.sha }}-
+            bazel-${{ env.CONFIGURATION }}-
+
+      - name: Prepare canonical source directory
+        run: |
+          sudo mkdir -p /Users/Shared "$CACHE_DIR"
+          sudo chown -R "$(whoami)" /Users/Shared
+          rsync -a --delete "$GITHUB_WORKSPACE/" "$SOURCE_DIR/"
+          mkdir -p "$OUT_DIR"
+
+      - name: Generate configuration
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        run: |
+          mkdir -p "$SOURCE_DIR/build-input"
+          python3 ayugram/ci/make_configuration.py "$SOURCE_DIR/build-input/ayugram-configuration.json"
+
+      - name: Prepare test
+        run: |
+          set -euo pipefail
+          cd "$SOURCE_DIR"
+          python3 ayugram/ci/pick_simulator.py "$SOURCE_DIR"
+          python3 ayugram/ci/refresh_profiles.py "$SOURCE_DIR"
+          python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+          printf '\nbuild --local_resources=memory=HOST_RAM*.85\nbuild --jobs=%s\ntest --test_timeout=3600\n' "$(sysctl -n hw.ncpu)" >> .bazelrc
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet telethon aiohttp
+
+      - name: Start peer controller
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        run: |
+          nohup "$RUNNER_TEMP/venv/bin/python" -u ayugram/uitest/peer_controller.py "$OUT_DIR" > "$OUT_DIR/controller-stdout.txt" 2>&1 &
+          sleep 5
+          cat "$OUT_DIR/controller-stdout.txt"
+
+      - name: Build and test
+        id: build
+        run: |
+          set -uo pipefail
+          cd "$SOURCE_DIR"
+          python3 ayugram/ci/run_with_timeout.py 17100 -- python3 -u build-system/Make/Make.py \
+            --bazelUserRoot="$BAZEL_USER_ROOT" \
+            --cacheDir="$CACHE_DIR" \
+            test \
+            --target=//Telegram:iOSAppUITestSuite \
+            --testFilter=AyuGramTests \
+            --configurationPath="build-input/ayugram-configuration.json" \
+            --codesigningInformationPath=build-system/fake-codesigning 2>&1 | tee build.log
+          STATUS=${PIPESTATUS[0]}
+          echo "exit status $STATUS"
+          if [ "$STATUS" = "124" ] || [ "$STATUS" = "137" ]; then
+            echo "timed_out=true" >> "$GITHUB_OUTPUT"
+          fi
+          exit $STATUS
+
+      - name: Errors summary
+        if: failure()
+        run: grep -E "error:|ERROR:" "$SOURCE_DIR/build.log" | sort -u | head -n 120 || true
+
+      - name: Save Bazel cache
+        if: always() && steps.build.outcome != 'skipped'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: bazel-${{ env.CONFIGURATION }}-${{ github.sha }}-${{ github.run_id }}
+
+      - name: Continue in a new job
+        if: always() && steps.build.outputs.timed_out == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
+            echo "Reached $MAX_ATTEMPTS attempts, not continuing."
+            exit 0
+          fi
+          gh workflow run ui-test.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f attempt=$(( ATTEMPT + 1 ))
+
+      # The API hash must not end up in a public artifact: it is removed from every text file collected.
+      - name: Collect results
+        if: always()
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        run: |
+          cd "$SOURCE_DIR"
+          cp build.log "$OUT_DIR/build.log" 2>/dev/null || true
+          if [ -d bazel-testlogs/Telegram/iOSAppUITestSuite ]; then
+            mkdir -p "$OUT_DIR/testlogs"
+            cp -RL bazel-testlogs/Telegram/iOSAppUITestSuite/. "$OUT_DIR/testlogs/" 2>/dev/null || true
+          fi
+          find "$OUT_DIR" -type f \( -name '*.log' -o -name '*.txt' -o -name '*.md' -o -name '*.json' -o -name '*.xml' \) -print0 |
+            while IFS= read -r -d '' f; do
+              python3 - "$f" <<'EOF'
+          import os, re, sys
+          path = sys.argv[1]
+          text = open(path, encoding='utf-8', errors='replace').read()
+          for name in ('TELEGRAM_API_HASH', 'TELEGRAM_API_ID'):
+              value = os.environ.get(name, '')
+              if value:
+                  text = re.sub(r'(?<![0-9A-Za-z])' + re.escape(value) + r'(?![0-9A-Za-z])', '<' + name + '>', text)
+          open(path, 'w', encoding='utf-8').write(text)
+          EOF
+            done
+          ls -R "$OUT_DIR" | head -100
+          cat "$OUT_DIR/report.md" 2>/dev/null || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uitest-results-${{ github.run_id }}
+          path: ${{ env.OUT_DIR }}
+          if-no-files-found: ignore
+          retention-days: 14

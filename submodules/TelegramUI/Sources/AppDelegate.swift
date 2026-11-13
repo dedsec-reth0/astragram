@@ -713,6 +713,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         
         let isUITest = CommandLine.arguments.contains("--ui-test")
 
+        // AyuGram's UI tests pass the settings to test as base64-encoded JSON.
+        if isUITest, let index = CommandLine.arguments.firstIndex(of: "--ayu-settings"), index + 1 < CommandLine.arguments.count, let data = Data(base64Encoded: CommandLine.arguments[index + 1]) {
+            let applied = AyuGramSettings.replace(withJSON: data)
+            NSLog("[AyuTest] settings applied: \(applied)")
+        }
+
         let rootPath: String
         if isUITest {
             let testDataPath = appGroupUrl.path + "/telegram-ui-tests-data"
