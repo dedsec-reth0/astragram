@@ -18,6 +18,8 @@ submodules/AccountContext/Sources/FetchMediaUtils.swift
 submodules/AccountContext/Sources/UniversalVideoNode.swift
 submodules/AvatarNode/Sources/AvatarNode.swift
 submodules/AvatarNode/Sources/PeerAvatar.swift
+submodules/AyuGramUI/Sources/AyuMessageDetails.swift
+submodules/AyuGramUI/Sources/AyuPluginManager.swift
 submodules/ChatListUI/Sources/ChatListController.swift
 submodules/ChatListUI/Sources/ChatListSearchListPaneNode.swift
 submodules/ChatListUI/Sources/Node/ChatListNodeLocation.swift
