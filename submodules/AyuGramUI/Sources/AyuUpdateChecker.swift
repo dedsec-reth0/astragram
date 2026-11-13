@@ -100,7 +100,7 @@ public enum AyuUpdateChecker {
                 let text = release == nil ? AyuUpdateChecker.t("Не удалось проверить обновления. Проверьте подключение к интернету.", "Could not check for updates. Check your internet connection.") : AyuUpdateChecker.t("У вас последняя версия.", "You have the latest version.")
                 let alert = UIAlertController(title: nil, message: text, preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "OK", style: .default))
-                alert.addAction(UIAlertAction(title: AyuUpdateChecker.t("Добавить источник в SideStore", "Add Source to SideStore"), style: .default, handler: { _ in
+                alert.addAction(UIAlertAction(title: AyuUpdateChecker.t("Добавить источник в AltStore", "Add Source to AltStore"), style: .default, handler: { _ in
                     AyuUpdateChecker.openSideStoreSource()
                 }))
                 controller.present(alert, animated: true)
@@ -109,13 +109,13 @@ public enum AyuUpdateChecker {
     }
 
     private static func presentUpdate(_ release: Release, from controller: UIViewController, allowSkip: Bool) {
-        var message = AyuUpdateChecker.t("Версия \(release.version) (\(release.build)). Обновление устанавливает SideStore, данные и вход сохранятся.", "Version \(release.version) (\(release.build)). SideStore installs the update; your data and login are kept.")
+        var message = AyuUpdateChecker.t("Версия \(release.version) (\(release.build)). Обновление устанавливает AltStore, данные и вход сохранятся.", "Version \(release.version) (\(release.build)). AltStore installs the update; your data and login are kept.")
         let notes = release.notes.components(separatedBy: "\n").first?.trimmingCharacters(in: .whitespaces) ?? ""
         if !notes.isEmpty {
             message += "\n\n" + notes
         }
         let alert = UIAlertController(title: AyuUpdateChecker.t("Доступно обновление AyuGram", "AyuGram Update Available"), message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: AyuUpdateChecker.t("Обновить в SideStore", "Update in SideStore"), style: .default, handler: { _ in
+        alert.addAction(UIAlertAction(title: AyuUpdateChecker.t("Обновить в AltStore", "Update in AltStore"), style: .default, handler: { _ in
             AyuUpdateChecker.openSideStoreInstall(release)
         }))
         if allowSkip {
@@ -131,29 +131,34 @@ public enum AyuUpdateChecker {
         return value.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? value
     }
 
-    private static func openSideStoreInstall(_ release: Release) {
-        let fallback = URL(string: release.pageUrl.isEmpty ? release.ipaUrl : release.pageUrl)
-        guard let url = URL(string: "sidestore://install?url=\(AyuUpdateChecker.encoded(release.ipaUrl))") else {
-            if let fallback = fallback {
-                UIApplication.shared.open(fallback)
-            }
+    /// Opens the first of `urls` that an installed app handles (AltStore, then SideStore), else calls `fallback`.
+    private static func openFirst(_ urls: [URL], fallback: @escaping () -> Void) {
+        guard let url = urls.first else {
+            fallback()
             return
         }
         UIApplication.shared.open(url, options: [:], completionHandler: { success in
-            if !success, let fallback = fallback {
-                UIApplication.shared.open(fallback)
+            if !success {
+                AyuUpdateChecker.openFirst(Array(urls.dropFirst()), fallback: fallback)
+            }
+        })
+    }
+
+    private static func openSideStoreInstall(_ release: Release) {
+        let ipaUrl = AyuUpdateChecker.encoded(release.ipaUrl)
+        let urls = ["altstore://install?url=\(ipaUrl)", "sidestore://install?url=\(ipaUrl)"].compactMap(URL.init(string:))
+        AyuUpdateChecker.openFirst(urls, fallback: {
+            if let page = URL(string: release.pageUrl.isEmpty ? release.ipaUrl : release.pageUrl) {
+                UIApplication.shared.open(page)
             }
         })
     }
 
     public static func openSideStoreSource() {
-        guard let url = URL(string: "sidestore://source?url=\(AyuUpdateChecker.encoded(AyuUpdateChecker.sourceUrl))") else {
-            return
-        }
-        UIApplication.shared.open(url, options: [:], completionHandler: { success in
-            if !success {
-                UIPasteboard.general.string = AyuUpdateChecker.sourceUrl
-            }
+        let sourceUrl = AyuUpdateChecker.encoded(AyuUpdateChecker.sourceUrl)
+        let urls = ["altstore://source?url=\(sourceUrl)", "sidestore://source?url=\(sourceUrl)"].compactMap(URL.init(string:))
+        AyuUpdateChecker.openFirst(urls, fallback: {
+            UIPasteboard.general.string = AyuUpdateChecker.sourceUrl
         })
     }
 }

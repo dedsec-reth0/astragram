@@ -35,7 +35,7 @@ def main():
     source_url = 'https://github.com/{}/releases/download/{}/source.json'.format(repo, SOURCE_TAG)
     commit_title = subprocess.run(['git', 'log', '-1', '--pretty=%s'], capture_output=True, text=True).stdout.strip()
 
-    notes = '{}\n\nУстановка: SideStore → Sources → + → {}\n\nПри первом запуске введите свои API ID и API Hash с my.telegram.org.'.format(commit_title, source_url)
+    notes = '{}\n\nУстановка: AltStore → Browse → Sources → + → {}\n\nПри первом запуске введите свои API ID и API Hash с my.telegram.org.'.format(commit_title, source_url)
     gh('release', 'create', tag, '{}#{}'.format(ipa, asset_name), '--repo', repo, '--title', 'AyuGram {} ({})'.format(version, build), '--notes', notes, '--latest')
     print('released', tag)
 
