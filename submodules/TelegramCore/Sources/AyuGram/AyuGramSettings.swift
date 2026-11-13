@@ -68,6 +68,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
     public var wideMessages: Bool
     /// Mark people writing to groups on behalf of a channel with 📢.
     public var channelBadge: Bool
+    /// Check GitHub for a newer AyuGram build at launch.
+    public var checkForUpdates: Bool
 
     // MARK: Appearance and chats
     /// Text shown next to the time of a deleted message.
@@ -122,6 +124,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         showRegistrationDate: true,
         wideMessages: false,
         channelBadge: true,
+        checkForUpdates: true,
         deletedMark: "🧹",
         editedMark: "",
         showMessageSeconds: false,
@@ -163,6 +166,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         showRegistrationDate: Bool,
         wideMessages: Bool,
         channelBadge: Bool,
+        checkForUpdates: Bool,
         deletedMark: String,
         editedMark: String,
         showMessageSeconds: Bool,
@@ -202,6 +206,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.showRegistrationDate = showRegistrationDate
         self.wideMessages = wideMessages
         self.channelBadge = channelBadge
+        self.checkForUpdates = checkForUpdates
         self.deletedMark = deletedMark
         self.editedMark = editedMark
         self.showMessageSeconds = showMessageSeconds
@@ -246,6 +251,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.showRegistrationDate = try container.decodeIfPresent(Bool.self, forKey: .showRegistrationDate) ?? d.showRegistrationDate
         self.wideMessages = try container.decodeIfPresent(Bool.self, forKey: .wideMessages) ?? d.wideMessages
         self.channelBadge = try container.decodeIfPresent(Bool.self, forKey: .channelBadge) ?? d.channelBadge
+        self.checkForUpdates = try container.decodeIfPresent(Bool.self, forKey: .checkForUpdates) ?? d.checkForUpdates
         self.deletedMark = try container.decodeIfPresent(String.self, forKey: .deletedMark) ?? d.deletedMark
         self.editedMark = try container.decodeIfPresent(String.self, forKey: .editedMark) ?? d.editedMark
         self.showMessageSeconds = try container.decodeIfPresent(Bool.self, forKey: .showMessageSeconds) ?? d.showMessageSeconds

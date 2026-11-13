@@ -186,4 +186,6 @@ public struct AyuStrings {
     public var viewHeader: String { t("ВИД СООБЩЕНИЙ", "MESSAGES") }
     public var wideMessages: String { t("Широкие сообщения", "Wide messages") }
     public var channelBadge: String { t("Значок 📢 у пишущих от имени канала", "📢 badge for posting as a channel") }
+    public var checkForUpdates: String { t("Проверять обновления", "Check for updates") }
+    public var checkUpdatesNow: String { t("Проверить обновления сейчас", "Check for Updates Now") }
 }

@@ -483,6 +483,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         ayuSetScreenshotProtectionDisabled(AyuGramSettings.current.allowScreenshots)
         // AyuGram plugins (JavaScript).
         AyuPluginManager.shared.start()
+        // AyuGram: online updates (installed through SideStore).
+        let ayuUpdateWindow = window
+        Queue.mainQueue().after(10.0, {
+            AyuUpdateChecker.checkOnLaunch(window: ayuUpdateWindow)
+        })
         let ayuWindowLayer = window.layer
         let _ = (AyuGramSettings.signal
         |> map { settings -> (Bool, Bool) in

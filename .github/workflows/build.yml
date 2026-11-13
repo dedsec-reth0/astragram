@@ -185,3 +185,10 @@ jobs:
           path: out/AyuGram.ipa
           if-no-files-found: error
           retention-days: 30
+
+      # A GitHub release with the IPA (the app checks it for updates) and the SideStore source that lists it.
+      - name: Publish release
+        if: steps.build.outcome == 'success' && env.CONFIGURATION == 'release_arm64' && github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 ayugram/ci/publish_release.py out/AyuGram.ipa "$APP_VERSION" "$BUILD_NUMBER"

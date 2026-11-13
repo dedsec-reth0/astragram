@@ -49,6 +49,7 @@ private final class AyuGramSettingsArguments {
     let openPlugins: () -> Void
     let unhideMessages: () -> Void
     let openApiCredentials: () -> Void
+    let checkUpdates: () -> Void
 
     init(
         update: @escaping ((inout AyuGramSettingsValues) -> Void) -> Void,
@@ -59,7 +60,8 @@ private final class AyuGramSettingsArguments {
         reset: @escaping () -> Void,
         openPlugins: @escaping () -> Void,
         unhideMessages: @escaping () -> Void,
-        openApiCredentials: @escaping () -> Void
+        openApiCredentials: @escaping () -> Void,
+        checkUpdates: @escaping () -> Void
     ) {
         self.update = update
         self.openDeletedMessages = openDeletedMessages
@@ -70,6 +72,7 @@ private final class AyuGramSettingsArguments {
         self.openPlugins = openPlugins
         self.unhideMessages = unhideMessages
         self.openApiCredentials = openApiCredentials
+        self.checkUpdates = checkUpdates
     }
 }
 
@@ -206,8 +209,8 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
         case .translator: return 71
         case .translatorFooter: return 72
         case .aboutHeader: return 80
-        case .reset: return 83
-        case .version: return 84
+        case .reset: return 86
+        case .version: return 87
         case let .flag(id, _, _, _, _, _), let .header(id, _, _), let .footer(id, _, _), let .button(id, _, _, _, _):
             return id
         }
@@ -323,6 +326,10 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openPlugins()
                 })
+            case .checkUpdates:
+                return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .generic, alignment: .natural, sectionId: section, style: .blocks, action: {
+                    arguments.checkUpdates()
+                })
             case .apiCredentials:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openApiCredentials()
@@ -340,6 +347,7 @@ private enum AyuGramSettingsButtonKind: Equatable {
     case plugins
     case unhideMessages
     case apiCredentials
+    case checkUpdates
 }
 
 private func formatFileSize(_ size: Int64) -> String {
@@ -430,6 +438,8 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
 
     entries.append(.aboutHeader(strings.aboutHeader))
     entries.append(.button(id: 81, section: .about, title: strings.apiCredentials, label: "\(BuildConfig(baseAppBundleId: Bundle.main.bundleIdentifier ?? "").apiId)", kind: .apiCredentials))
+    entries.append(.flag(id: 82, section: .about, title: strings.checkForUpdates, value: settings.checkForUpdates, enabled: true, keyPath: \.checkForUpdates))
+    entries.append(.button(id: 85, section: .about, title: strings.checkUpdatesNow, label: "", kind: .checkUpdates))
     entries.append(.reset(strings.resetSettings))
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
     let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
@@ -443,6 +453,7 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
     var pushControllerImpl: ((ViewController) -> Void)?
     var presentControllerImpl: ((ViewController) -> Void)?
     var presentNativeControllerImpl: ((UIViewController) -> Void)?
+    var topNativeControllerImpl: (() -> UIViewController?)?
 
     let store = AyuMessageStore.forAccount(context.account)
 
@@ -497,6 +508,11 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
         },
         openApiCredentials: {
             presentNativeControllerImpl?(AyuApiCredentialsController(baseAppBundleId: Bundle.main.bundleIdentifier ?? "", isInitialSetup: false, completion: {}))
+        },
+        checkUpdates: {
+            if let controller = topNativeControllerImpl?() {
+                AyuUpdateChecker.checkNow(from: controller)
+            }
         }
     )
 
@@ -527,6 +543,13 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
             presenter = presented
         }
         presenter?.present(c, animated: true)
+    }
+    topNativeControllerImpl = { [weak controller] in
+        var presenter = controller?.view.window?.rootViewController
+        while let presented = presenter?.presentedViewController {
+            presenter = presented
+        }
+        return presenter
     }
     return controller
 }
