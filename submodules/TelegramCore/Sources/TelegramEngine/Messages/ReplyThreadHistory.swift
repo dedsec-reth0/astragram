@@ -373,6 +373,11 @@ private class ReplyThreadHistoryContextImpl {
 
             strongSelf.unreadCountValue = unreadCountValue
 
+            // AyuGram ghost mode: the thread is read locally only.
+            if !AyuGhostMode.mayPushReadState(peerId: messageIndex.id.peerId) {
+                return
+            }
+
             if let state = strongSelf.stateValue {
                 if let indices = state.holeIndices[messageIndex.id.namespace] {
                     let fromIdInt: Int

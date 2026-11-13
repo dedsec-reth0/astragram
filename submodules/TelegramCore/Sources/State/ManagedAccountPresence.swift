@@ -22,7 +22,20 @@ private final class AccountPresenceManagerImpl {
         self.queue = queue
         self.network = network
         
-        self.shouldKeepOnlinePresenceDisposable = (shouldKeepOnlinePresence
+        // AyuGram ghost mode: with "hide online status" on, the account is always reported offline (turning it on
+        // while online sends `updateStatus(offline: true)` at once).
+        let effectiveShouldKeepOnlinePresence = combineLatest(
+            shouldKeepOnlinePresence,
+            AyuGramSettings.signal
+            |> map { settings -> Bool in
+                return settings.hideOnlineStatus
+            }
+            |> distinctUntilChanged
+        )
+        |> map { shouldKeepOnline, hideOnline -> Bool in
+            return shouldKeepOnline && !hideOnline
+        }
+        self.shouldKeepOnlinePresenceDisposable = (effectiveShouldKeepOnlinePresence
         |> distinctUntilChanged
         |> deliverOn(self.queue)).start(next: { [weak self] value in
             guard let `self` = self else {

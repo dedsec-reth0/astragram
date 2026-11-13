@@ -16,6 +16,7 @@ import WebUI
 import AvatarNode
 import PeerNameColorItem
 import BoostLevelIconComponent
+import AyuGramUI
 
 private let enabledPublicBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag]
 private let enabledPrivateBioEntities: EnabledEntityTypes = [.internalUrl, .mention, .hashtag]
@@ -953,6 +954,26 @@ func infoItems(
         }
     }
     
+    // AyuGram: the numeric ID (in the Bot API form), tap to copy.
+    if AyuGramSettings.current.showPeerId, let peer = data.peer, !isMyProfile {
+        let rawId = peer.id.id._internalGetInt64Value()
+        let apiId: Int64
+        if peer.id.namespace == Namespaces.Peer.CloudChannel {
+            apiId = -(1000000000000 + rawId)
+        } else if peer.id.namespace == Namespaces.Peer.CloudGroup {
+            apiId = -rawId
+        } else {
+            apiId = rawId
+        }
+        let idText = "\(apiId)"
+        items[.peerInfo]!.append(PeerInfoScreenLabeledValueItem(id: "ayugram.peerId", label: "ID", text: idText, textColor: .primary, action: { _, _ in
+            UIPasteboard.general.string = idText
+            AyuHaptics.success()
+        }, requestLayout: { animated in
+            interaction.requestLayout(animated)
+        }))
+    }
+
     var result: [(AnyHashable, [PeerInfoScreenItem])] = []
     for section in InfoSection.allCases {
         if let sectionItems = items[section], !sectionItems.isEmpty {

@@ -1,0 +1,26 @@
+load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
+
+swift_library(
+    name = "AyuGramUI",
+    module_name = "AyuGramUI",
+    srcs = glob([
+        "Sources/**/*.swift",
+    ]),
+    copts = [
+        "-warnings-as-errors",
+    ],
+    deps = [
+        "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        "//submodules/Display:Display",
+        "//submodules/TelegramCore:TelegramCore",
+        "//submodules/TelegramPresentationData:TelegramPresentationData",
+        "//submodules/AccountContext:AccountContext",
+        "//submodules/ItemListUI:ItemListUI",
+        "//submodules/PresentationDataUtils:PresentationDataUtils",
+        "//submodules/UndoUI:UndoUI",
+        "//submodules/Pasteboard:Pasteboard",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)

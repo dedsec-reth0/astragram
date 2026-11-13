@@ -159,6 +159,7 @@ public struct PresentationResourcesSettings {
     public static let archivedSticker = renderSettingsIcon(name: "Item List/Icons/ArchivedSticker", backgroundColors: [colorGreen])
     public static let trendingSticker = renderSettingsIcon(name: "Item List/Icons/TrendingSticker", backgroundColors: [colorOrange])
     public static let effects = renderSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorLightBlue])
+    public static let ayuGram = renderSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorViolet])
     public static let photosBlue = renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorBlue])
     public static let clock = renderSettingsIcon(name: "Item List/Icons/Clock", backgroundColors: [colorPurple])
     public static let photosLightBlue = renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorLightBlue])

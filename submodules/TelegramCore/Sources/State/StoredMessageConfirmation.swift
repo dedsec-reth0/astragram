@@ -211,6 +211,9 @@ func confirmStoredMessages(accountPeerId: PeerId, postbox: Postbox, source: Fetc
 /// Returns the ids it deleted: the private-chat and basic-group ones, then the channel ones, each in the order given.
 @discardableResult
 func deleteStoredMessagesAsReceivedDeletion(transaction: Transaction, mediaBox: MediaBox, ids: [MessageId]) -> [MessageId] {
+    // AyuGram anti-delete: the messages are deleted anyway (keeping them would make the history fill ask for them
+    // again), but their content is saved first.
+    AyuAntiDelete.saveBeforeDeletion(transaction: transaction, mediaBox: mediaBox, ids: ids)
     var regularIds: [MessageId] = []
     var channelIds: [MessageId] = []
     for id in ids {

@@ -117,6 +117,10 @@ private enum GetUnseenIdsError {
 }
 
 private func synchronizeMarkAllUnseen(transaction: Transaction, postbox: Postbox, network: Network, stateManager: AccountStateManager, peerId: PeerId, operation: SynchronizeMarkAllUnseenPersonalMessagesOperation) -> Signal<Void, NoError> {
+    // AyuGram ghost mode: listened voice/video messages and opened media are not reported.
+    if AyuGramSettings.current.hideMessageContentsRead {
+        return .complete()
+    }
     guard let inputPeer = transaction.getPeer(peerId).flatMap(apiInputPeer) else {
         return .complete()
     }

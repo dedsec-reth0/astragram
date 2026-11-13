@@ -151,6 +151,10 @@ import ChatAgeRestrictionAlertController
 import TextProcessingScreen
 import ChatMediaEditorScreen
 import OpenUserGeneratedUrl
+import AyuGramUI
+
+/// Set while a sticker or GIF the user confirmed is being sent, so that the confirmation is not asked again.
+private var ayuStickerSendConfirmed = false
 
 public final class ChatControllerOverlayPresentationData {
     public let expandData: (ASDisplayNode?, () -> Void)
@@ -2473,6 +2477,23 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let strongSelf = self else {
                 return false
             }
+
+            // AyuGram: ask before sending a sticker.
+            if AyuGramSettings.current.confirmStickerSend && !ayuStickerSendConfirmed {
+                let ayuStrings = AyuStrings(strongSelf.presentationData.strings)
+                strongSelf.present(textAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, title: nil, text: ayuStrings.confirmStickerQuestion, actions: [
+                    TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_Cancel, action: {}),
+                    TextAlertAction(type: .defaultAction, title: ayuStrings.send, action: { [weak strongSelf] in
+                        guard let strongSelf, let controllerInteraction = strongSelf.controllerInteraction else {
+                            return
+                        }
+                        ayuStickerSendConfirmed = true
+                        let _ = controllerInteraction.sendSticker(fileReference, silentPosting, schedule, query, clearInput, nil, nil, nil, bubbleUpEmojiOrStickersets)
+                        ayuStickerSendConfirmed = false
+                    })
+                ]), in: .window(.root))
+                return false
+            }
             
             if let _ = strongSelf.presentationInterfaceState.slowmodeState, strongSelf.presentationInterfaceState.subject != .scheduledMessages {
                 if let sourceView, let sourceRect {
@@ -2749,6 +2770,22 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
         }, sendGif: { [weak self] fileReference, sourceView, sourceRect, silentPosting, schedule in
             if let strongSelf = self {
+                // AyuGram: ask before sending a GIF.
+                if AyuGramSettings.current.confirmStickerSend && !ayuStickerSendConfirmed {
+                    let ayuStrings = AyuStrings(strongSelf.presentationData.strings)
+                    strongSelf.present(textAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, title: nil, text: ayuStrings.confirmGifQuestion, actions: [
+                        TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_Cancel, action: {}),
+                        TextAlertAction(type: .defaultAction, title: ayuStrings.send, action: { [weak strongSelf] in
+                            guard let strongSelf, let controllerInteraction = strongSelf.controllerInteraction else {
+                                return
+                            }
+                            ayuStickerSendConfirmed = true
+                            let _ = controllerInteraction.sendGif(fileReference, sourceView, sourceRect, silentPosting, schedule)
+                            ayuStickerSendConfirmed = false
+                        })
+                    ]), in: .window(.root))
+                    return false
+                }
                 if let _ = strongSelf.presentationInterfaceState.slowmodeState, strongSelf.presentationInterfaceState.subject != .scheduledMessages {
                     strongSelf.interfaceInteraction?.displaySlowmodeTooltip(sourceView, sourceRect)
                     return false

@@ -2255,7 +2255,18 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             if self.previewing {
                 self.storiesReady.set(.single(true))
             } else {
-                self.storySubscriptionsDisposable = (self.context.engine.messages.storySubscriptions(isHidden: self.location == .chatList(groupId: .archive))
+                // AyuGram: "Hide stories above chats" empties the row (stories stay available in profiles).
+                let ayuStorySubscriptions = combineLatest(
+                    self.context.engine.messages.storySubscriptions(isHidden: self.location == .chatList(groupId: .archive)),
+                    AyuGramSettings.signal |> map { $0.hideStoriesInChatList } |> distinctUntilChanged
+                )
+                |> map { subscriptions, hideStories -> EngineStorySubscriptions in
+                    if hideStories {
+                        return EngineStorySubscriptions(accountItem: nil, items: [], hasMoreToken: nil)
+                    }
+                    return subscriptions
+                }
+                self.storySubscriptionsDisposable = (ayuStorySubscriptions
                 |> deliverOnMainQueue).startStrict(next: { [weak self] rawStorySubscriptions in
                     guard let self else {
                         return

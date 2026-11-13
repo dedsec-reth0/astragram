@@ -610,7 +610,9 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             if arguments.edited {
                 if let useEditedTimestamp = arguments.context.getAppConfigValue("message_primary_edited_date") as? Bool, useEditedTimestamp {
                 } else {
-                    updatedDateText = "\(arguments.presentationData.strings.Conversation_MessageEditedLabel) \(updatedDateText)"
+                    // AyuGram: a custom "edited" mark.
+                    let customEditedMark = AyuGramSettings.current.editedMark.trimmingCharacters(in: .whitespacesAndNewlines)
+                    updatedDateText = "\(customEditedMark.isEmpty ? arguments.presentationData.strings.Conversation_MessageEditedLabel : customEditedMark) \(updatedDateText)"
                 }
             }
             if let impressionCount = arguments.impressionCount {
