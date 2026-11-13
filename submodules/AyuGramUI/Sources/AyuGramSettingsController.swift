@@ -91,6 +91,7 @@ private enum AyuGramSettingsSection: Int32 {
     case plugins
     case extra
     case view
+    case notifications
 }
 
 private enum AyuGramSettingsEntry: ItemListNodeEntry {
@@ -430,6 +431,9 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
 
     entries.append(.flag(id: 76, section: .extra, title: strings.showRegistrationDate, value: settings.showRegistrationDate, enabled: true, keyPath: \.showRegistrationDate))
     entries.append(.flag(id: 77, section: .extra, title: strings.localPremium, value: settings.localPremium, enabled: true, keyPath: \.localPremium))
+    entries.append(.header(id: 66, section: .notifications, text: strings.notificationsHeader))
+    entries.append(.flag(id: 67, section: .notifications, title: strings.backgroundNotifications, value: settings.backgroundNotifications, enabled: true, keyPath: \.backgroundNotifications))
+    entries.append(.footer(id: 68, section: .notifications, text: strings.backgroundNotificationsFooter))
     entries.append(.footer(id: 78, section: .extra, text: strings.localPremiumFooter))
 
     entries.append(.translatorHeader(strings.translatorHeader))

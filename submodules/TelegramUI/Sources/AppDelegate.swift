@@ -348,6 +348,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         
     // AyuGram: the first-launch screen for the user's own API ID and hash.
     private var ayuApiSetupWindow: UIWindow?
+    private var ayuBackgroundNotifier: AyuBackgroundNotifier?
     private var ayuConnectedScene: (UIWindowScene, UIScene.ConnectionOptions)?
 
     var ayuIsWaitingForApiCredentials: Bool {
@@ -1338,6 +1339,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             
             return .single(sharedApplicationContext)
         })
+
+        // AyuGram: notifications without push (local notifications and background app refresh).
+        self.ayuBackgroundNotifier = AyuBackgroundNotifier(application: application, sharedContext: self.sharedContextPromise.get(), baseAppBundleId: baseAppBundleId)
             
         self.context.set(self.sharedContextPromise.get()
         |> deliverOnMainQueue

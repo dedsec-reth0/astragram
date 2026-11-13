@@ -188,4 +188,7 @@ public struct AyuStrings {
     public var channelBadge: String { t("Значок 📢 у пишущих от имени канала", "📢 badge for posting as a channel") }
     public var checkForUpdates: String { t("Проверять обновления", "Check for updates") }
     public var checkUpdatesNow: String { t("Проверить обновления сейчас", "Check for Updates Now") }
+    public var notificationsHeader: String { t("УВЕДОМЛЕНИЯ", "NOTIFICATIONS") }
+    public var backgroundNotifications: String { t("Уведомления без push", "Notifications without push") }
+    public var backgroundNotificationsFooter: String { t("Push-уведомления Telegram не приходят в установленные через AltStore приложения. AyuGram сам показывает уведомления о сообщениях, пока работает в фоне, и периодически проверяет новые сообщения, когда iOS разрешает (обычно раз в 15–60 минут, реже в режиме энергосбережения или после закрытия приложения из списка недавних). Уведомления могут приходить с задержкой.", "Telegram push notifications do not reach apps installed with AltStore. AyuGram shows notifications itself while it runs in the background and checks for new messages whenever iOS allows (usually every 15–60 minutes, less often in Low Power Mode or after the app is swiped away). Notifications may come late.") }
 }
