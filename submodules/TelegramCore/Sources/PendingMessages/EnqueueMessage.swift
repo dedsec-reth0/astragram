@@ -759,12 +759,17 @@ private func opportunisticallyTransformOutgoingMedia(network: Network, postbox: 
 }
 
 public func enqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {
+    // AyuGram plugins may change the text of outgoing messages, or handle a command and drop the message.
+    let ayuMessages = AyuPluginHooks.transformOutgoing(messages, peerId: peerId)
+    if ayuMessages.isEmpty {
+        return .single([])
+    }
     AyuGhostMode.didSendMessage(account: account, peerId: peerId)
     let signal: Signal<[(Bool, EnqueueMessage)], NoError>
     if let transformOutgoingMessageMedia = account.transformOutgoingMessageMedia {
-        signal = opportunisticallyTransformOutgoingMedia(network: account.network, postbox: account.postbox, transformOutgoingMessageMedia: transformOutgoingMessageMedia, messages: messages, userInteractive: true)
+        signal = opportunisticallyTransformOutgoingMedia(network: account.network, postbox: account.postbox, transformOutgoingMessageMedia: transformOutgoingMessageMedia, messages: ayuMessages, userInteractive: true)
     } else {
-        signal = .single(messages.map { (false, $0) })
+        signal = .single(ayuMessages.map { (false, $0) })
     }
     return signal
     |> mapToSignal { messages -> Signal<[MessageId?], NoError> in

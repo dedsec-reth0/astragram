@@ -186,6 +186,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var chatLocationContextHolder: Atomic<ChatLocationContextHolder?>
     let controllerInteraction: ChatControllerInteraction
     private weak var controller: ChatControllerImpl?
+    private var ayuMessageSendConfirmed = false
     
     let navigationBar: NavigationBar?
     let statusBar: StatusBar?
@@ -5159,6 +5160,23 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
 
     func sendCurrentMessage(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false, messageEffect: ChatSendMessageEffect? = nil, sendWithoutFormatting: Bool = false, completion: @escaping () -> Void = {}) {
         guard let textInputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode else {
+            return
+        }
+        // AyuGram: "Confirm sending messages".
+        if AyuGramSettings.current.confirmMessageSend && !self.ayuMessageSendConfirmed, let controller = self.controller {
+            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+            let isRussian = presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+            controller.present(textAlertController(context: self.context, title: nil, text: isRussian ? "Отправить сообщение?" : "Send this message?", actions: [
+                TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+                TextAlertAction(type: .defaultAction, title: isRussian ? "Отправить" : "Send", action: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.ayuMessageSendConfirmed = true
+                    self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting, completion: completion)
+                    self.ayuMessageSendConfirmed = false
+                })
+            ]), in: .window(.root))
             return
         }
         self.historyNode.justSentTextMessage = true

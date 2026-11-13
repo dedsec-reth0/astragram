@@ -9251,6 +9251,18 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
         
     func transformEnqueueMessages(_ messages: [EnqueueMessage], silentPosting: Bool, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false) -> [EnqueueMessage] {
+        // AyuGram ghost mode: "Send via schedule" sends a message as scheduled a few seconds ahead, so sending it does
+        // not show the account online.
+        var scheduleTime = scheduleTime
+        if scheduleTime == nil, !postpone, AyuGramSettings.current.sendViaSchedule, AyuGramSettings.current.hideOnlineStatus, case let .peer(peerId) = self.chatLocation, peerId.namespace != Namespaces.Peer.SecretChat, peerId != self.context.account.peerId {
+            var isScheduledChat = false
+            if case .scheduledMessages = self.presentationInterfaceState.subject {
+                isScheduledChat = true
+            }
+            if !isScheduledChat {
+                scheduleTime = Int32(Date().timeIntervalSince1970) + 12
+            }
+        }
         var defaultThreadId: Int64?
         var defaultReplyMessageSubject: EngineMessageReplySubject?
         switch self.chatLocation {

@@ -45,6 +45,8 @@ private final class AyuGramSettingsArguments {
     let openLinked: (AyuLinkedTelegramSettings) -> Void
     let clearHistory: () -> Void
     let reset: () -> Void
+    let openPlugins: () -> Void
+    let unhideMessages: () -> Void
 
     init(
         update: @escaping ((inout AyuGramSettingsValues) -> Void) -> Void,
@@ -52,7 +54,9 @@ private final class AyuGramSettingsArguments {
         openFilters: @escaping () -> Void,
         openLinked: @escaping (AyuLinkedTelegramSettings) -> Void,
         clearHistory: @escaping () -> Void,
-        reset: @escaping () -> Void
+        reset: @escaping () -> Void,
+        openPlugins: @escaping () -> Void,
+        unhideMessages: @escaping () -> Void
     ) {
         self.update = update
         self.openDeletedMessages = openDeletedMessages
@@ -60,6 +64,8 @@ private final class AyuGramSettingsArguments {
         self.openLinked = openLinked
         self.clearHistory = clearHistory
         self.reset = reset
+        self.openPlugins = openPlugins
+        self.unhideMessages = unhideMessages
     }
 }
 
@@ -72,6 +78,10 @@ private enum AyuGramSettingsSection: Int32 {
     case filters
     case translator
     case about
+    case ghostExtra
+    case privacy
+    case chats
+    case plugins
 }
 
 private enum AyuGramSettingsEntry: ItemListNodeEntry {
@@ -122,6 +132,12 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
     case reset(String)
     case version(String)
 
+    // A switch bound to a setting, a section header or footer, and a button (newer options use these generic cases).
+    case flag(id: Int32, section: AyuGramSettingsSection, title: String, value: Bool, enabled: Bool, keyPath: WritableKeyPath<AyuGramSettingsValues, Bool>)
+    case header(id: Int32, section: AyuGramSettingsSection, text: String)
+    case footer(id: Int32, section: AyuGramSettingsSection, text: String)
+    case button(id: Int32, section: AyuGramSettingsSection, title: String, label: String, kind: AyuGramSettingsButtonKind)
+
     var section: ItemListSectionId {
         switch self {
         case .ghostHeader, .ghostMaster, .ghostMasterFooter:
@@ -140,6 +156,8 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
             return AyuGramSettingsSection.translator.rawValue
         case .aboutHeader, .reset, .version:
             return AyuGramSettingsSection.about.rawValue
+        case let .flag(_, section, _, _, _, _), let .header(_, section, _), let .footer(_, section, _), let .button(_, section, _, _, _):
+            return section.rawValue
         }
     }
 
@@ -184,6 +202,8 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
         case .aboutHeader: return 80
         case .reset: return 81
         case .version: return 82
+        case let .flag(id, _, _, _, _, _), let .header(id, _, _), let .footer(id, _, _), let .button(id, _, _, _, _):
+            return id
         }
     }
 
@@ -283,8 +303,32 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
             })
         case let .version(text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: section)
+        case let .flag(_, _, title, value, enabled, keyPath):
+            return toggle(title, value, enabled: enabled) { settings, value in
+                settings[keyPath: keyPath] = value
+            }
+        case let .header(_, _, text):
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: section)
+        case let .footer(_, _, text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: section)
+        case let .button(_, _, title, label, kind):
+            switch kind {
+            case .plugins:
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
+                    arguments.openPlugins()
+                })
+            case .unhideMessages:
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, action: {
+                    arguments.unhideMessages()
+                })
+            }
         }
     }
+}
+
+private enum AyuGramSettingsButtonKind: Equatable {
+    case plugins
+    case unhideMessages
 }
 
 private func formatFileSize(_ size: Int64) -> String {
@@ -298,7 +342,7 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
 
     entries.append(.ghostHeader(strings.ghostHeader))
     entries.append(.ghostMaster(strings.ghostMode, settings.isGhostModeFullyEnabled))
-    entries.append(.ghostMasterFooter(strings.ghostFooter))
+    entries.append(.ghostMasterFooter(strings.ghostFooter + " " + strings.ghostButtonHint))
 
     entries.append(.hideOnline(strings.hideOnline, settings.hideOnlineStatus))
     entries.append(.hideRead(strings.hideRead, settings.hideReadReceipts))
@@ -307,6 +351,10 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.hideContents(strings.hideContents, settings.hideMessageContentsRead))
     entries.append(.markReadAfterSend(strings.markReadAfterSend, settings.markReadAfterSend, enabled: settings.hideReadReceipts))
     entries.append(.ghostFooter(strings.markReadAfterSendFooter))
+
+    entries.append(.flag(id: 17, section: .ghostExtra, title: strings.markReadAfterReaction, value: settings.markReadAfterReaction, enabled: settings.hideReadReceipts, keyPath: \.markReadAfterReaction))
+    entries.append(.flag(id: 18, section: .ghostExtra, title: strings.sendViaSchedule, value: settings.sendViaSchedule, enabled: settings.hideOnlineStatus, keyPath: \.sendViaSchedule))
+    entries.append(.footer(id: 19, section: .ghostExtra, text: strings.sendViaScheduleFooter))
 
     entries.append(.antiDeleteHeader(strings.antiDeleteHeader))
     entries.append(.saveDeleted(strings.saveDeleted, settings.saveDeletedMessages))
@@ -320,6 +368,12 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.storageSize(strings.storageUsage, statistics.flatMap { formatFileSize($0.fileSize) } ?? ""))
     entries.append(.clearHistory(strings.clearHistory))
 
+    entries.append(.header(id: 33, section: .privacy, text: strings.privacyHeader))
+    entries.append(.flag(id: 34, section: .privacy, title: strings.removeCopyRestrictions, value: settings.removeCopyRestrictions, enabled: true, keyPath: \.removeCopyRestrictions))
+    entries.append(.flag(id: 35, section: .privacy, title: strings.allowScreenshots, value: settings.allowScreenshots, enabled: true, keyPath: \.allowScreenshots))
+    entries.append(.flag(id: 36, section: .privacy, title: strings.streamerMode, value: settings.streamerMode, enabled: true, keyPath: \.streamerMode))
+    entries.append(.footer(id: 37, section: .privacy, text: strings.privacyFooter))
+
     entries.append(.appearanceHeader(strings.appearanceHeader))
     entries.append(.deletedMark(strings.deletedMark, settings.deletedMark))
     entries.append(.editedMark(strings.editedMark, settings.editedMark, strings.editedMarkPlaceholder))
@@ -332,8 +386,24 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.openAppearance(strings.openAppearance))
     entries.append(.appearanceFooter(strings.appearanceFooter))
 
+    entries.append(.header(id: 51, section: .chats, text: strings.chatsHeader))
+    entries.append(.flag(id: 52, section: .chats, title: strings.hideBlocked, value: settings.hideBlockedUsersMessages, enabled: true, keyPath: \.hideBlockedUsersMessages))
+    entries.append(.flag(id: 53, section: .chats, title: strings.hideSimilarChannels, value: settings.hideSimilarChannels, enabled: true, keyPath: \.hideSimilarChannels))
+    entries.append(.flag(id: 54, section: .chats, title: strings.hideFolderCounters, value: settings.hideFolderCounters, enabled: true, keyPath: \.hideFolderCounters))
+    entries.append(.flag(id: 55, section: .chats, title: strings.hideAllChatsFolder, value: settings.hideAllChatsFolder, enabled: true, keyPath: \.hideAllChatsFolder))
+    entries.append(.flag(id: 56, section: .chats, title: strings.increaseRecentStickers, value: settings.increaseRecentStickers, enabled: true, keyPath: \.increaseRecentStickers))
+    entries.append(.flag(id: 57, section: .chats, title: strings.showServiceTime, value: settings.showServiceMessageTime, enabled: true, keyPath: \.showServiceMessageTime))
+    entries.append(.flag(id: 58, section: .chats, title: strings.simpleReplies, value: settings.simpleReplies, enabled: true, keyPath: \.simpleReplies))
+    entries.append(.flag(id: 59, section: .chats, title: strings.confirmMessageSend, value: settings.confirmMessageSend, enabled: true, keyPath: \.confirmMessageSend))
+
     entries.append(.filtersHeader(strings.filtersHeader))
     entries.append(.filters(strings.filters, settings.messageFiltersEnabled ? "\(settings.messageFilters.count)" : ""))
+    let hiddenCount = AyuHiddenMessages.count
+    entries.append(.button(id: 62, section: .filters, title: strings.unhideMessages, label: hiddenCount > 0 ? "\(hiddenCount)" : "", kind: .unhideMessages))
+
+    entries.append(.header(id: 73, section: .plugins, text: strings.plugins.uppercased()))
+    entries.append(.button(id: 74, section: .plugins, title: strings.plugins, label: "\(AyuPluginManager.shared.enabledCount)", kind: .plugins))
+    entries.append(.footer(id: 75, section: .plugins, text: strings.pluginsFooter))
 
     entries.append(.translatorHeader(strings.translatorHeader))
     entries.append(.translator(strings.translatorSettings))
@@ -393,6 +463,16 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
             AyuGramSettings.reset()
             AyuHaptics.success()
             presentControllerImpl?(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: strings.resetDone, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }))
+        },
+        openPlugins: {
+            pushControllerImpl?(ayuPluginsController(context: context))
+        },
+        unhideMessages: {
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            let strings = AyuStrings(presentationData.strings)
+            AyuHiddenMessages.removeAll()
+            AyuHaptics.success()
+            presentControllerImpl?(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: strings.unhideMessagesDone, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }))
         }
     )
 

@@ -66,6 +66,20 @@ public enum AyuGhostMode {
         guard settings.hideReadReceipts && settings.markReadAfterSend else {
             return
         }
+        AyuGhostMode.pushReadStateOnce(account: account, peerId: peerId)
+    }
+
+    /// Called when the user reacts to a message or votes in a poll: with "mark read after reaction" on, the chat's
+    /// read state is pushed once.
+    static func didInteract(account: Account, peerId: PeerId) {
+        let settings = AyuGramSettings.current
+        guard settings.hideReadReceipts && settings.markReadAfterReaction else {
+            return
+        }
+        AyuGhostMode.pushReadStateOnce(account: account, peerId: peerId)
+    }
+
+    static func pushReadStateOnce(account: Account, peerId: PeerId) {
         guard peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup || peerId.namespace == Namespaces.Peer.CloudChannel else {
             return
         }

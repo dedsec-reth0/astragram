@@ -521,7 +521,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                     var tertiaryColor: UIColor? = nil
                     
                     let nameColors: PeerNameColors.Colors?
-                    switch author?.nameColor {
+                    switch AyuGramSettings.current.simpleReplies ? nil : author?.nameColor {
                     case let .preset(nameColor):
                         nameColors = item.context.peerNameColors.get(nameColor, dark: item.presentationData.theme.theme.overallDarkAppearance)
                     case let .collectible(collectibleColor):

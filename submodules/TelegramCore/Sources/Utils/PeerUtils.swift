@@ -270,6 +270,10 @@ public extension Peer {
     }
     
     var isCopyProtectionEnabled: Bool {
+        // AyuGram: "Remove copy restrictions".
+        if AyuGramSettings.current.removeCopyRestrictions {
+            return false
+        }
         switch self {
         case let group as TelegramGroup:
             return group.flags.contains(.copyProtectionEnabled)

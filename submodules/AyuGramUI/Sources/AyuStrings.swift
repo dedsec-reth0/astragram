@@ -119,4 +119,60 @@ public struct AyuStrings {
         case .none: return ""
         }
     }
+
+    // AyuGram features, second batch
+    public var messageMenu: String { t("AyuGram", "AyuGram") }
+    public var messageDetails: String { t("Детали сообщения", "Message Details") }
+    public var repeatMessage: String { t("Повторить", "Repeat") }
+    public var copyPlain: String { t("Копировать без форматирования", "Copy Without Formatting") }
+    public var readUntil: String { t("Прочитать до этого места", "Read Until Here") }
+    public var hideMessage: String { t("Скрыть сообщение", "Hide Message") }
+    public var copied: String { t("Скопировано", "Copied") }
+    public var readUntilDone: String { t("Отмечено прочитанным", "Marked as read") }
+    public var hiddenDone: String { t("Сообщение скрыто на этом устройстве", "Message hidden on this device") }
+    public var detailsMessageId: String { t("ID сообщения", "Message ID") }
+    public var detailsChatId: String { t("ID чата", "Chat ID") }
+    public var detailsAuthorId: String { t("ID автора", "Author ID") }
+    public var detailsDate: String { t("Дата", "Date") }
+    public var detailsEdited: String { t("Изменено", "Edited") }
+    public var detailsViews: String { t("Просмотры", "Views") }
+    public var detailsForwards: String { t("Пересылки", "Forwards") }
+    public var detailsForwardedFrom: String { t("Переслано от", "Forwarded from") }
+    public var detailsOriginalDate: String { t("Дата оригинала", "Original date") }
+    public var detailsFile: String { t("Файл", "File") }
+    public var detailsSize: String { t("Размер", "Size") }
+    public var detailsPackId: String { t("ID набора", "Pack ID") }
+    public var detailsPackOwner: String { t("ID автора набора", "Pack author ID") }
+    public var detailsPack: String { t("Набор", "Pack") }
+    public var detailsPhoto: String { t("Фото", "Photo") }
+    public var ghostButtonHint: String { t("Кнопка 👻 в шапке экрана «Чаты» включает и выключает весь режим призрака.", "The 👻 button at the top of the Chats screen turns the whole Ghost Mode on and off.") }
+    public var markReadAfterReaction: String { t("Прочитать при реакции и голосовании", "Mark as read when reacting or voting") }
+    public var sendViaSchedule: String { t("Отправлять через отложку", "Send via schedule") }
+    public var sendViaScheduleFooter: String { t("Сообщения отправляются как отложенные на несколько секунд вперёд, поэтому отправка не показывает вас «в сети». Работает, когда включено «Не отправлять «в сети»».", "Messages are sent as scheduled a few seconds ahead, so sending does not show you online. Works while \"Don't send online status\" is on.") }
+    public var privacyHeader: String { t("ОГРАНИЧЕНИЯ И ПРИВАТНОСТЬ", "RESTRICTIONS AND PRIVACY") }
+    public var removeCopyRestrictions: String { t("Снять запрет копирования", "Remove copy restrictions") }
+    public var allowScreenshots: String { t("Разрешить скриншоты", "Allow screenshots") }
+    public var streamerMode: String { t("Режим стримера", "Streamer mode") }
+    public var privacyFooter: String { t("Снятие запрета позволяет копировать текст и сохранять медиа из защищённых чатов (пересылку сервер всё равно запрещает). Скриншоты секретных чатов и одноразовых медиа перестают блокироваться, собеседник не получает уведомления. Режим стримера скрывает окно приложения при записи экрана и трансляции.", "Removing restrictions lets you copy text and save media from protected chats (the server still refuses forwarding). Screenshots of secret chats and self-destructing media are no longer blocked and the other side is not notified. Streamer mode hides the app window from screen recording and sharing.") }
+    public var chatsHeader: String { t("ЧАТЫ", "CHATS") }
+    public var hideBlocked: String { t("Скрывать сообщения заблокированных", "Hide messages of blocked users") }
+    public var hideSimilarChannels: String { t("Скрывать похожие каналы", "Hide similar channels") }
+    public var hideFolderCounters: String { t("Скрывать счётчики на папках", "Hide folder unread counters") }
+    public var hideAllChatsFolder: String { t("Скрывать папку «Все чаты»", "Hide the \"All Chats\" folder") }
+    public var increaseRecentStickers: String { t("До 100 недавних стикеров", "Up to 100 recent stickers") }
+    public var showServiceTime: String { t("Время служебных сообщений", "Service message time") }
+    public var simpleReplies: String { t("Простые ответы и цитаты", "Simple replies and quotes") }
+    public var confirmMessageSend: String { t("Подтверждать отправку сообщений", "Confirm sending messages") }
+    public var unhideMessages: String { t("Показать скрытые сообщения", "Show hidden messages") }
+    public var plugins: String { t("Плагины", "Plugins") }
+    public var unhideMessagesDone: String { t("Скрытые сообщения снова видны (откройте чат заново)", "Hidden messages are visible again (reopen the chat)") }
+    public var pluginsFooter: String { t("Плагины на JavaScript меняют исходящие сообщения, реагируют на входящие и добавляют команды вида .команда. Устанавливайте только плагины, которым доверяете.", "JavaScript plugins change outgoing messages, react to incoming ones and add commands like .command. Install only plugins you trust.") }
+    public var pluginsInstall: String { t("Установить из файла", "Install from File") }
+    public var pluginsInstallFromClipboard: String { t("Установить из буфера обмена", "Install from Clipboard") }
+    public var pluginsInstalled: String { t("УСТАНОВЛЕННЫЕ", "INSTALLED") }
+    public var pluginsEmpty: String { t("Плагинов пока нет. Плагин — это файл .js с описанием в начале. Пример есть в документации AyuGram для iOS.", "No plugins yet. A plugin is a .js file with a header. See the AyuGram for iOS docs for an example.") }
+    public var pluginsDelete: String { t("Удалить", "Delete") }
+    public var pluginsInvalid: String { t("Не удалось загрузить плагин", "Could not load the plugin") }
+    public var pluginsInstalledDone: String { t("Плагин установлен", "Plugin installed") }
+    public var pluginsHelp: String { t("Как писать плагины", "Writing Plugins") }
 }

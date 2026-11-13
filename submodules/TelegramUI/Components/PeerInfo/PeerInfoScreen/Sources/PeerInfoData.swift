@@ -2522,6 +2522,9 @@ func peerInfoScreenData(
 /// not the private chat, so it follows the direct-messages channel's own protection (which cannot
 /// be enabled today) and never the private chat's.
 func peerInfoIsCopyProtected(data: PeerInfoScreenData, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?) -> Bool {
+    if AyuGramSettings.current.removeCopyRestrictions {
+        return false
+    }
     if sharedMediaFromForumTopic != nil {
         return data.sharedMediaPeer?.isCopyProtectionEnabled ?? false
     }

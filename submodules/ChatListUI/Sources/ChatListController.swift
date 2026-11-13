@@ -4149,6 +4149,22 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 }
             }
             
+            // AyuGram: "Hide the All Chats folder" (only when there is another folder to show).
+            let ayuHideAllChats = AyuGramSettings.current.hideAllChatsFolder && filterItems.contains(where: { entry in
+                if case .filter = entry {
+                    return true
+                }
+                return false
+            })
+            if ayuHideAllChats {
+                filterItems.removeAll(where: { entry in
+                    if case .all = entry {
+                        return true
+                    }
+                    return false
+                })
+            }
+
             var resolvedItems = filterItems
             if case .chatList(.root) = strongSelf.location {
             } else {
@@ -4156,12 +4172,15 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             }
             
             let firstItem = countAndFilterItems.1.first?.0 ?? .allChats
-            let firstItemEntryId: ChatListFilterTabEntryId
+            var firstItemEntryId: ChatListFilterTabEntryId
             switch firstItem {
                 case .allChats:
                     firstItemEntryId = .all
                 case let .filter(id, _, _, _):
                     firstItemEntryId = .filter(id)
+            }
+            if ayuHideAllChats, let firstResolved = resolvedItems.first {
+                firstItemEntryId = firstResolved.id
             }
             
             var selectedEntryId = !strongSelf.initializedFilters ? firstItemEntryId : strongSelf.chatListDisplayNode.mainContainerNode.currentItemFilter
@@ -4185,6 +4204,9 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 } else {
                     selectedEntryId = .all
                 }
+                if ayuHideAllChats, selectedEntryId == .all, let firstResolved = resolvedItems.first {
+                    selectedEntryId = firstResolved.id
+                }
             }
             let filtersLimit = isPremium == false ? limits.maxFoldersCount : nil
             strongSelf.tabContainerData = (resolvedItems, false, filtersLimit)
@@ -4194,6 +4216,9 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 switch item.0 {
                     case .allChats:
                         hasAllChats = true
+                        if ayuHideAllChats {
+                            continue
+                        }
                         if let isPremium = isPremium, !isPremium && availableFilters.count > 0 {
                             availableFilters.insert(.all, at: 0)
                         } else {
@@ -4203,7 +4228,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         availableFilters.append(.filter(item.0))
                 }
             }
-            if !hasAllChats {
+            if !hasAllChats && !ayuHideAllChats {
                 availableFilters.insert(.all, at: 0)
             }
             strongSelf.chatListDisplayNode.mainContainerNode.updateAvailableFilters(availableFilters, limit: filtersLimit)

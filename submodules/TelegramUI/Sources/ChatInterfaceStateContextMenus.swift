@@ -1373,6 +1373,72 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })))
         }
 
+        // AyuGram: the AyuGram submenu (details, repeat, copy without formatting, read until here, hide).
+        if message.id.namespace == Namespaces.Message.Cloud {
+            let ayuStrings = AyuStrings(chatPresentationInterfaceState.strings)
+            let ayuMessage = message
+            actions.append(.action(ContextMenuActionItem(text: ayuStrings.messageMenu, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Customize"), color: theme.actionSheet.primaryTextColor)
+            }, action: { [weak controllerInteraction] c, _ in
+                var subItems: [ContextMenuItem] = []
+                subItems.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Common_Back, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.actionSheet.primaryTextColor)
+                }, iconPosition: .left, action: { c, _ in
+                    c?.popItems()
+                })))
+                subItems.append(.separator)
+                subItems.append(.action(ContextMenuActionItem(text: ayuStrings.messageDetails, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.actionSheet.primaryTextColor)
+                }, action: { [weak controllerInteraction] c, _ in
+                    c?.dismiss(completion: {
+                        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                        let text = ayuMessageDetailsText(message: ayuMessage, strings: presentationData.strings)
+                        controllerInteraction?.presentController(textAlertController(context: context, title: ayuStrings.messageDetails, text: text, actions: [
+                            TextAlertAction(type: .genericAction, title: presentationData.strings.Conversation_ContextMenuCopy, action: {
+                                UIPasteboard.general.string = text
+                            }),
+                            TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                        ], actionLayout: .horizontal), nil)
+                    })
+                })))
+                if !ayuMessage.text.isEmpty && ayuMessage.media.isEmpty {
+                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.repeatMessage, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Resend"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { [weak controllerInteraction] _, f in
+                        f(.default)
+                        controllerInteraction?.sendMessage(ayuMessage.text, nil)
+                    })))
+                }
+                if !ayuMessage.text.isEmpty {
+                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.copyPlain, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { [weak controllerInteraction] _, f in
+                        UIPasteboard.general.string = ayuMessage.text
+                        f(.default)
+                        controllerInteraction?.displayUndo(.copy(text: ayuStrings.copied))
+                    })))
+                }
+                if ayuMessage.flags.contains(.Incoming) {
+                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.readUntil, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Read"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { [weak controllerInteraction] _, f in
+                        f(.default)
+                        let _ = AyuMessageActions.readUntil(account: context.account, index: ayuMessage.index).startStandalone()
+                        controllerInteraction?.displayUndo(.info(title: nil, text: ayuStrings.readUntilDone, timeout: 2.0, customUndoText: nil))
+                    })))
+                }
+                subItems.append(.action(ContextMenuActionItem(text: ayuStrings.hideMessage, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/EyeLocked"), color: theme.actionSheet.primaryTextColor)
+                }, action: { [weak controllerInteraction] _, f in
+                    f(.default)
+                    let _ = AyuMessageActions.hideLocally(account: context.account, id: ayuMessage.id).startStandalone()
+                    controllerInteraction?.displayUndo(.info(title: nil, text: ayuStrings.hiddenDone, timeout: 2.0, customUndoText: nil))
+                })))
+
+                c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
+            })))
+        }
+
         let isCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()
         if !messageText.isEmpty || richMessageMarkdown != nil || (resourceAvailable && isImage) || diceEmoji != nil {
             if !isExpired {
@@ -2642,6 +2708,9 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
         }
         
         func isPeerCopyProtected(_ peerId: EnginePeer.Id) -> Bool? {
+            if AyuGramSettings.current.removeCopyRestrictions {
+                return nil
+            }
             let copyProtection = copyProtectionMap[peerId]
             let myCopyProtection = myCopyProtectionMap[peerId]
             if copyProtection == true || myCopyProtection == true {

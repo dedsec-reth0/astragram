@@ -33,6 +33,32 @@ public struct AyuGramSettingsValues: Codable, Equatable {
     /// Self-destructing and view-once photos, videos and voice messages stay viewable after you open them: the local
     /// self-destruct timer is not started. The sender still sees them as viewed (even in ghost mode).
     public var keepSelfDestructingMedia: Bool
+    /// Send a read receipt for a chat when you react to a message or vote in a poll in it, even while read receipts are hidden.
+    public var markReadAfterReaction: Bool
+    /// Ghost mode: messages are sent as scheduled a few seconds ahead, so sending does not show the account online.
+    public var sendViaSchedule: Bool
+    /// Hide messages of blocked users in groups and channels.
+    public var hideBlockedUsersMessages: Bool
+    /// Allow copying, forwarding and saving the content of chats that forbid it.
+    public var removeCopyRestrictions: Bool
+    /// Allow screenshots of secret chats and self-destructing media without notifying the other side.
+    public var allowScreenshots: Bool
+    /// Hide the app from screenshots, screen recording and screen sharing.
+    public var streamerMode: Bool
+    /// Show the time of service messages.
+    public var showServiceMessageTime: Bool
+    /// Draw replies and quotes without the sender's colors and patterns.
+    public var simpleReplies: Bool
+    /// Hide recommendations of similar channels.
+    public var hideSimilarChannels: Bool
+    /// Hide unread counters on chat folder tabs.
+    public var hideFolderCounters: Bool
+    /// Hide the "All Chats" folder tab.
+    public var hideAllChatsFolder: Bool
+    /// Keep up to 100 recently used stickers.
+    public var increaseRecentStickers: Bool
+    /// Ask before sending any message.
+    public var confirmMessageSend: Bool
 
     // MARK: Appearance and chats
     /// Text shown next to the time of a deleted message.
@@ -70,6 +96,19 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         saveEditHistory: true,
         saveDeletedInChannels: true,
         keepSelfDestructingMedia: true,
+        markReadAfterReaction: true,
+        sendViaSchedule: false,
+        hideBlockedUsersMessages: false,
+        removeCopyRestrictions: true,
+        allowScreenshots: true,
+        streamerMode: false,
+        showServiceMessageTime: false,
+        simpleReplies: false,
+        hideSimilarChannels: false,
+        hideFolderCounters: false,
+        hideAllChatsFolder: false,
+        increaseRecentStickers: true,
+        confirmMessageSend: false,
         deletedMark: "🧹",
         editedMark: "",
         showMessageSeconds: false,
@@ -94,6 +133,19 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         saveEditHistory: Bool,
         saveDeletedInChannels: Bool,
         keepSelfDestructingMedia: Bool,
+        markReadAfterReaction: Bool,
+        sendViaSchedule: Bool,
+        hideBlockedUsersMessages: Bool,
+        removeCopyRestrictions: Bool,
+        allowScreenshots: Bool,
+        streamerMode: Bool,
+        showServiceMessageTime: Bool,
+        simpleReplies: Bool,
+        hideSimilarChannels: Bool,
+        hideFolderCounters: Bool,
+        hideAllChatsFolder: Bool,
+        increaseRecentStickers: Bool,
+        confirmMessageSend: Bool,
         deletedMark: String,
         editedMark: String,
         showMessageSeconds: Bool,
@@ -116,6 +168,19 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.saveEditHistory = saveEditHistory
         self.saveDeletedInChannels = saveDeletedInChannels
         self.keepSelfDestructingMedia = keepSelfDestructingMedia
+        self.markReadAfterReaction = markReadAfterReaction
+        self.sendViaSchedule = sendViaSchedule
+        self.hideBlockedUsersMessages = hideBlockedUsersMessages
+        self.removeCopyRestrictions = removeCopyRestrictions
+        self.allowScreenshots = allowScreenshots
+        self.streamerMode = streamerMode
+        self.showServiceMessageTime = showServiceMessageTime
+        self.simpleReplies = simpleReplies
+        self.hideSimilarChannels = hideSimilarChannels
+        self.hideFolderCounters = hideFolderCounters
+        self.hideAllChatsFolder = hideAllChatsFolder
+        self.increaseRecentStickers = increaseRecentStickers
+        self.confirmMessageSend = confirmMessageSend
         self.deletedMark = deletedMark
         self.editedMark = editedMark
         self.showMessageSeconds = showMessageSeconds
@@ -143,6 +208,19 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.saveEditHistory = try container.decodeIfPresent(Bool.self, forKey: .saveEditHistory) ?? d.saveEditHistory
         self.saveDeletedInChannels = try container.decodeIfPresent(Bool.self, forKey: .saveDeletedInChannels) ?? d.saveDeletedInChannels
         self.keepSelfDestructingMedia = try container.decodeIfPresent(Bool.self, forKey: .keepSelfDestructingMedia) ?? d.keepSelfDestructingMedia
+        self.markReadAfterReaction = try container.decodeIfPresent(Bool.self, forKey: .markReadAfterReaction) ?? d.markReadAfterReaction
+        self.sendViaSchedule = try container.decodeIfPresent(Bool.self, forKey: .sendViaSchedule) ?? d.sendViaSchedule
+        self.hideBlockedUsersMessages = try container.decodeIfPresent(Bool.self, forKey: .hideBlockedUsersMessages) ?? d.hideBlockedUsersMessages
+        self.removeCopyRestrictions = try container.decodeIfPresent(Bool.self, forKey: .removeCopyRestrictions) ?? d.removeCopyRestrictions
+        self.allowScreenshots = try container.decodeIfPresent(Bool.self, forKey: .allowScreenshots) ?? d.allowScreenshots
+        self.streamerMode = try container.decodeIfPresent(Bool.self, forKey: .streamerMode) ?? d.streamerMode
+        self.showServiceMessageTime = try container.decodeIfPresent(Bool.self, forKey: .showServiceMessageTime) ?? d.showServiceMessageTime
+        self.simpleReplies = try container.decodeIfPresent(Bool.self, forKey: .simpleReplies) ?? d.simpleReplies
+        self.hideSimilarChannels = try container.decodeIfPresent(Bool.self, forKey: .hideSimilarChannels) ?? d.hideSimilarChannels
+        self.hideFolderCounters = try container.decodeIfPresent(Bool.self, forKey: .hideFolderCounters) ?? d.hideFolderCounters
+        self.hideAllChatsFolder = try container.decodeIfPresent(Bool.self, forKey: .hideAllChatsFolder) ?? d.hideAllChatsFolder
+        self.increaseRecentStickers = try container.decodeIfPresent(Bool.self, forKey: .increaseRecentStickers) ?? d.increaseRecentStickers
+        self.confirmMessageSend = try container.decodeIfPresent(Bool.self, forKey: .confirmMessageSend) ?? d.confirmMessageSend
         self.deletedMark = try container.decodeIfPresent(String.self, forKey: .deletedMark) ?? d.deletedMark
         self.editedMark = try container.decodeIfPresent(String.self, forKey: .editedMark) ?? d.editedMark
         self.showMessageSeconds = try container.decodeIfPresent(Bool.self, forKey: .showMessageSeconds) ?? d.showMessageSeconds
@@ -254,4 +332,9 @@ public final class AyuGramSettings {
             value = .default
         }
     }
+}
+
+/// How many recent stickers are kept ("Up to 100 recent stickers"; Telegram keeps 20).
+var ayuRecentStickersLimit: Int {
+    return AyuGramSettings.current.increaseRecentStickers ? 100 : 20
 }

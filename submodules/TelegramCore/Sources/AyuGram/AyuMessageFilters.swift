@@ -83,8 +83,18 @@ public extension AyuGramSettings {
 
     /// Whether AyuGram's message filters hide `message` from chat histories. Your own messages are never hidden.
     static func shouldHideMessage(_ message: Message) -> Bool {
+        if AyuHiddenMessages.contains(message.id) {
+            return true
+        }
         if !message.flags.contains(.Incoming) {
             return false
+        }
+        // Messages of blocked users, except in the private chat with them.
+        if AyuGramSettings.current.hideBlockedUsersMessages, let authorId = message.author?.id, authorId != message.id.peerId, AyuBlockedPeers.isBlocked(authorId) {
+            return true
+        }
+        if AyuPluginHooks.shouldHide(message) {
+            return true
         }
         if let matcher = AyuGramSettings.currentMessageFilterMatcher() {
             return matcher.matches(message.text)

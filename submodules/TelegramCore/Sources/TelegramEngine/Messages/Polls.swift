@@ -38,6 +38,9 @@ public enum RequestMessageSelectPollOptionError {
 }
 
 func _internal_requestMessageSelectPollOption(account: Account, messageId: MessageId, opaqueIdentifiers: [Data]) -> Signal<TelegramMediaPoll?, RequestMessageSelectPollOptionError> {
+    if !opaqueIdentifiers.isEmpty {
+        AyuGhostMode.didInteract(account: account, peerId: messageId.peerId)
+    }
     return account.postbox.loadedPeerWithId(messageId.peerId)
     |> take(1)
     |> castError(RequestMessageSelectPollOptionError.self)

@@ -262,6 +262,12 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
             if arguments.isSummarized {
                 authorNameColor = nil
             }
+            // AyuGram: "Simple replies and quotes" draws them without the sender's colors.
+            if AyuGramSettings.current.simpleReplies {
+                authorNameColor = nil
+                dashSecondaryColor = nil
+                dashTertiaryColor = nil
+            }
             
             switch arguments.type {
             case let .bubble(incoming):
@@ -948,7 +954,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 node.backgroundView.frame = backgroundFrame
                 
                 var pattern: MessageInlineBlockBackgroundView.Pattern?
-                if let backgroundEmojiId = author?.backgroundEmojiId {
+                if let backgroundEmojiId = author?.backgroundEmojiId, !AyuGramSettings.current.simpleReplies {
                     pattern = MessageInlineBlockBackgroundView.Pattern(
                         context: arguments.context,
                         fileId: backgroundEmojiId,

@@ -33,6 +33,7 @@ import DebugSettingsUI
 import CrashReporting
 import BackgroundTasks
 import UIKitRuntimeUtils
+import AyuGramUI
 import StoreKit
 import PhoneNumberFormat
 import AuthorizationUI
@@ -447,6 +448,24 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         self.nativeWindow = window
         
         hostView.containerView.layer.addSublayer(MetalEngine.shared.rootLayer)
+
+        // AyuGram: "Allow screenshots" switches the app's capture protection off; streamer mode hides the whole window
+        // from screenshots, screen recording and screen sharing.
+        ayuSetScreenshotProtectionDisabled(AyuGramSettings.current.allowScreenshots)
+        // AyuGram plugins (JavaScript).
+        AyuPluginManager.shared.start()
+        let ayuWindowLayer = window.layer
+        let _ = (AyuGramSettings.signal
+        |> map { settings -> (Bool, Bool) in
+            return (settings.allowScreenshots, settings.streamerMode)
+        }
+        |> distinctUntilChanged(isEqual: { lhs, rhs in
+            return lhs == rhs
+        })
+        |> deliverOnMainQueue).start(next: { allowScreenshots, streamerMode in
+            ayuSetScreenshotProtectionDisabled(allowScreenshots)
+            ayuSetLayerHiddenFromCapture(ayuWindowLayer, streamerMode)
+        })
         // On the first start after an update, compile the pipelines that would otherwise stall their first use.
         if MetalEngine.shared.pipelineCache.isFresh {
             prewarmLiquidGlassShapes([.crest], qos: .utility)

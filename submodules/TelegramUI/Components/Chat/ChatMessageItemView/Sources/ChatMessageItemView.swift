@@ -12,6 +12,7 @@ import SwiftSignalKit
 import ChatControllerInteraction
 import ChatMessageItemCommon
 import TextFormat
+import PresentationDataUtils
 import ChatMessageItem
 import ChatMessageTransitionNode
 import AnimatedStickerNode
@@ -904,6 +905,14 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
             switch button.action {
                 case let .url(url):
                     item.controllerInteraction.longTap(.url(url), ChatControllerInteraction.LongTapParams(message: item.message))
+                case let .callback(_, data):
+                    // AyuGram: a long press on an inline button copies its callback data.
+                    let bytes = Data(bytes: data.memory, count: data.length)
+                    let text = String(data: bytes, encoding: .utf8) ?? bytes.map { String(format: "%02x", $0) }.joined()
+                    UIPasteboard.general.string = text
+                    let isRussian = item.presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+                    let alert = textAlertController(context: item.context, title: isRussian ? "Данные кнопки" : "Button Data", text: text, actions: [TextAlertAction(type: .defaultAction, title: item.presentationData.strings.Common_OK, action: {})])
+                    item.controllerInteraction.presentController(alert, nil)
                 default:
                     break
             }
