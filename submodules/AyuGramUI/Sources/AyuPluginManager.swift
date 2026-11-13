@@ -194,52 +194,84 @@ public final class AyuPluginManager {
         return result
     }
 
-    private func load(id: String, source: String) -> Result<LoadedPlugin, LoadError> {
-        guard let context = JSContext() else {
-            return .failure(LoadError(message: "JavaScriptCore is not available"))
+    // JavaScriptCore's Objective-C API is imported with implicitly unwrapped or non-optional types depending on the
+    // SDK; these helpers give the same types either way.
+    private static func newObject(in context: JSContext) -> JSValue {
+        let value: JSValue = JSValue(newObjectIn: context)
+        return value
+    }
+
+    private static func property(_ value: JSValue, _ name: String) -> JSValue? {
+        let result: JSValue? = value.forProperty(name)
+        if let result = result, !result.isUndefined, !result.isNull {
+            return result
         }
+        return nil
+    }
+
+    private static func call(_ function: JSValue, _ arguments: [Any]) -> JSValue? {
+        let result: JSValue? = function.call(withArguments: arguments)
+        return result
+    }
+
+    private static func string(_ value: JSValue) -> String? {
+        let result: String? = value.toString()
+        return result
+    }
+
+    private func load(id: String, source: String) -> Result<LoadedPlugin, LoadError> {
+        let context: JSContext = JSContext()
         var exceptionText: String?
         context.exceptionHandler = { _, exception in
-            exceptionText = exception?.toString()
+            let exceptionValue: JSValue? = exception
+            exceptionText = exceptionValue.flatMap { AyuPluginManager.string($0) } ?? "error"
         }
 
         let storageKey = "ayugram.plugins.storage." + id
-        let ayu = JSValue(newObjectIn: context)!
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-        ayu.setValue(version, forProperty: "version")
         let log: @convention(block) (String) -> Void = { text in
             NSLog("[AyuPlugin \(id)] \(text)")
         }
-        ayu.setValue(unsafeBitCast(log, to: AnyObject.self), forProperty: "log")
-        let storage = JSValue(newObjectIn: context)!
-        let storageGet: @convention(block) (String) -> Any? = { key in
-            let values = UserDefaults.standard.dictionary(forKey: storageKey) ?? [:]
+        // The storage keeps JSON strings; the JavaScript wrapper below turns them back into values.
+        let storageGet: @convention(block) (String) -> String? = { key in
+            let values = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: String] ?? [:]
             return values[key]
         }
-        let storageSet: @convention(block) (String, JSValue) -> Void = { key, value in
-            var values = UserDefaults.standard.dictionary(forKey: storageKey) ?? [:]
-            if value.isUndefined || value.isNull {
+        let storageSet: @convention(block) (String, String?) -> Void = { key, value in
+            var values = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: String] ?? [:]
+            if let value = value {
+                values[key] = value
+            } else {
                 values.removeValue(forKey: key)
-            } else if let object = value.toObject(), JSONSerialization.isValidJSONObject([object]) {
-                values[key] = object
             }
             UserDefaults.standard.set(values, forKey: storageKey)
         }
-        storage.setValue(unsafeBitCast(storageGet, to: AnyObject.self), forProperty: "get")
-        storage.setValue(unsafeBitCast(storageSet, to: AnyObject.self), forProperty: "set")
-        ayu.setValue(storage, forProperty: "storage")
-        context.setObject(ayu, forKeyedSubscript: "ayu" as NSString)
-
-        let plugin = JSValue(newObjectIn: context)!
-        plugin.setValue(JSValue(newObjectIn: context), forProperty: "commands")
-        context.setObject(plugin, forKeyedSubscript: "plugin" as NSString)
+        context.setObject(unsafeBitCast(log, to: AnyObject.self), forKeyedSubscript: "__ayuLog" as NSString)
+        context.setObject(unsafeBitCast(storageGet, to: AnyObject.self), forKeyedSubscript: "__ayuStorageGet" as NSString)
+        context.setObject(unsafeBitCast(storageSet, to: AnyObject.self), forKeyedSubscript: "__ayuStorageSet" as NSString)
+        context.setObject(version, forKeyedSubscript: "__ayuVersion" as NSString)
+        context.evaluateScript("""
+        var ayu = {
+            version: __ayuVersion,
+            log: function (text) { __ayuLog(String(text)) },
+            storage: {
+                get: function (key) { var value = __ayuStorageGet(String(key)); return value == null ? null : JSON.parse(value) },
+                set: function (key, value) { __ayuStorageSet(String(key), value === undefined || value === null ? null : JSON.stringify(value)) }
+            }
+        };
+        var plugin = { commands: {} };
+        """)
 
         context.evaluateScript(source, withSourceURL: URL(string: "ayugram-plugin://\(id).js"))
         if let exceptionText = exceptionText {
             return .failure(LoadError(message: exceptionText))
         }
+        guard let plugin = AyuPluginManager.property(context.globalObject, "plugin") else {
+            return .failure(LoadError(message: "plugin object is missing"))
+        }
         context.exceptionHandler = { _, exception in
-            NSLog("[AyuPlugin \(id)] error: \(exception?.toString() ?? "")")
+            let exceptionValue: JSValue? = exception
+            NSLog("[AyuPlugin \(id)] error: \(exceptionValue.flatMap { AyuPluginManager.string($0) } ?? "")")
         }
         return .success(LoadedPlugin(id: id, context: context, plugin: plugin))
     }
@@ -247,7 +279,7 @@ public final class AyuPluginManager {
     // MARK: Hooks
 
     private func chatObject(_ peerId: PeerId, in context: JSContext) -> JSValue {
-        let chat = JSValue(newObjectIn: context)!
+        let chat = AyuPluginManager.newObject(in: context)
         chat.setValue(NSNumber(value: ayuBotApiId(peerId)), forProperty: "id")
         return chat
     }
@@ -266,13 +298,13 @@ public final class AyuPluginManager {
             if let name = parts.first.map(String.init), !name.isEmpty {
                 let args = parts.count > 1 ? String(parts[1]) : ""
                 for loaded in self.loaded {
-                    guard let commands = loaded.plugin.forProperty("commands"), let command = commands.forProperty(name), command.isObject, !command.isUndefined else {
+                    guard let commands = AyuPluginManager.property(loaded.plugin, "commands"), let command = AyuPluginManager.property(commands, name), command.isObject else {
                         continue
                     }
-                    guard let result = command.call(withArguments: [args, self.chatObject(peerId, in: loaded.context)]) else {
+                    guard let result = AyuPluginManager.call(command, [args, self.chatObject(peerId, in: loaded.context)]) else {
                         return .drop
                     }
-                    if result.isString, let resultText = result.toString(), !resultText.isEmpty {
+                    if result.isString, let resultText = AyuPluginManager.string(result), !resultText.isEmpty {
                         return .send(resultText)
                     }
                     return .drop
@@ -283,16 +315,16 @@ public final class AyuPluginManager {
         var current = text
         var changed = false
         for loaded in self.loaded {
-            guard let hook = loaded.plugin.forProperty("onOutgoing"), hook.isObject else {
+            guard let hook = AyuPluginManager.property(loaded.plugin, "onOutgoing"), hook.isObject else {
                 continue
             }
-            guard let result = hook.call(withArguments: [current, self.chatObject(peerId, in: loaded.context)]) else {
+            guard let result = AyuPluginManager.call(hook, [current, self.chatObject(peerId, in: loaded.context)]) else {
                 continue
             }
             if result.isNull {
                 return .drop
             }
-            if result.isString, let resultText = result.toString() {
+            if result.isString, let resultText = AyuPluginManager.string(result) {
                 if resultText != current {
                     current = resultText
                     changed = true
@@ -314,17 +346,17 @@ public final class AyuPluginManager {
         }
         var hide = false
         for loaded in self.loaded {
-            guard let hook = loaded.plugin.forProperty("shouldHide"), hook.isObject else {
+            guard let hook = AyuPluginManager.property(loaded.plugin, "shouldHide"), hook.isObject else {
                 continue
             }
-            let object = JSValue(newObjectIn: loaded.context)!
+            let object = AyuPluginManager.newObject(in: loaded.context)
             object.setValue(message.text, forProperty: "text")
             object.setValue(NSNumber(value: message.id.id), forProperty: "id")
             object.setValue(NSNumber(value: ayuBotApiId(message.id.peerId)), forProperty: "chatId")
             if let author = message.author {
                 object.setValue(NSNumber(value: ayuBotApiId(author.id)), forProperty: "authorId")
             }
-            if let result = hook.call(withArguments: [object]), result.toBool() {
+            if let result = AyuPluginManager.call(hook, [object]), result.toBool() {
                 hide = true
                 break
             }

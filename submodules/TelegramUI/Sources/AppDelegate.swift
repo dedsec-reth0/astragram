@@ -365,8 +365,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 self.ayuApiSetupWindow?.isHidden = true
                 self.ayuApiSetupWindow = nil
                 let _ = self.application(application, didFinishLaunchingWithOptions: launchOptions)
-                if let (scene, connectionOptions) = self.ayuConnectedScene {
-                    self.attach(scene: scene, connectionOptions: connectionOptions)
+                if let connectedScene = self.ayuConnectedScene {
+                    self.attach(scene: connectedScene.0, connectionOptions: connectedScene.1)
                     if application.applicationState == .active {
                         self.handleDidBecomeActive()
                     }
