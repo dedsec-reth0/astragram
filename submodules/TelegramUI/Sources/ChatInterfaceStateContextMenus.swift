@@ -1379,7 +1379,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             let ayuMessage = message
             actions.append(.action(ContextMenuActionItem(text: ayuStrings.messageMenu, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Customize"), color: theme.actionSheet.primaryTextColor)
-            }, action: { [weak controllerInteraction] c, _ in
+            }, action: { c, _ in
                 var subItems: [ContextMenuItem] = []
                 subItems.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Common_Back, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.actionSheet.primaryTextColor)
@@ -1389,11 +1389,11 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 subItems.append(.separator)
                 subItems.append(.action(ContextMenuActionItem(text: ayuStrings.messageDetails, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.actionSheet.primaryTextColor)
-                }, action: { [weak controllerInteraction] c, _ in
+                }, action: { c, _ in
                     c?.dismiss(completion: {
                         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                         let text = ayuMessageDetailsText(message: ayuMessage, strings: presentationData.strings)
-                        controllerInteraction?.presentController(textAlertController(context: context, title: ayuStrings.messageDetails, text: text, actions: [
+                        controllerInteraction.presentController(textAlertController(context: context, title: ayuStrings.messageDetails, text: text, actions: [
                             TextAlertAction(type: .genericAction, title: presentationData.strings.Conversation_ContextMenuCopy, action: {
                                 UIPasteboard.general.string = text
                             }),
@@ -1404,36 +1404,36 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 if !ayuMessage.text.isEmpty && ayuMessage.media.isEmpty {
                     subItems.append(.action(ContextMenuActionItem(text: ayuStrings.repeatMessage, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Resend"), color: theme.actionSheet.primaryTextColor)
-                    }, action: { [weak controllerInteraction] _, f in
+                    }, action: { _, f in
                         f(.default)
-                        controllerInteraction?.sendMessage(ayuMessage.text, nil)
+                        controllerInteraction.sendMessage(ayuMessage.text, nil)
                     })))
                 }
                 if !ayuMessage.text.isEmpty {
                     subItems.append(.action(ContextMenuActionItem(text: ayuStrings.copyPlain, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor)
-                    }, action: { [weak controllerInteraction] _, f in
+                    }, action: { _, f in
                         UIPasteboard.general.string = ayuMessage.text
                         f(.default)
-                        controllerInteraction?.displayUndo(.copy(text: ayuStrings.copied))
+                        controllerInteraction.displayUndo(.copy(text: ayuStrings.copied))
                     })))
                 }
                 if ayuMessage.flags.contains(.Incoming) {
                     subItems.append(.action(ContextMenuActionItem(text: ayuStrings.readUntil, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Read"), color: theme.actionSheet.primaryTextColor)
-                    }, action: { [weak controllerInteraction] _, f in
+                    }, action: { _, f in
                         f(.default)
                         let _ = AyuMessageActions.readUntil(account: context.account, index: ayuMessage.index).startStandalone()
-                        controllerInteraction?.displayUndo(.info(title: nil, text: ayuStrings.readUntilDone, timeout: 2.0, customUndoText: nil))
+                        controllerInteraction.displayUndo(.info(title: nil, text: ayuStrings.readUntilDone, timeout: 2.0, customUndoText: nil))
                     })))
                 }
                 if ayuMessage.flags.contains(.Incoming) && ayuMessage.containsSecretMedia && AyuGramSettings.current.keepSelfDestructingMedia {
                     subItems.append(.action(ContextMenuActionItem(text: ayuStrings.burnNow, textColor: .destructive, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Timer"), color: theme.actionSheet.destructiveActionTextColor)
-                    }, action: { [weak controllerInteraction] _, f in
+                    }, action: { _, f in
                         f(.default)
                         let _ = AyuMessageActions.expireSelfDestructingMedia(account: context.account, id: ayuMessage.id).startStandalone()
-                        controllerInteraction?.displayUndo(.info(title: nil, text: ayuStrings.burnDone, timeout: 2.0, customUndoText: nil))
+                        controllerInteraction.displayUndo(.info(title: nil, text: ayuStrings.burnDone, timeout: 2.0, customUndoText: nil))
                     })))
                 }
                 if let ayuMessageNode = messageNode {
@@ -1465,10 +1465,10 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 }
                 subItems.append(.action(ContextMenuActionItem(text: ayuStrings.hideMessage, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/EyeLocked"), color: theme.actionSheet.primaryTextColor)
-                }, action: { [weak controllerInteraction] _, f in
+                }, action: { _, f in
                     f(.default)
                     let _ = AyuMessageActions.hideLocally(account: context.account, id: ayuMessage.id).startStandalone()
-                    controllerInteraction?.displayUndo(.info(title: nil, text: ayuStrings.hiddenDone, timeout: 2.0, customUndoText: nil))
+                    controllerInteraction.displayUndo(.info(title: nil, text: ayuStrings.hiddenDone, timeout: 2.0, customUndoText: nil))
                 })))
 
                 c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
