@@ -93,6 +93,20 @@ public extension AyuGramSettings {
         if AyuGramSettings.current.hideBlockedUsersMessages, let authorId = message.author?.id, authorId != message.id.peerId, AyuBlockedPeers.isBlocked(authorId) {
             return true
         }
+        // Stickers and GIFs of other people ("Hide stickers" / "Hide GIFs").
+        let settings = AyuGramSettings.current
+        if settings.hideStickersFromOthers || settings.hideGifsFromOthers {
+            for media in message.media {
+                if let file = media as? TelegramMediaFile {
+                    if settings.hideStickersFromOthers && file.isSticker {
+                        return true
+                    }
+                    if settings.hideGifsFromOthers && file.isAnimated && !file.isSticker {
+                        return true
+                    }
+                }
+            }
+        }
         if AyuPluginHooks.shouldHide(message) {
             return true
         }

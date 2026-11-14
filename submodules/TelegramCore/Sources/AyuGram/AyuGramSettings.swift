@@ -78,6 +78,20 @@ public struct AyuGramSettingsValues: Codable, Equatable {
     public var dedsecSilence: Bool
     /// Beta: the Liquid Glass+ look (gradient background, chat list as a floating card).
     public var liquidGlassBeta: Bool
+    /// Hide stickers sent by other people.
+    public var hideStickersFromOthers: Bool
+    /// Hide GIFs sent by other people.
+    public var hideGifsFromOthers: Bool
+    /// Message templates, "name = text": sending ";name" sends the text.
+    public var messageTemplates: [String]
+    /// Words that notify even in muted chats (case-insensitive).
+    public var keywordAlerts: [String]
+    /// OpenAI-compatible API base URL for the AI features.
+    public var aiEndpoint: String
+    /// API key for the AI features (stored on this device only).
+    public var aiApiKey: String
+    /// Model name for the AI features.
+    public var aiModel: String
 
     // MARK: Appearance and chats
     /// Text shown next to the time of a deleted message.
@@ -137,6 +151,13 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         keepAliveInBackground: true,
         dedsecSilence: false,
         liquidGlassBeta: false,
+        hideStickersFromOthers: false,
+        hideGifsFromOthers: false,
+        messageTemplates: [],
+        keywordAlerts: [],
+        aiEndpoint: "https://api.openai.com/v1",
+        aiApiKey: "",
+        aiModel: "gpt-4o-mini",
         deletedMark: "🧹",
         editedMark: "",
         showMessageSeconds: false,
@@ -183,6 +204,13 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         keepAliveInBackground: Bool,
         dedsecSilence: Bool,
         liquidGlassBeta: Bool,
+        hideStickersFromOthers: Bool,
+        hideGifsFromOthers: Bool,
+        messageTemplates: [String],
+        keywordAlerts: [String],
+        aiEndpoint: String,
+        aiApiKey: String,
+        aiModel: String,
         deletedMark: String,
         editedMark: String,
         showMessageSeconds: Bool,
@@ -227,6 +255,13 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.keepAliveInBackground = keepAliveInBackground
         self.dedsecSilence = dedsecSilence
         self.liquidGlassBeta = liquidGlassBeta
+        self.hideStickersFromOthers = hideStickersFromOthers
+        self.hideGifsFromOthers = hideGifsFromOthers
+        self.messageTemplates = messageTemplates
+        self.keywordAlerts = keywordAlerts
+        self.aiEndpoint = aiEndpoint
+        self.aiApiKey = aiApiKey
+        self.aiModel = aiModel
         self.deletedMark = deletedMark
         self.editedMark = editedMark
         self.showMessageSeconds = showMessageSeconds
@@ -276,6 +311,13 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.keepAliveInBackground = try container.decodeIfPresent(Bool.self, forKey: .keepAliveInBackground) ?? d.keepAliveInBackground
         self.dedsecSilence = try container.decodeIfPresent(Bool.self, forKey: .dedsecSilence) ?? d.dedsecSilence
         self.liquidGlassBeta = try container.decodeIfPresent(Bool.self, forKey: .liquidGlassBeta) ?? d.liquidGlassBeta
+        self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
+        self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
+        self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates
+        self.keywordAlerts = try container.decodeIfPresent([String].self, forKey: .keywordAlerts) ?? d.keywordAlerts
+        self.aiEndpoint = try container.decodeIfPresent(String.self, forKey: .aiEndpoint) ?? d.aiEndpoint
+        self.aiApiKey = try container.decodeIfPresent(String.self, forKey: .aiApiKey) ?? d.aiApiKey
+        self.aiModel = try container.decodeIfPresent(String.self, forKey: .aiModel) ?? d.aiModel
         self.deletedMark = try container.decodeIfPresent(String.self, forKey: .deletedMark) ?? d.deletedMark
         self.editedMark = try container.decodeIfPresent(String.self, forKey: .editedMark) ?? d.editedMark
         self.showMessageSeconds = try container.decodeIfPresent(Bool.self, forKey: .showMessageSeconds) ?? d.showMessageSeconds

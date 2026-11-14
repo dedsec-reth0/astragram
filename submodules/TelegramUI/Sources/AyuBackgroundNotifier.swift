@@ -45,8 +45,13 @@ final class AyuBackgroundNotifier {
                 return context.account.stateManager.notificationMessages
                 |> map { items -> (AccountContext, [Message]) in
                     var messages: [Message] = []
-                    for (itemMessages, _, notify, _) in items where notify {
-                        messages.append(contentsOf: itemMessages)
+                    for (itemMessages, _, notify, _) in items {
+                        // Muted chats notify only messages with a keyword alert.
+                        if notify {
+                            messages.append(contentsOf: itemMessages)
+                        } else {
+                            messages.append(contentsOf: itemMessages.filter { AyuBackgroundNotifier.matchesKeywordAlert($0.text) })
+                        }
                     }
                     return (context, messages)
                 }
@@ -81,6 +86,16 @@ final class AyuBackgroundNotifier {
         self.messagesDisposable?.dispose()
     }
 
+    /// "Keyword alerts": whether `text` contains one of the words.
+    static func matchesKeywordAlert(_ text: String) -> Bool {
+        let keywords = AyuGramSettings.current.keywordAlerts
+        if keywords.isEmpty || text.isEmpty {
+            return false
+        }
+        let lowercased = text.lowercased()
+        return keywords.contains(where: { !$0.isEmpty && lowercased.contains($0.lowercased()) })
+    }
+
     private func notify(context: AccountContext, messages: [Message]) {
         guard AyuGramSettings.current.backgroundNotifications, self.application.applicationState != .active else {
             return
@@ -101,7 +116,7 @@ final class AyuBackgroundNotifier {
             if message.id.peerId.namespace != Namespaces.Peer.CloudUser, let author = message.author, author.id != message.id.peerId {
                 body = EnginePeer(author).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) + ": " + body
             }
-            content.title = chatTitle
+            content.title = AyuBackgroundNotifier.matchesKeywordAlert(message.text) ? "🔔 " + chatTitle : chatTitle
             content.body = body
             content.sound = .default
             content.threadIdentifier = "\(message.id.peerId.toInt64())"

@@ -119,6 +119,12 @@ public final class AyuPluginManager {
         return id
     }
 
+    /// The sources of the installed plugins (for AyuGram backups).
+    public func exportSources() -> [String] {
+        let files = (try? FileManager.default.contentsOfDirectory(at: self.directory, includingPropertiesForKeys: nil)) ?? []
+        return files.filter { $0.pathExtension == "js" }.compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+    }
+
     public func setEnabled(id: String, enabled: Bool) {
         var ids = self.enabledIds
         if enabled {

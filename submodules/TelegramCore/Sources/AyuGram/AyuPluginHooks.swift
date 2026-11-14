@@ -33,10 +33,42 @@ public enum AyuPluginHooks {
         return hook(message)
     }
 
-    /// Applies the plugins to messages about to be sent.
+    /// Message templates: ";name" is replaced with the template's text.
+    static func templateText(_ text: String) -> String? {
+        guard text.hasPrefix(";") else {
+            return nil
+        }
+        let name = text.dropFirst().trimmingCharacters(in: .whitespaces).lowercased()
+        if name.isEmpty {
+            return nil
+        }
+        for entry in AyuGramSettings.current.messageTemplates {
+            guard let separator = entry.range(of: "=") else {
+                continue
+            }
+            let entryName = entry[..<separator.lowerBound].trimmingCharacters(in: .whitespaces).lowercased()
+            if entryName == name {
+                // "\n" in a template stands for a line break.
+                return entry[separator.upperBound...].trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "\\n", with: "\n")
+            }
+        }
+        return nil
+    }
+
+    /// Applies the templates and plugins to messages about to be sent.
     static func transformOutgoing(_ messages: [EnqueueMessage], peerId: PeerId) -> [EnqueueMessage] {
-        guard let hook = AyuPluginHooks.outgoingHook.with({ $0 }) else {
-            return messages
+        let templateHook: (String, PeerId) -> AyuPluginOutgoingResult? = { text, _ in
+            if let templateText = AyuPluginHooks.templateText(text) {
+                return AyuPluginOutgoingResult.send(templateText)
+            }
+            return nil
+        }
+        let pluginHook = AyuPluginHooks.outgoingHook.with({ $0 })
+        let hook: (String, PeerId) -> AyuPluginOutgoingResult? = { text, peerId in
+            if let result = templateHook(text, peerId) {
+                return result
+            }
+            return pluginHook?(text, peerId)
         }
         var result: [EnqueueMessage] = []
         for message in messages {

@@ -9,6 +9,7 @@ import PresentationDataUtils
 import AccountContext
 import UndoUI
 import BuildConfig
+import UniformTypeIdentifiers
 
 /// Sections of Telegram's own settings that the AyuGram screen links to.
 public enum AyuLinkedTelegramSettings {
@@ -50,6 +51,7 @@ private final class AyuGramSettingsArguments {
     let unhideMessages: () -> Void
     let openApiCredentials: () -> Void
     let checkUpdates: () -> Void
+    let openTool: (AyuGramSettingsButtonKind) -> Void
 
     init(
         update: @escaping ((inout AyuGramSettingsValues) -> Void) -> Void,
@@ -61,7 +63,8 @@ private final class AyuGramSettingsArguments {
         openPlugins: @escaping () -> Void,
         unhideMessages: @escaping () -> Void,
         openApiCredentials: @escaping () -> Void,
-        checkUpdates: @escaping () -> Void
+        checkUpdates: @escaping () -> Void,
+        openTool: @escaping (AyuGramSettingsButtonKind) -> Void
     ) {
         self.update = update
         self.openDeletedMessages = openDeletedMessages
@@ -73,6 +76,7 @@ private final class AyuGramSettingsArguments {
         self.unhideMessages = unhideMessages
         self.openApiCredentials = openApiCredentials
         self.checkUpdates = checkUpdates
+        self.openTool = openTool
     }
 }
 
@@ -94,6 +98,9 @@ private enum AyuGramSettingsSection: Int32 {
     case notifications
     case dedsec
     case look
+    case media
+    case tools
+    case footerSection
 }
 
 private enum AyuGramSettingsEntry: ItemListNodeEntry {
@@ -166,8 +173,10 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
             return AyuGramSettingsSection.filters.rawValue
         case .translatorHeader, .translator, .translatorFooter:
             return AyuGramSettingsSection.translator.rawValue
-        case .aboutHeader, .reset, .version:
+        case .aboutHeader:
             return AyuGramSettingsSection.about.rawValue
+        case .reset, .version:
+            return AyuGramSettingsSection.footerSection.rawValue
         case let .flag(_, section, _, _, _, _), let .header(_, section, _), let .footer(_, section, _), let .button(_, section, _, _, _):
             return section.rawValue
         }
@@ -212,8 +221,8 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
         case .translator: return 71
         case .translatorFooter: return 72
         case .aboutHeader: return 80
-        case .reset: return 86
-        case .version: return 87
+        case .reset: return 199
+        case .version: return 200
         case let .flag(id, _, _, _, _, _), let .header(id, _, _), let .footer(id, _, _), let .button(id, _, _, _, _):
             return id
         }
@@ -329,6 +338,14 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openPlugins()
                 })
+            case .ai, .templates, .keywordAlerts, .bookmarks:
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
+                    arguments.openTool(kind)
+                })
+            case .backupExport, .backupImport:
+                return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .generic, alignment: .natural, sectionId: section, style: .blocks, action: {
+                    arguments.openTool(kind)
+                })
             case .checkUpdates:
                 return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .generic, alignment: .natural, sectionId: section, style: .blocks, action: {
                     arguments.checkUpdates()
@@ -351,6 +368,12 @@ private enum AyuGramSettingsButtonKind: Equatable {
     case unhideMessages
     case apiCredentials
     case checkUpdates
+    case ai
+    case templates
+    case keywordAlerts
+    case bookmarks
+    case backupExport
+    case backupImport
 }
 
 private func formatFileSize(_ size: Int64) -> String {
@@ -455,6 +478,18 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.button(id: 81, section: .about, title: strings.apiCredentials, label: "\(BuildConfig(baseAppBundleId: Bundle.main.bundleIdentifier ?? "").apiId)", kind: .apiCredentials))
     entries.append(.flag(id: 82, section: .about, title: strings.checkForUpdates, value: settings.checkForUpdates, enabled: true, keyPath: \.checkForUpdates))
     entries.append(.button(id: 85, section: .about, title: strings.checkUpdatesNow, label: "", kind: .checkUpdates))
+
+    entries.append(.header(id: 90, section: .media, text: strings.mediaHeader))
+    entries.append(.flag(id: 91, section: .media, title: strings.hideStickers, value: settings.hideStickersFromOthers, enabled: true, keyPath: \.hideStickersFromOthers))
+    entries.append(.flag(id: 92, section: .media, title: strings.hideGifs, value: settings.hideGifsFromOthers, enabled: true, keyPath: \.hideGifsFromOthers))
+
+    entries.append(.header(id: 100, section: .tools, text: strings.toolsHeader))
+    entries.append(.button(id: 101, section: .tools, title: strings.aiSettings, label: AyuAI.isConfigured ? settings.aiModel : "", kind: .ai))
+    entries.append(.button(id: 102, section: .tools, title: strings.templates, label: settings.messageTemplates.isEmpty ? "" : "\(settings.messageTemplates.count)", kind: .templates))
+    entries.append(.button(id: 103, section: .tools, title: strings.keywordAlerts, label: settings.keywordAlerts.isEmpty ? "" : "\(settings.keywordAlerts.count)", kind: .keywordAlerts))
+    entries.append(.button(id: 104, section: .tools, title: strings.bookmarks, label: "", kind: .bookmarks))
+    entries.append(.button(id: 105, section: .tools, title: strings.backupExport, label: "", kind: .backupExport))
+    entries.append(.button(id: 106, section: .tools, title: strings.backupImport, label: "", kind: .backupImport))
     entries.append(.reset(strings.resetSettings))
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
     let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
@@ -528,6 +563,42 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
             if let controller = topNativeControllerImpl?() {
                 AyuUpdateChecker.checkNow(from: controller)
             }
+        },
+        openTool: { kind in
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            let strings = AyuStrings(presentationData.strings)
+            switch kind {
+            case .ai:
+                pushControllerImpl?(ayuAIController(context: context))
+            case .templates:
+                pushControllerImpl?(ayuStringListController(context: context, title: strings.templates, placeholder: strings.templatePlaceholder, footer: strings.templatesFooter, keyPath: \.messageTemplates, validate: { $0.contains("=") }))
+            case .keywordAlerts:
+                pushControllerImpl?(ayuStringListController(context: context, title: strings.keywordAlerts, placeholder: strings.keywordPlaceholder, footer: strings.keywordAlertsFooter, keyPath: \.keywordAlerts))
+            case .bookmarks:
+                pushControllerImpl?(ayuBookmarksController(context: context))
+            case .backupExport:
+                guard let data = AyuBackup.exportData() else {
+                    return
+                }
+                let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("AyuGram-backup.json")
+                try? data.write(to: url)
+                let activityController = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                presentNativeControllerImpl?(activityController)
+            case .backupImport:
+                let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.json, UTType.item], asCopy: true)
+                let delegate = AyuBackupPickerDelegate(completion: { url in
+                    guard let url = url, let data = try? Data(contentsOf: url) else {
+                        return
+                    }
+                    let text = AyuBackup.importData(data) ? strings.backupDone : strings.backupInvalid
+                    presentControllerImpl?(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }))
+                })
+                AyuBackupPickerDelegate.current = delegate
+                picker.delegate = delegate
+                presentNativeControllerImpl?(picker)
+            default:
+                break
+            }
         }
     )
 
@@ -567,4 +638,22 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
         return presenter
     }
     return controller
+}
+
+private final class AyuBackupPickerDelegate: NSObject, UIDocumentPickerDelegate {
+    static var current: AyuBackupPickerDelegate?
+    let completion: (URL?) -> Void
+
+    init(completion: @escaping (URL?) -> Void) {
+        self.completion = completion
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        self.completion(urls.first)
+        AyuBackupPickerDelegate.current = nil
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        AyuBackupPickerDelegate.current = nil
+    }
 }

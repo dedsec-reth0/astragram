@@ -210,4 +210,46 @@ public struct AyuStrings {
     public var liquidGlassBeta: String { t("Liquid Glass+ (бета)", "Liquid Glass+ (beta)") }
     public var liquidGlassFooter: String { t("Бета-вид в стиле концепта Liquid Glass: градиентный фон и список чатов в виде плавающей карточки. Обычный вид остаётся по умолчанию. Применяется после перезапуска приложения.", "A beta look in the style of the Liquid Glass concept: a gradient background and the chat list as a floating card. The regular look stays the default. Applied after the app restarts.") }
     public var themesHeader: String { t("ВИД (БЕТА)", "LOOK (BETA)") }
+    public var listAdd: String { t("Добавить", "Add") }
+    public var aiHeader: String { t("OPENAI-СОВМЕСТИМЫЙ API", "OPENAI-COMPATIBLE API") }
+    public var aiKey: String { t("Ключ", "Key") }
+    public var aiModel: String { t("Модель", "Model") }
+    public var aiTest: String { t("Проверить подключение", "Test Connection") }
+    public var aiFooter: String { t("AI-функции в меню сообщения (перевод, пересказ, ответ, исправление, тон, пересказ чата, расшифровка голосовых) работают через ваш ключ: OpenAI, OpenRouter, Groq, DeepSeek или свой сервер с OpenAI-совместимым API. Ключ хранится только на этом устройстве. Текст отправляется в выбранный сервис только когда вы сами выбираете AI-действие.", "The AI actions in the message menu (translate, summarize, reply, fix, tone, chat summary, voice transcription) use your own key: OpenAI, OpenRouter, Groq, DeepSeek or your own server with an OpenAI-compatible API. The key stays on this device. Text is sent to that service only when you pick an AI action.") }
+    public var bookmarks: String { t("Закладки", "Bookmarks") }
+    public var bookmarksEmpty: String { t("Закладок пока нет. Долгое нажатие на сообщение → AyuGram → «В закладки».", "No bookmarks yet. Long press a message → AyuGram → Bookmark.") }
+    public var bookmarksClear: String { t("Удалить все закладки", "Delete All Bookmarks") }
+    public var bookmarksClearConfirm: String { t("Удалить все закладки? Сами сообщения останутся в чатах.", "Delete all bookmarks? The messages stay in their chats.") }
+    public var toolsHeader: String { t("ИНСТРУМЕНТЫ", "TOOLS") }
+    public var aiSettings: String { t("AI", "AI") }
+    public var templates: String { t("Шаблоны сообщений", "Message Templates") }
+    public var templatePlaceholder: String { t("имя = текст", "name = text") }
+    public var templatesFooter: String { t("Шаблон пишется как «имя = текст» (\\n — перенос строки). Отправьте «;имя», и вместо этого уйдёт текст шаблона.", "Write a template as \"name = text\" (\\n is a line break). Send \";name\" and the template text is sent instead.") }
+    public var keywordAlerts: String { t("Уведомления по словам", "Keyword Alerts") }
+    public var keywordPlaceholder: String { t("слово или фраза", "word or phrase") }
+    public var keywordAlertsFooter: String { t("Сообщения с этими словами уведомляют, даже если чат без звука (работает вместе с «Уведомления без push»).", "Messages with these words notify even when the chat is muted (works with Notifications without push).") }
+    public var backupExport: String { t("Экспорт настроек AyuGram", "Export AyuGram Settings") }
+    public var backupImport: String { t("Импорт настроек AyuGram", "Import AyuGram Settings") }
+    public var backupDone: String { t("Настройки восстановлены", "Settings restored") }
+    public var backupInvalid: String { t("Это не резервная копия AyuGram", "This is not an AyuGram backup") }
+    public var mediaHeader: String { t("ФИЛЬТРЫ МЕДИА", "MEDIA FILTERS") }
+    public var hideStickers: String { t("Скрывать стикеры других", "Hide stickers from others") }
+    public var hideGifs: String { t("Скрывать GIF других", "Hide GIFs from others") }
+    public var aiMenu: String { t("AI ✨", "AI ✨") }
+    public var aiTranslate: String { t("Перевести", "Translate") }
+    public var aiSummarize: String { t("Кратко пересказать", "Summarize") }
+    public var aiExplain: String { t("Объяснить", "Explain") }
+    public var aiReply: String { t("Предложить ответ", "Suggest a Reply") }
+    public var aiImprove: String { t("Исправить и улучшить", "Fix and Improve") }
+    public var aiFormal: String { t("Сделать официальнее", "Make It Formal") }
+    public var aiFriendly: String { t("Сделать дружелюбнее", "Make It Friendly") }
+    public var aiChatSummary: String { t("Пересказ чата (100 сообщений)", "Chat Summary (100 messages)") }
+    public var aiActionPoints: String { t("Главное и задачи из чата", "Key Points and Tasks") }
+    public var aiTranscribe: String { t("Расшифровать голосовое (AI)", "Transcribe Voice (AI)") }
+    public var ocr: String { t("Распознать текст на фото", "Recognize Text") }
+    public var bookmarkAdd: String { t("В закладки", "Bookmark") }
+    public var bookmarkRemove: String { t("Убрать из закладок", "Remove Bookmark") }
+    public var bookmarkAdded: String { t("Сообщение в закладках AyuGram", "Message bookmarked") }
+    public var exportChat: String { t("Экспорт чата и статистика", "Export Chat and Statistics") }
+    public var aiNotConfiguredShort: String { t("Сначала добавьте ключ в Настройки → AyuGram → AI", "First add a key in Settings → AyuGram → AI") }
 }

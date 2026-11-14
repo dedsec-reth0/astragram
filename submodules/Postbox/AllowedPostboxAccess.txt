@@ -19,6 +19,7 @@ submodules/AccountUtils/Sources/AccountUtils.swift
 submodules/ActionSheetPeerItem/Sources/ActionSheetPeerItem.swift
 submodules/AvatarNode/Sources/PeerAvatar.swift
 submodules/AvatarVideoNode/Sources/AvatarVideoNode.swift
+submodules/AyuGramUI/Sources/AyuMessageTools.swift
 submodules/BrowserUI/Sources/BrowserWebContent.swift
 submodules/ChatImportUI/Sources/ChatImportActivityScreen.swift
 submodules/ChatListSearchRecentPeersNode/Sources/ChatListSearchRecentPeersNode.swift

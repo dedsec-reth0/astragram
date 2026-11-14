@@ -87,4 +87,16 @@ public enum AyuMessageActions {
             })
         }
     }
+
+    /// The newest `limit` messages of a chat, oldest first (for chat export, statistics and AI summaries).
+    public static func recentMessages(account: Account, peerId: PeerId, limit: Int) -> Signal<[Message], NoError> {
+        return account.postbox.transaction { transaction -> [Message] in
+            var messages: [Message] = []
+            transaction.scanTopMessages(peerId: peerId, namespace: Namespaces.Message.Cloud, limit: limit, { message in
+                messages.append(message)
+                return messages.count < limit
+            })
+            return messages.sorted(by: { $0.index < $1.index })
+        }
+    }
 }

@@ -1463,6 +1463,55 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         })
                     })))
                 }
+                let ayuIsBookmarked = AyuBookmarks.contains(ayuMessage.id)
+                subItems.append(.action(ContextMenuActionItem(text: ayuIsBookmarked ? ayuStrings.bookmarkRemove : ayuStrings.bookmarkAdd, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Fave"), color: theme.actionSheet.primaryTextColor)
+                }, action: { _, f in
+                    f(.default)
+                    if ayuIsBookmarked {
+                        AyuBookmarks.remove(id: ayuMessage.id)
+                    } else {
+                        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                        let chatTitle = ayuMessage.peers[ayuMessage.id.peerId].flatMap { EnginePeer($0).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) } ?? ""
+                        AyuBookmarks.add(id: ayuMessage.id, chatTitle: chatTitle, text: ayuMessage.text, date: ayuMessage.timestamp)
+                        controllerInteraction.displayUndo(.info(title: nil, text: ayuStrings.bookmarkAdded, timeout: 2.0, customUndoText: nil))
+                    }
+                })))
+                if let ayuImage = ayuMessage.media.first(where: { $0 is TelegramMediaImage }) as? TelegramMediaImage, let ayuLargest = largestImageRepresentation(ayuImage.representations) {
+                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.ocr, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { c, _ in
+                        c?.dismiss(completion: {
+                            let resultController = AyuTextResultController(title: ayuStrings.ocr, isRussian: ayuStrings.isRussian, load: { completion in
+                                let _ = (ayuDownloadResource(context: context, message: ayuMessage, media: ayuImage, resource: ayuLargest.resource)
+                                |> deliverOnMainQueue).start(next: { path in
+                                    guard let path = path, let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
+                                        completion(.failure(AyuTextError("—")))
+                                        return
+                                    }
+                                    AyuOCR.recognize(imageData: data, completion: completion)
+                                })
+                            })
+                            ayuPresentNative(resultController.wrapped(), in: controllerInteraction.navigationController()?.view.window)
+                        })
+                    })))
+                }
+                subItems.append(.action(ContextMenuActionItem(text: ayuStrings.exportChat, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Statistics"), color: theme.actionSheet.primaryTextColor)
+                }, action: { c, _ in
+                    c?.dismiss(completion: {
+                        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                        let resultController = AyuTextResultController(title: ayuStrings.exportChat, isRussian: ayuStrings.isRussian, load: { completion in
+                            let _ = (AyuMessageActions.recentMessages(account: context.account, peerId: ayuMessage.id.peerId, limit: 3000)
+                            |> deliverOnMainQueue).start(next: { messages in
+                                let statistics = ayuChatStatistics(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
+                                let transcript = ayuChatTranscript(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
+                                completion(.success(statistics + "\n\n────────\n\n" + transcript))
+                            })
+                        })
+                        ayuPresentNative(resultController.wrapped(), in: controllerInteraction.navigationController()?.view.window)
+                    })
+                })))
                 subItems.append(.action(ContextMenuActionItem(text: ayuStrings.hideMessage, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/EyeLocked"), color: theme.actionSheet.primaryTextColor)
                 }, action: { _, f in
@@ -1471,6 +1520,113 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     controllerInteraction.displayUndo(.info(title: nil, text: ayuStrings.hiddenDone, timeout: 2.0, customUndoText: nil))
                 })))
 
+                c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
+            })))
+        }
+
+        // AyuGram: AI actions (an OpenAI-compatible API with the user's own key).
+        if message.id.namespace == Namespaces.Message.Cloud {
+            let ayuStrings = AyuStrings(chatPresentationInterfaceState.strings)
+            let ayuMessage = message
+            let ayuLanguageNameValue = ayuLanguageName(chatPresentationInterfaceState.strings)
+            actions.append(.action(ContextMenuActionItem(text: ayuStrings.aiMenu, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Translate"), color: theme.actionSheet.primaryTextColor)
+            }, action: { c, _ in
+                let presentAI: (String, @escaping (@escaping (Result<String, Error>) -> Void) -> Void) -> Void = { title, load in
+                    c?.dismiss(completion: {
+                        let resultController = AyuTextResultController(title: title, isRussian: ayuStrings.isRussian, load: load)
+                        ayuPresentNative(resultController.wrapped(), in: controllerInteraction.navigationController()?.view.window)
+                    })
+                }
+                let complete: (AyuAIAction, String, @escaping (Result<String, Error>) -> Void) -> Void = { action, text, completion in
+                    AyuAI.complete(system: action.prompt(languageName: ayuLanguageNameValue), user: text, completion: { result in
+                        switch result {
+                        case let .success(answer):
+                            completion(.success(answer))
+                        case let .failure(error):
+                            completion(.failure(AyuTextError(AyuAI.describe(error, isRussian: ayuStrings.isRussian))))
+                        }
+                    })
+                }
+                var subItems: [ContextMenuItem] = []
+                subItems.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Common_Back, icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Back"), color: theme.actionSheet.primaryTextColor)
+                }, iconPosition: .left, action: { c, _ in
+                    c?.popItems()
+                })))
+                subItems.append(.separator)
+                if !AyuAI.isConfigured {
+                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.aiNotConfiguredShort, textLayout: .multiline, icon: { _ in
+                        return nil
+                    }, action: nil as ((ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void)?)))
+                }
+                if !ayuMessage.text.isEmpty {
+                    let textActions: [(AyuAIAction, String)] = [
+                        (.translate, ayuStrings.aiTranslate),
+                        (.summarize, ayuStrings.aiSummarize),
+                        (.explain, ayuStrings.aiExplain),
+                        (.reply, ayuStrings.aiReply),
+                        (.improve, ayuStrings.aiImprove),
+                        (.formal, ayuStrings.aiFormal),
+                        (.friendly, ayuStrings.aiFriendly)
+                    ]
+                    for (action, title) in textActions {
+                        subItems.append(.action(ContextMenuActionItem(text: title, icon: { _ in
+                            return nil
+                        }, action: { _, _ in
+                            presentAI(title, { completion in
+                                complete(action, ayuMessage.text, completion)
+                            })
+                        })))
+                    }
+                }
+                if let ayuVoice = ayuMessage.media.first(where: { media in
+                    if let file = media as? TelegramMediaFile {
+                        return file.isVoice || file.isInstantVideo
+                    }
+                    return false
+                }) as? TelegramMediaFile {
+                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.aiTranscribe, icon: { _ in
+                        return nil
+                    }, action: { _, _ in
+                        presentAI(ayuStrings.aiTranscribe, { completion in
+                            let _ = (ayuDownloadResource(context: context, message: ayuMessage, media: ayuVoice, resource: ayuVoice.resource)
+                            |> deliverOnMainQueue).start(next: { path in
+                                guard let path = path else {
+                                    completion(.failure(AyuTextError("—")))
+                                    return
+                                }
+                                let isVideo = ayuVoice.isInstantVideo
+                                AyuAI.transcribe(fileUrl: URL(fileURLWithPath: path), fileName: isVideo ? "message.mp4" : "voice.ogg", mimeType: isVideo ? "video/mp4" : "audio/ogg", completion: { result in
+                                    switch result {
+                                    case let .success(text):
+                                        completion(.success(text))
+                                    case let .failure(error):
+                                        completion(.failure(AyuTextError(AyuAI.describe(error, isRussian: ayuStrings.isRussian))))
+                                    }
+                                })
+                            })
+                        })
+                    })))
+                }
+                let chatActions: [(AyuAIAction, String)] = [
+                    (.chatSummary, ayuStrings.aiChatSummary),
+                    (.actionPoints, ayuStrings.aiActionPoints)
+                ]
+                for (action, title) in chatActions {
+                    subItems.append(.action(ContextMenuActionItem(text: title, icon: { _ in
+                        return nil
+                    }, action: { _, _ in
+                        presentAI(title, { completion in
+                            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                            let _ = (AyuMessageActions.recentMessages(account: context.account, peerId: ayuMessage.id.peerId, limit: 100)
+                            |> deliverOnMainQueue).start(next: { messages in
+                                let transcript = ayuChatTranscript(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
+                                complete(action, transcript, completion)
+                            })
+                        })
+                    })))
+                }
                 c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
             })))
         }
