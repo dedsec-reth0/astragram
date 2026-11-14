@@ -145,6 +145,11 @@ public final class SharedWakeupManager {
             self.enableBackgroundTasks = isEnabled
         })
         
+        // AyuGram: the keep-alive audio was interrupted or resumed.
+        self.ayuKeepAlive.activeUpdated = { [weak self] in
+            self?.checkTasks()
+        }
+
         self.inForegroundDisposable = (inForeground
         |> deliverOnMainQueue).startStrict(next: { [weak self] value in
             guard let strongSelf = self else {

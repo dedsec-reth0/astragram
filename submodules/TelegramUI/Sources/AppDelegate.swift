@@ -350,6 +350,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     private var ayuApiSetupWindow: UIWindow?
     private var ayuBackgroundNotifier: AyuBackgroundNotifier?
     private var ayuConnectedScene: (UIWindowScene, UIScene.ConnectionOptions)?
+    // AyuGram: the cleanup background task was registered by the first-launch screen's pass through launch.
+    private var ayuDidRegisterCleanupTask = false
 
     var ayuIsWaitingForApiCredentials: Bool {
         return self.ayuApiSetupWindow != nil
@@ -360,7 +362,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         if !BuildConfig.ayuHasApiCredentials(baseAppBundleId: Bundle.main.bundleIdentifier!) && !CommandLine.arguments.contains("--ui-test") {
             let window = UIWindow(frame: UIScreen.main.bounds)
             window.rootViewController = AyuApiCredentialsController(baseAppBundleId: Bundle.main.bundleIdentifier!, isInitialSetup: true, completion: { [weak self] in
-                guard let self else {
+                // Only once: the launch below must not run twice.
+                guard let self, self.ayuApiSetupWindow != nil else {
                     return
                 }
                 self.ayuApiSetupWindow?.isHidden = true
@@ -373,6 +376,18 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                     }
                 }
             })
+            // Background task launch handlers can only be registered until the app has finished launching (later
+            // BGTaskScheduler raises an exception), and the real launch runs after this method has returned, from
+            // the completion above: they are registered now.
+            if self.ayuBackgroundNotifier == nil {
+                self.ayuBackgroundNotifier = AyuBackgroundNotifier(application: application, sharedContext: self.sharedContextPromise.get(), baseAppBundleId: Bundle.main.bundleIdentifier!)
+            }
+            if #available(iOS 13.0, *), !self.ayuDidRegisterCleanupTask {
+                let _ = BGTaskScheduler.shared.register(forTaskWithIdentifier: "\(Bundle.main.bundleIdentifier!).cleanup", using: DispatchQueue.main, launchHandler: { task in
+                    task.setTaskCompleted(success: true)
+                })
+                self.ayuDidRegisterCleanupTask = true
+            }
             self.ayuApiSetupWindow = window
             self.window = window
             return true
@@ -1341,7 +1356,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         })
 
         // AyuGram: notifications without push (local notifications and background app refresh).
-        self.ayuBackgroundNotifier = AyuBackgroundNotifier(application: application, sharedContext: self.sharedContextPromise.get(), baseAppBundleId: baseAppBundleId)
+        if self.ayuBackgroundNotifier == nil {
+            self.ayuBackgroundNotifier = AyuBackgroundNotifier(application: application, sharedContext: self.sharedContextPromise.get(), baseAppBundleId: baseAppBundleId)
+        }
         // AyuGram: DEDSEC silence is applied to every logged-in account when it is switched (from the settings or the
         // home screen menu).
         let ayuPreviousDedsecSilence = Atomic<Bool?>(value: nil)
@@ -1716,6 +1733,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         if #available(iOS 13.0, *) {
             let cleanupTaskId = "\(baseAppBundleId).cleanup"
             
+            // AyuGram: already registered when this launch follows the first-launch API credentials screen.
+            if !self.ayuDidRegisterCleanupTask {
             BGTaskScheduler.shared.register(forTaskWithIdentifier: cleanupTaskId, using: DispatchQueue.main) { task in
                 Logger.shared.log("App \(self.episodeId)", "Executing cleanup task")
                 
@@ -1729,6 +1748,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                     disposable.dispose()
                     task.setTaskCompleted(success: false)
                 }
+            }
             }
             
             BGTaskScheduler.shared.getPendingTaskRequests(completionHandler: { tasks in

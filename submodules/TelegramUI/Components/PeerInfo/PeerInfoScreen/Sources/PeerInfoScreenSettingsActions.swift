@@ -319,6 +319,8 @@ extension PeerInfoScreenNode {
                     return themeSettingsController(context: context)
                 case .language:
                     return LocalizationListController(context: context)
+                case .privacy:
+                    return privacyAndSecurityController(context: context)
                 }
             }))
         }

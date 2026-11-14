@@ -221,7 +221,7 @@ private enum AyuDeletedMessagesEntry: ItemListNodeEntry {
         let arguments = arguments as! AyuDeletedMessagesArguments
         switch self {
         case let .message(_, record, title, label, detail):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, labelStyle: .detailText, additionalDetailLabel: detail, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: detail.isEmpty ? label : label + "\n" + detail, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: {
                 arguments.select(record)
             })
         case let .empty(text):

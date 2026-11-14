@@ -10,12 +10,25 @@ public enum AyuAI {
         case server(String)
     }
 
-    public static var isConfigured: Bool {
+    /// Without a key, a free public OpenAI-compatible service is used (Pollinations: no registration, about one
+    /// request every 45 seconds, text only).
+    public static let freeEndpoint = "https://text.pollinations.ai/openai"
+    public static let freeModel = "openai"
+
+    /// Whether the user's own key is set (otherwise the free service is used).
+    public static var hasOwnKey: Bool {
         let settings = AyuGramSettings.current
         return !settings.aiApiKey.trimmingCharacters(in: .whitespaces).isEmpty && URL(string: settings.aiEndpoint) != nil
     }
 
+    public static var isConfigured: Bool {
+        return true
+    }
+
     private static func baseUrl() -> String {
+        if !AyuAI.hasOwnKey {
+            return AyuAI.freeEndpoint
+        }
         var endpoint = AyuGramSettings.current.aiEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
         while endpoint.hasSuffix("/") {
             endpoint.removeLast()
@@ -45,9 +58,12 @@ public enum AyuAI {
         var request = URLRequest(url: url, timeoutInterval: 120.0)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(settings.aiApiKey.trimmingCharacters(in: .whitespaces))", forHTTPHeaderField: "Authorization")
+        let hasOwnKey = AyuAI.hasOwnKey
+        if hasOwnKey {
+            request.setValue("Bearer \(settings.aiApiKey.trimmingCharacters(in: .whitespaces))", forHTTPHeaderField: "Authorization")
+        }
         let body: [String: Any] = [
-            "model": settings.aiModel.isEmpty ? "gpt-4o-mini" : settings.aiModel,
+            "model": hasOwnKey ? (settings.aiModel.isEmpty ? "gpt-4o-mini" : settings.aiModel) : AyuAI.freeModel,
             "messages": [
                 ["role": "system", "content": system],
                 ["role": "user", "content": user]
@@ -76,7 +92,7 @@ public enum AyuAI {
     /// Speech to text (an OpenAI-compatible /audio/transcriptions endpoint, model whisper-1).
     public static func transcribe(fileUrl: URL, fileName: String, mimeType: String, completion: @escaping (Result<String, AIError>) -> Void) {
         let settings = AyuGramSettings.current
-        guard AyuAI.isConfigured, let url = URL(string: AyuAI.baseUrl() + "/audio/transcriptions"), let fileData = try? Data(contentsOf: fileUrl) else {
+        guard AyuAI.hasOwnKey, let url = URL(string: AyuAI.baseUrl() + "/audio/transcriptions"), let fileData = try? Data(contentsOf: fileUrl) else {
             completion(.failure(.notConfigured))
             return
         }
@@ -116,7 +132,7 @@ public enum AyuAI {
     public static func describe(_ error: AIError, isRussian: Bool) -> String {
         switch error {
         case .notConfigured:
-            return isRussian ? "AI не настроен: укажите API-ключ в Настройки → AyuGram → AI." : "AI is not set up: add an API key in Settings → AyuGram → AI."
+            return isRussian ? "Для этого действия нужен свой API-ключ: Настройки → AyuGram → AI (бесплатный AI работает только с текстом)." : "This action needs your own API key: Settings → AyuGram → AI (the free AI handles text only)."
         case let .network(text):
             return (isRussian ? "Ошибка сети: " : "Network error: ") + text
         case let .server(text):

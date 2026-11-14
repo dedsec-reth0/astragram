@@ -759,16 +759,29 @@ private func opportunisticallyTransformOutgoingMedia(network: Network, postbox: 
 }
 
 public func enqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {
-    // AyuForward: forwards from chats that forbid forwarding are sent as copies.
-    return AyuForward.prepare(account: account, messages: messages)
-    |> mapToSignal { messages -> Signal<[MessageId?], NoError> in
-        return ayuEnqueuePreparedMessages(account: account, peerId: peerId, messages: messages)
+    // AyuGram plugins and templates may change the text of outgoing messages, or handle a command and drop the
+    // message. They see what the user sends, so they run before AyuForward: the copies it makes carry the text of
+    // other people's messages, which must not be taken for a command or a template.
+    let ayuTransformed = Signal<[EnqueueMessage], NoError> { subscriber in
+        subscriber.putNext(AyuPluginHooks.transformOutgoing(messages, peerId: peerId))
+        subscriber.putCompletion()
+        return EmptyDisposable
+    }
+    return ayuTransformed
+    |> mapToSignal { ayuTransformedMessages -> Signal<[MessageId?], NoError> in
+        if ayuTransformedMessages.isEmpty {
+            return .single([])
+        }
+        // AyuForward: forwards from chats that forbid forwarding are sent as copies.
+        return AyuForward.prepare(account: account, messages: ayuTransformedMessages)
+        |> mapToSignal { ayuPreparedMessages -> Signal<[MessageId?], NoError> in
+            return ayuEnqueuePreparedMessages(account: account, peerId: peerId, messages: ayuPreparedMessages)
+        }
     }
 }
 
 private func ayuEnqueuePreparedMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {
-    // AyuGram plugins may change the text of outgoing messages, or handle a command and drop the message.
-    let ayuMessages = AyuPluginHooks.transformOutgoing(messages, peerId: peerId)
+    let ayuMessages = messages
     if ayuMessages.isEmpty {
         return .single([])
     }

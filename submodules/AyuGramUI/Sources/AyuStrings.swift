@@ -215,7 +215,7 @@ public struct AyuStrings {
     public var aiKey: String { t("Ключ", "Key") }
     public var aiModel: String { t("Модель", "Model") }
     public var aiTest: String { t("Проверить подключение", "Test Connection") }
-    public var aiFooter: String { t("AI-функции в меню сообщения (перевод, пересказ, ответ, исправление, тон, пересказ чата, расшифровка голосовых) работают через ваш ключ: OpenAI, OpenRouter, Groq, DeepSeek или свой сервер с OpenAI-совместимым API. Ключ хранится только на этом устройстве. Текст отправляется в выбранный сервис только когда вы сами выбираете AI-действие.", "The AI actions in the message menu (translate, summarize, reply, fix, tone, chat summary, voice transcription) use your own key: OpenAI, OpenRouter, Groq, DeepSeek or your own server with an OpenAI-compatible API. The key stays on this device. Text is sent to that service only when you pick an AI action.") }
+    public var aiFooter: String { t("Без ключа AI работает через бесплатный публичный сервис Pollinations: регистрация не нужна, но не чаще одного запроса в 45 секунд и только текст (расшифровка голосовых недоступна). Со своим ключом (OpenAI, OpenRouter, Groq, DeepSeek или свой сервер с OpenAI-совместимым API) ограничений нет. Текст отправляется в сервис только когда вы сами выбираете AI-действие. Ключ хранится только на этом устройстве.", "Without a key, AI uses the free public Pollinations service: no sign-up, but at most one request every 45 seconds and text only (no voice transcription). With your own key (OpenAI, OpenRouter, Groq, DeepSeek or your own OpenAI-compatible server) there are no such limits. Text is sent to the service only when you pick an AI action. The key stays on this device.") }
     public var bookmarks: String { t("Закладки", "Bookmarks") }
     public var bookmarksEmpty: String { t("Закладок пока нет. Долгое нажатие на сообщение → AyuGram → «В закладки».", "No bookmarks yet. Long press a message → AyuGram → Bookmark.") }
     public var bookmarksClear: String { t("Удалить все закладки", "Delete All Bookmarks") }
@@ -252,4 +252,8 @@ public struct AyuStrings {
     public var bookmarkAdded: String { t("Сообщение в закладках AyuGram", "Message bookmarked") }
     public var exportChat: String { t("Экспорт чата и статистика", "Export Chat and Statistics") }
     public var aiNotConfiguredShort: String { t("Сначала добавьте ключ в Настройки → AyuGram → AI", "First add a key in Settings → AyuGram → AI") }
+    public var aiFree: String { t("бесплатный", "free") }
+    public var onlineForExceptions: String { t("Онлайн для избранных", "Online for selected people") }
+    public var onlineWhoSees: String { t("Кому виден мой онлайн", "Who Sees My Online Status") }
+    public var onlineForExceptionsFooter: String { t("Режим призрака скрывает «в сети» от всех. С этой опцией статус отправляется, а кто его видит, решает настройка Telegram: откройте «Кому виден мой онлайн» → «Последняя активность» → «Никто» и добавьте нужных людей в «Всегда показывать». Они увидят вас в сети, остальные нет. Учтите правило Telegram: без Premium вы тоже не увидите время захода тех, от кого скрыли своё.", "Ghost Mode hides your online status from everyone. With this option the status is sent, and Telegram decides who sees it: open Who Sees My Online Status → Last Seen → Nobody and add people to Always Share With. They see you online, others do not. Telegram rule: without Premium you will not see the last seen time of people you hide yours from.") }
 }

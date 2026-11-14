@@ -74,11 +74,12 @@ private enum AyuEditHistoryEntry: ItemListNodeEntry {
         let arguments = arguments as! AyuEditHistoryArguments
         switch self {
         case let .version(_, title, date, text, rawText, entities):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: date, labelStyle: .detailText, additionalDetailLabel: text, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: {
+            // The date goes into the title: a detail label and an additional detail label are drawn on the same line.
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title + " · " + date, label: text, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: {
                 arguments.copy(rawText, entities)
             })
         case let .current(title, date, text, entities):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: date, labelStyle: .detailText, additionalDetailLabel: text, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title + " · " + date, label: text, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: {
                 arguments.copy(text, entities)
             })
         case let .empty(text):

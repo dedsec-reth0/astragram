@@ -8,16 +8,27 @@ final class AyuBackgroundKeepAlive {
     private var player: AVAudioPlayer?
     private var interruptionObserver: NSObjectProtocol?
 
-    private(set) var isActive = false
+    /// Whether keeping alive is wanted now (the app is in the background and nothing else uses the audio session).
+    private var isRequested = false
+
+    /// Whether the silence is really playing. Only then does iOS keep the app running: when the audio session could
+    /// not be started or is interrupted, the app is suspended as usual and must be treated so.
+    var isActive: Bool {
+        return self.isRequested && self.player?.isPlaying == true
+    }
+
+    /// Called on the main queue when an interruption of the audio session began or ended, so `isActive` may have changed.
+    var activeUpdated: (() -> Void)?
 
     init() {
         self.interruptionObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main, using: { [weak self] notification in
-            guard let self, self.isActive else {
+            guard let self, self.isRequested else {
                 return
             }
             if let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt, AVAudioSession.InterruptionType(rawValue: rawType) == .ended {
                 self.startPlaying()
             }
+            self.activeUpdated?()
         })
     }
 
@@ -28,13 +39,13 @@ final class AyuBackgroundKeepAlive {
     }
 
     func setActive(_ active: Bool) {
-        if active == self.isActive {
+        if active == self.isRequested {
             if active, self.player?.isPlaying != true {
                 self.startPlaying()
             }
             return
         }
-        self.isActive = active
+        self.isRequested = active
         if active {
             self.startPlaying()
         } else {

@@ -213,7 +213,11 @@ public func ayuPluginsController(context: AccountContext) -> ViewController {
         controller?.present(c, in: .window(.root))
     }
     presentNativeControllerImpl = { [weak controller] c in
-        controller?.view.window?.rootViewController?.present(c, animated: true)
+        var presenter = controller?.view.window?.rootViewController
+        while let presented = presenter?.presentedViewController {
+            presenter = presented
+        }
+        presenter?.present(c, animated: true)
     }
     return controller
 }

@@ -15,6 +15,7 @@ import UniformTypeIdentifiers
 public enum AyuLinkedTelegramSettings {
     case appearance
     case language
+    case privacy
 }
 
 /// A shared haptic generator for AyuGram controls; honours the "Haptic feedback" setting.
@@ -98,6 +99,7 @@ private enum AyuGramSettingsSection: Int32 {
     case notifications
     case dedsec
     case look
+    case onlineExceptions
     case media
     case tools
     case footerSection
@@ -338,6 +340,10 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openPlugins()
                 })
+            case .lastSeenPrivacy:
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
+                    arguments.openLinked(.privacy)
+                })
             case .ai, .templates, .keywordAlerts, .bookmarks:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openTool(kind)
@@ -368,6 +374,7 @@ private enum AyuGramSettingsButtonKind: Equatable {
     case unhideMessages
     case apiCredentials
     case checkUpdates
+    case lastSeenPrivacy
     case ai
     case templates
     case keywordAlerts
@@ -400,6 +407,10 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.flag(id: 17, section: .ghostExtra, title: strings.markReadAfterReaction, value: settings.markReadAfterReaction, enabled: settings.hideReadReceipts, keyPath: \.markReadAfterReaction))
     entries.append(.flag(id: 18, section: .ghostExtra, title: strings.sendViaSchedule, value: settings.sendViaSchedule, enabled: settings.hideOnlineStatus, keyPath: \.sendViaSchedule))
     entries.append(.footer(id: 19, section: .ghostExtra, text: strings.sendViaScheduleFooter))
+
+    entries.append(.flag(id: 6, section: .onlineExceptions, title: strings.onlineForExceptions, value: settings.onlineForExceptions, enabled: settings.hideOnlineStatus, keyPath: \.onlineForExceptions))
+    entries.append(.button(id: 7, section: .onlineExceptions, title: strings.onlineWhoSees, label: "", kind: .lastSeenPrivacy))
+    entries.append(.footer(id: 8, section: .onlineExceptions, text: strings.onlineForExceptionsFooter))
 
     entries.append(.header(id: 3, section: .dedsec, text: strings.dedsecHeader))
     entries.append(.flag(id: 4, section: .dedsec, title: strings.dedsecSilence, value: settings.dedsecSilence, enabled: true, keyPath: \.dedsecSilence))
@@ -484,7 +495,7 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.flag(id: 92, section: .media, title: strings.hideGifs, value: settings.hideGifsFromOthers, enabled: true, keyPath: \.hideGifsFromOthers))
 
     entries.append(.header(id: 100, section: .tools, text: strings.toolsHeader))
-    entries.append(.button(id: 101, section: .tools, title: strings.aiSettings, label: AyuAI.isConfigured ? settings.aiModel : "", kind: .ai))
+    entries.append(.button(id: 101, section: .tools, title: strings.aiSettings, label: AyuAI.hasOwnKey ? settings.aiModel : strings.aiFree, kind: .ai))
     entries.append(.button(id: 102, section: .tools, title: strings.templates, label: settings.messageTemplates.isEmpty ? "" : "\(settings.messageTemplates.count)", kind: .templates))
     entries.append(.button(id: 103, section: .tools, title: strings.keywordAlerts, label: settings.keywordAlerts.isEmpty ? "" : "\(settings.keywordAlerts.count)", kind: .keywordAlerts))
     entries.append(.button(id: 104, section: .tools, title: strings.bookmarks, label: "", kind: .bookmarks))
@@ -627,6 +638,12 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
         var presenter = controller?.view.window?.rootViewController
         while let presented = presenter?.presentedViewController {
             presenter = presented
+        }
+        // On iPad the share sheet is a popover: without an anchor UIKit raises an exception when it is presented.
+        if let presenterView = presenter?.view, let popover = c.popoverPresentationController, popover.sourceView == nil {
+            popover.sourceView = presenterView
+            popover.sourceRect = CGRect(x: presenterView.bounds.midX, y: presenterView.bounds.midY, width: 1.0, height: 1.0)
+            popover.permittedArrowDirections = []
         }
         presenter?.present(c, animated: true)
     }

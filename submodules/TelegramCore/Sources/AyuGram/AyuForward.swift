@@ -48,7 +48,7 @@ enum AyuForward {
                 guard let sourceMessage = sourceMessage, case let .forward(_, threadId, _, attributes, correlationId) = message else {
                     return .single(message)
                 }
-                return AyuForward.copy(account: account, message: sourceMessage, threadId: threadId, attributes: attributes, correlationId: correlationId)
+                return AyuForward.copy(account: account, original: message, message: sourceMessage, threadId: threadId, attributes: attributes, correlationId: correlationId)
             }
             return combineLatest(signals)
             |> map { values -> [EnqueueMessage] in
@@ -57,30 +57,45 @@ enum AyuForward {
         }
     }
 
-    private static func copy(account: Account, message: Message, threadId: Int64?, attributes: [MessageAttribute], correlationId: Int64?) -> Signal<EnqueueMessage?, NoError> {
-        var copiedAttributes = attributes.filter { !($0 is ForwardOptionsMessageAttribute) }
-        if let entities = message.attributes.first(where: { $0 is TextEntitiesMessageAttribute }) {
-            copiedAttributes.append(entities)
-        }
+    /// A copy of `message`, or `original` (the forward itself, which the server refuses, so the message is shown as
+    /// failed) when a copy cannot be made: the photo or file could not be downloaded, or there is nothing to copy.
+    private static func copy(account: Account, original: EnqueueMessage, message: Message, threadId: Int64?, attributes: [MessageAttribute], correlationId: Int64?) -> Signal<EnqueueMessage?, NoError> {
         let groupingKey = message.groupingKey
 
         var mediaSignal: Signal<Media?, NoError> = .single(nil)
+        var requiresDownload = false
         for media in message.media {
             if media is TelegramMediaImage || media is TelegramMediaFile {
                 mediaSignal = AyuForward.localCopy(account: account, message: message, media: media)
+                requiresDownload = true
                 break
             } else if media is TelegramMediaMap || media is TelegramMediaContact || media is TelegramMediaDice {
                 mediaSignal = .single(media)
                 break
             }
         }
+        let mediaRequired = requiresDownload
+
+        // "Hide captions" of the forward options: the photo or file is sent without its text.
+        var hideCaptions = false
+        for attribute in attributes {
+            if let attribute = attribute as? ForwardOptionsMessageAttribute, attribute.hideCaptions {
+                hideCaptions = true
+            }
+        }
+        let text = (hideCaptions && mediaRequired) ? "" : message.text
+
+        var copiedAttributes = attributes.filter { !($0 is ForwardOptionsMessageAttribute) }
+        if !text.isEmpty, let entities = message.attributes.first(where: { $0 is TextEntitiesMessageAttribute }) {
+            copiedAttributes.append(entities)
+        }
 
         return mediaSignal
         |> map { media -> EnqueueMessage? in
-            if media == nil && message.text.isEmpty {
-                return nil
+            if media == nil && (mediaRequired || text.isEmpty) {
+                return original
             }
-            return .message(text: message.text, attributes: copiedAttributes, inlineStickers: [:], mediaReference: media.flatMap { .standalone(media: $0) }, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: groupingKey, correlationId: correlationId, bubbleUpEmojiOrStickersets: [])
+            return .message(text: text, attributes: copiedAttributes, inlineStickers: [:], mediaReference: media.flatMap { .standalone(media: $0) }, threadId: threadId, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: groupingKey, correlationId: correlationId, bubbleUpEmojiOrStickersets: [])
         }
     }
 
@@ -96,7 +111,11 @@ enum AyuForward {
         }
         |> timeout(15.0 * 60.0, queue: Queue.concurrentDefaultQueue(), alternate: .single(false))
         return Signal { subscriber in
-            let fetchDisposable = fetch.start()
+            // A failed download ends at once instead of waiting for the timeout.
+            let fetchDisposable = fetch.start(error: { _ in
+                subscriber.putNext(false)
+                subscriber.putCompletion()
+            })
             let completedDisposable = completed.start(next: { value in
                 subscriber.putNext(value)
                 subscriber.putCompletion()

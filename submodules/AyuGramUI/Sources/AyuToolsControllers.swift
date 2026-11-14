@@ -398,10 +398,12 @@ public enum AyuBackup {
         guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], object["format"] as? String == "ayugram-ios-backup" else {
             return false
         }
-        if let settings = object["settings"], let settingsData = try? JSONSerialization.data(withJSONObject: settings) {
+        // JSONSerialization raises an Objective-C exception (which `try?` does not catch) for a value that is not an
+        // object or an array: the types are checked first.
+        if let settings = object["settings"] as? [String: Any], let settingsData = try? JSONSerialization.data(withJSONObject: settings) {
             AyuGramSettings.replace(withJSON: settingsData)
         }
-        if let bookmarks = object["bookmarks"], let bookmarksData = try? JSONSerialization.data(withJSONObject: bookmarks), let decoded = try? JSONDecoder().decode([AyuBookmark].self, from: bookmarksData) {
+        if let bookmarks = object["bookmarks"] as? [Any], let bookmarksData = try? JSONSerialization.data(withJSONObject: bookmarks), let decoded = try? JSONDecoder().decode([AyuBookmark].self, from: bookmarksData) {
             AyuBookmarks.replaceAll(decoded)
         }
         if let plugins = object["plugins"] as? [String] {

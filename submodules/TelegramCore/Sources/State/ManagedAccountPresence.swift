@@ -28,7 +28,8 @@ private final class AccountPresenceManagerImpl {
             shouldKeepOnlinePresence,
             AyuGramSettings.signal
             |> map { settings -> Bool in
-                return settings.hideOnlineStatus
+                // "Online for selected people": the status is sent, and Telegram's Last Seen privacy decides who sees it.
+                return settings.hideOnlineStatus && !settings.onlineForExceptions
             }
             |> distinctUntilChanged
         )

@@ -176,8 +176,11 @@ final class AyuBackgroundNotifier {
                 task.setTaskCompleted(success: success)
             }
         }
+        // The expiration handler is not called on the main queue; `complete` belongs to it.
         task.expirationHandler = {
-            complete(false)
+            Queue.mainQueue().async {
+                complete(false)
+            }
         }
         Queue.mainQueue().after(25.0, {
             complete(true)

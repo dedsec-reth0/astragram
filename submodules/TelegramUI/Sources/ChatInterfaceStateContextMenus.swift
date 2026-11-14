@@ -1555,11 +1555,6 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     c?.popItems()
                 })))
                 subItems.append(.separator)
-                if !AyuAI.isConfigured {
-                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.aiNotConfiguredShort, textLayout: .multiline, icon: { _ in
-                        return nil
-                    }, action: nil as ((ContextControllerProtocol?, @escaping (ContextMenuActionResult) -> Void) -> Void)?)))
-                }
                 if !ayuMessage.text.isEmpty {
                     let textActions: [(AyuAIAction, String)] = [
                         (.translate, ayuStrings.aiTranslate),
