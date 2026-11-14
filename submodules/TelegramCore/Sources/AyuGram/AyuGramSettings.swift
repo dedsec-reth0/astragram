@@ -72,6 +72,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
     public var checkForUpdates: Bool
     /// Notifications without push: local notifications for messages that arrive in the background, and background app refresh.
     public var backgroundNotifications: Bool
+    /// Stay connected in the background (plays silence so iOS does not suspend the app), so messages arrive and are notified at once. Uses more battery.
+    public var keepAliveInBackground: Bool
 
     // MARK: Appearance and chats
     /// Text shown next to the time of a deleted message.
@@ -128,6 +130,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         channelBadge: true,
         checkForUpdates: true,
         backgroundNotifications: true,
+        keepAliveInBackground: true,
         deletedMark: "🧹",
         editedMark: "",
         showMessageSeconds: false,
@@ -171,6 +174,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         channelBadge: Bool,
         checkForUpdates: Bool,
         backgroundNotifications: Bool,
+        keepAliveInBackground: Bool,
         deletedMark: String,
         editedMark: String,
         showMessageSeconds: Bool,
@@ -212,6 +216,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.channelBadge = channelBadge
         self.checkForUpdates = checkForUpdates
         self.backgroundNotifications = backgroundNotifications
+        self.keepAliveInBackground = keepAliveInBackground
         self.deletedMark = deletedMark
         self.editedMark = editedMark
         self.showMessageSeconds = showMessageSeconds
@@ -258,6 +263,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.channelBadge = try container.decodeIfPresent(Bool.self, forKey: .channelBadge) ?? d.channelBadge
         self.checkForUpdates = try container.decodeIfPresent(Bool.self, forKey: .checkForUpdates) ?? d.checkForUpdates
         self.backgroundNotifications = try container.decodeIfPresent(Bool.self, forKey: .backgroundNotifications) ?? d.backgroundNotifications
+        self.keepAliveInBackground = try container.decodeIfPresent(Bool.self, forKey: .keepAliveInBackground) ?? d.keepAliveInBackground
         self.deletedMark = try container.decodeIfPresent(String.self, forKey: .deletedMark) ?? d.deletedMark
         self.editedMark = try container.decodeIfPresent(String.self, forKey: .editedMark) ?? d.editedMark
         self.showMessageSeconds = try container.decodeIfPresent(Bool.self, forKey: .showMessageSeconds) ?? d.showMessageSeconds

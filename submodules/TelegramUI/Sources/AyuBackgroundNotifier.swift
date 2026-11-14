@@ -29,7 +29,10 @@ final class AyuBackgroundNotifier {
     init(application: UIApplication, sharedContext: Signal<SharedApplicationContext, NoError>, baseAppBundleId: String) {
         self.application = application
         self.sharedContext = sharedContext
-        self.refreshTaskId = "\(baseAppBundleId).refresh"
+        // AltStore changes the bundle identifier when it signs the app, but not the permitted task identifiers in
+        // Info.plist: the identifier is taken from there.
+        let permittedTaskIds = Bundle.main.object(forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers") as? [String] ?? []
+        self.refreshTaskId = permittedTaskIds.first(where: { $0.hasSuffix(".refresh") }) ?? "\(baseAppBundleId).refresh"
 
         // New messages of every logged-in account, notified while the app is not in the foreground.
         self.messagesDisposable = (sharedContext
