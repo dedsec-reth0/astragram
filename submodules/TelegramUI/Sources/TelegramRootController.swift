@@ -81,6 +81,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     
     /// The Contacts screen `openContacts()` pushed; `getContactsController()` returns it while it is open.
     private weak var contactsController: ContactsController?
+    private var ayuContactsTabController: ContactsController?
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
@@ -214,11 +215,22 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         
         var controllers: [ViewController] = []
         
-        if showCallsTab {
-            controllers.append(callListController)
-        }
-        if showNewsTab {
-            controllers.append(newsController)
+        // AyuGram Liquid Glass+ (beta): the tab bar of the concept, Contacts / Chats / Settings.
+        if AyuGramSettings.current.liquidGlassBeta {
+            let contactsTabController = ContactsController(context: self.context)
+            let contactsIcon = UIImage(bundleImageName: "Chat List/Tabs/IconContacts")
+            contactsTabController.tabBarItem.title = self.presentationData.strings.Contacts_Title
+            contactsTabController.tabBarItem.image = contactsIcon
+            contactsTabController.tabBarItem.selectedImage = contactsIcon
+            self.ayuContactsTabController = contactsTabController
+            controllers.append(contactsTabController)
+        } else {
+            if showCallsTab {
+                controllers.append(callListController)
+            }
+            if showNewsTab {
+                controllers.append(newsController)
+            }
         }
         controllers.append(chatListController)
         
@@ -257,11 +269,15 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             return
         }
         var controllers: [ViewController] = []
-        if showCallsTab {
-            controllers.append(self.callListController!)
-        }
-        if showNewsTab, let newsController = self.newsController {
-            controllers.append(newsController)
+        if let ayuContactsTabController = self.ayuContactsTabController {
+            controllers.append(ayuContactsTabController)
+        } else {
+            if showCallsTab {
+                controllers.append(self.callListController!)
+            }
+            if showNewsTab, let newsController = self.newsController {
+                controllers.append(newsController)
+            }
         }
         controllers.append(self.chatListController!)
         controllers.append(self.accountSettingsController!)

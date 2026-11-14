@@ -6,7 +6,10 @@ import TelegramPresentationData
 /// AyuGram "Liquid Glass+ (beta)": the chat list over a soft gradient, as a floating rounded card (after the Liquid Glass
 /// Telegram concept). Read once at launch: switching it applies after the app restarts.
 enum AyuLiquidGlass {
-    static let isEnabled: Bool = AyuGramSettings.current.liquidGlassBeta
+    /// The gradient-and-card background is off: the concept's gradient turned out to be the backdrop of its
+    /// presentation picture, not part of the app. The beta look now changes the tab bar (TelegramRootController).
+    static let isEnabled: Bool = AyuGramSettings.current.liquidGlassBeta && AyuLiquidGlass.gradientBackground
+    private static let gradientBackground: Bool = UserDefaults.standard.bool(forKey: "ayugram.liquidGlass.gradientBackground")
 
     /// The chat list background: clear in the beta look, so the gradient and the card show through.
     static func chatListBackgroundColor(_ theme: PresentationTheme) -> UIColor {
