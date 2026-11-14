@@ -78,6 +78,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
     public var dedsecSilence: Bool
     /// Ghost mode still sends the online status; Telegram's Last Seen privacy (Nobody + Always Share With) decides who sees it.
     public var onlineForExceptions: Bool
+    /// Ghost mode: the users who still see the account online (applied through the Last Seen privacy rule).
+    public var ghostOnlineExceptions: [Int64]
     /// Beta: the Liquid Glass+ look (gradient background, chat list as a floating card).
     public var liquidGlassBeta: Bool
     /// Hide stickers sent by other people.
@@ -153,6 +155,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         keepAliveInBackground: true,
         dedsecSilence: false,
         onlineForExceptions: false,
+        ghostOnlineExceptions: [],
         liquidGlassBeta: false,
         hideStickersFromOthers: false,
         hideGifsFromOthers: false,
@@ -207,6 +210,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         keepAliveInBackground: Bool,
         dedsecSilence: Bool,
         onlineForExceptions: Bool,
+        ghostOnlineExceptions: [Int64],
         liquidGlassBeta: Bool,
         hideStickersFromOthers: Bool,
         hideGifsFromOthers: Bool,
@@ -259,6 +263,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.keepAliveInBackground = keepAliveInBackground
         self.dedsecSilence = dedsecSilence
         self.onlineForExceptions = onlineForExceptions
+        self.ghostOnlineExceptions = ghostOnlineExceptions
         self.liquidGlassBeta = liquidGlassBeta
         self.hideStickersFromOthers = hideStickersFromOthers
         self.hideGifsFromOthers = hideGifsFromOthers
@@ -316,6 +321,7 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.keepAliveInBackground = try container.decodeIfPresent(Bool.self, forKey: .keepAliveInBackground) ?? d.keepAliveInBackground
         self.dedsecSilence = try container.decodeIfPresent(Bool.self, forKey: .dedsecSilence) ?? d.dedsecSilence
         self.onlineForExceptions = try container.decodeIfPresent(Bool.self, forKey: .onlineForExceptions) ?? d.onlineForExceptions
+        self.ghostOnlineExceptions = try container.decodeIfPresent([Int64].self, forKey: .ghostOnlineExceptions) ?? d.ghostOnlineExceptions
         self.liquidGlassBeta = try container.decodeIfPresent(Bool.self, forKey: .liquidGlassBeta) ?? d.liquidGlassBeta
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers

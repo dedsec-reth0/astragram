@@ -344,7 +344,7 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openLinked(.privacy)
                 })
-            case .ai, .templates, .keywordAlerts, .bookmarks:
+            case .ai, .templates, .keywordAlerts, .bookmarks, .ghostOnlineExceptions:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openTool(kind)
                 })
@@ -375,6 +375,7 @@ private enum AyuGramSettingsButtonKind: Equatable {
     case apiCredentials
     case checkUpdates
     case lastSeenPrivacy
+    case ghostOnlineExceptions
     case ai
     case templates
     case keywordAlerts
@@ -408,8 +409,7 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.flag(id: 18, section: .ghostExtra, title: strings.sendViaSchedule, value: settings.sendViaSchedule, enabled: settings.hideOnlineStatus, keyPath: \.sendViaSchedule))
     entries.append(.footer(id: 19, section: .ghostExtra, text: strings.sendViaScheduleFooter))
 
-    entries.append(.flag(id: 6, section: .onlineExceptions, title: strings.onlineForExceptions, value: settings.onlineForExceptions, enabled: settings.hideOnlineStatus, keyPath: \.onlineForExceptions))
-    entries.append(.button(id: 7, section: .onlineExceptions, title: strings.onlineWhoSees, label: "", kind: .lastSeenPrivacy))
+    entries.append(.button(id: 7, section: .onlineExceptions, title: strings.ghostOnlineExceptions, label: settings.ghostOnlineExceptions.isEmpty ? strings.ghostOnlineNobody : "\(settings.ghostOnlineExceptions.count)", kind: .ghostOnlineExceptions))
     entries.append(.footer(id: 8, section: .onlineExceptions, text: strings.onlineForExceptionsFooter))
 
     entries.append(.header(id: 3, section: .dedsec, text: strings.dedsecHeader))
@@ -579,6 +579,34 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let strings = AyuStrings(presentationData.strings)
             switch kind {
+            case .ghostOnlineExceptions:
+                let selected = Set(AyuGramSettings.current.ghostOnlineExceptions.map { EnginePeer.Id($0) })
+                let controller = context.sharedContext.makeContactMultiselectionController(ContactMultiselectionControllerParams(context: context, mode: .chatSelection(ContactMultiselectionControllerMode.ChatSelection(
+                    title: strings.ghostOnlineExceptions,
+                    searchPlaceholder: presentationData.strings.PrivacySettings_SearchUsersPlaceholder,
+                    selectedChats: selected,
+                    additionalCategories: nil,
+                    chatListFilters: nil,
+                    onlyUsers: true,
+                    disableChannels: true,
+                    disableBots: true
+                ))))
+                let _ = (controller.result
+                |> take(1)
+                |> deliverOnMainQueue).start(next: { [weak controller] result in
+                    if case let .result(peerIds, _) = result {
+                        var ids: [Int64] = []
+                        for peerId in peerIds {
+                            if case let .peer(id) = peerId, id.namespace == Namespaces.Peer.CloudUser {
+                                ids.append(id.toInt64())
+                            }
+                        }
+                        AyuGramSettings.update { $0.ghostOnlineExceptions = ids }
+                        AyuGhostOnlineExceptions.apply(context: context)
+                    }
+                    controller?.dismiss()
+                })
+                pushControllerImpl?(controller)
             case .ai:
                 pushControllerImpl?(ayuAIController(context: context))
             case .templates:

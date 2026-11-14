@@ -1359,6 +1359,20 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         if self.ayuBackgroundNotifier == nil {
             self.ayuBackgroundNotifier = AyuBackgroundNotifier(application: application, sharedContext: self.sharedContextPromise.get(), baseAppBundleId: baseAppBundleId)
         }
+        // AyuGram: ghost mode's "who sees me online" list follows the ghost mode switch.
+        let ayuPreviousHideOnline = Atomic<Bool?>(value: nil)
+        let _ = (combineLatest(self.sharedContextPromise.get()
+        |> mapToSignal { sharedApplicationContext -> Signal<(primary: AccountContext?, accounts: [(AccountRecordId, AccountContext, Int32)], currentAuth: UnauthorizedAccount?), NoError> in
+            return sharedApplicationContext.sharedContext.activeAccountContexts
+        }, AyuGramSettings.signal |> map { $0.hideOnlineStatus } |> distinctUntilChanged)
+        |> deliverOnMainQueue).start(next: { accountContexts, hideOnline in
+            let previous = ayuPreviousHideOnline.swap(hideOnline)
+            guard let previous, previous != hideOnline, let context = accountContexts.primary else {
+                return
+            }
+            AyuGhostOnlineExceptions.apply(context: context)
+        })
+
         // AyuGram: DEDSEC silence is applied to every logged-in account when it is switched (from the settings or the
         // home screen menu).
         let ayuPreviousDedsecSilence = Atomic<Bool?>(value: nil)
