@@ -92,6 +92,8 @@ private enum AyuGramSettingsSection: Int32 {
     case extra
     case view
     case notifications
+    case dedsec
+    case look
 }
 
 private enum AyuGramSettingsEntry: ItemListNodeEntry {
@@ -376,6 +378,10 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.flag(id: 18, section: .ghostExtra, title: strings.sendViaSchedule, value: settings.sendViaSchedule, enabled: settings.hideOnlineStatus, keyPath: \.sendViaSchedule))
     entries.append(.footer(id: 19, section: .ghostExtra, text: strings.sendViaScheduleFooter))
 
+    entries.append(.header(id: 3, section: .dedsec, text: strings.dedsecHeader))
+    entries.append(.flag(id: 4, section: .dedsec, title: strings.dedsecSilence, value: settings.dedsecSilence, enabled: true, keyPath: \.dedsecSilence))
+    entries.append(.footer(id: 5, section: .dedsec, text: strings.dedsecFooter))
+
     entries.append(.antiDeleteHeader(strings.antiDeleteHeader))
     entries.append(.saveDeleted(strings.saveDeleted, settings.saveDeletedMessages))
     entries.append(.keepInChat(strings.keepDeletedInChat, settings.keepDeletedMessagesInChat))
@@ -383,6 +389,10 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.saveEdits(strings.saveEdits, settings.saveEditHistory))
     entries.append(.keepSelfDestructing(strings.keepSelfDestructing, settings.keepSelfDestructingMedia))
     entries.append(.antiDeleteFooter(strings.antiDeleteFooter))
+
+    entries.append(.header(id: 27, section: .look, text: strings.themesHeader))
+    entries.append(.flag(id: 28, section: .look, title: strings.liquidGlassBeta, value: settings.liquidGlassBeta, enabled: true, keyPath: \.liquidGlassBeta))
+    entries.append(.footer(id: 29, section: .look, text: strings.liquidGlassFooter))
 
     entries.append(.deletedMessages(strings.deletedMessages, statistics.flatMap { "\($0.deletedCount)" } ?? ""))
     entries.append(.storageSize(strings.storageUsage, statistics.flatMap { formatFileSize($0.fileSize) } ?? ""))

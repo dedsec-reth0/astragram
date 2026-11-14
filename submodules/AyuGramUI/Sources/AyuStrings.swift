@@ -192,4 +192,22 @@ public struct AyuStrings {
     public var backgroundNotifications: String { t("Уведомления без push", "Notifications without push") }
     public var keepAliveInBackground: String { t("Держать соединение в фоне", "Stay connected in background") }
     public var backgroundNotificationsFooter: String { t("Push-уведомления Telegram не приходят в приложения, установленные через AltStore. «Держать соединение в фоне» не даёт iOS усыпить AyuGram (проигрывается тишина, музыке это не мешает), поэтому сообщения приходят и уведомляются сразу, но батарея расходуется быстрее. Без него AyuGram проверяет сообщения, только когда iOS сама его будит (раз в 15–60 минут или реже). Смахивание AyuGram из списка недавних приложений останавливает и то и другое.", "Telegram push notifications do not reach apps installed with AltStore. \"Stay connected in background\" keeps iOS from suspending AyuGram (it plays silence, music is not affected), so messages arrive and are notified at once, at the cost of battery. Without it AyuGram checks for messages only when iOS wakes it up (every 15–60 minutes or less often). Swiping AyuGram away from recent apps stops both.") }
+    public var shortcutGhostOn: String { t("Включить режим призрака", "Turn On Ghost Mode") }
+    public var shortcutGhostOff: String { t("Выключить режим призрака", "Turn Off Ghost Mode") }
+    public var shortcutStateOn: String { t("Сейчас включён", "Now on") }
+    public var shortcutStateOff: String { t("Сейчас выключен", "Now off") }
+    public var shortcutDedsecOn: String { t("DEDSEC: тишина групп и каналов", "DEDSEC: Silence Groups & Channels") }
+    public var shortcutDedsecOff: String { t("DEDSEC: вернуть звук групп и каналов", "DEDSEC: Unmute Groups & Channels") }
+    public var shortcutDedsecSubtitleOn: String { t("🔕 Группы и каналы молчат", "🔕 Groups and channels are silent") }
+    public var shortcutDedsecSubtitleOff: String { t("Одна кнопка для всех групп и каналов", "One switch for all groups and channels") }
+    public var ghostToastOn: String { t("Режим призрака включён", "Ghost Mode is on") }
+    public var ghostToastOff: String { t("Режим призрака выключен", "Ghost Mode is off") }
+    public var dedsecToastOn: String { t("🔕 DEDSEC: группы и каналы без звука и уведомлений", "🔕 DEDSEC: groups and channels are silent") }
+    public var dedsecToastOff: String { t("🔔 DEDSEC: уведомления групп и каналов включены", "🔔 DEDSEC: group and channel notifications are on") }
+    public var dedsecHeader: String { t("DEDSEC", "DEDSEC") }
+    public var dedsecSilence: String { t("Тишина групп и каналов", "Silence groups and channels") }
+    public var dedsecFooter: String { t("Функция от автора (DEDSEC): выключает уведомления и звуки всех групп и каналов одной кнопкой, новые группы и каналы тоже будут молчать. Чтобы какой-то чат уведомлял, включите в его профиле уведомления: это исключение. Переключается и из меню иконки приложения (долгое нажатие на иконку).", "From the author (DEDSEC): one switch turns off notifications and sounds of all groups and channels, and new ones are silent too. To keep a chat notifying, turn its notifications on in its profile: that is an exception. Also available from the app icon menu (long press the icon).") }
+    public var liquidGlassBeta: String { t("Liquid Glass+ (бета)", "Liquid Glass+ (beta)") }
+    public var liquidGlassFooter: String { t("Бета-вид в стиле концепта Liquid Glass: градиентный фон и список чатов в виде плавающей карточки. Обычный вид остаётся по умолчанию. Применяется после перезапуска приложения.", "A beta look in the style of the Liquid Glass concept: a gradient background and the chat list as a floating card. The regular look stays the default. Applied after the app restarts.") }
+    public var themesHeader: String { t("ВИД (БЕТА)", "LOOK (BETA)") }
 }

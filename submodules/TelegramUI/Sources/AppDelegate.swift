@@ -1342,6 +1342,22 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
         // AyuGram: notifications without push (local notifications and background app refresh).
         self.ayuBackgroundNotifier = AyuBackgroundNotifier(application: application, sharedContext: self.sharedContextPromise.get(), baseAppBundleId: baseAppBundleId)
+        // AyuGram: DEDSEC silence is applied to every logged-in account when it is switched (from the settings or the
+        // home screen menu).
+        let ayuPreviousDedsecSilence = Atomic<Bool?>(value: nil)
+        let _ = (combineLatest(self.sharedContextPromise.get()
+        |> mapToSignal { sharedApplicationContext -> Signal<(primary: AccountContext?, accounts: [(AccountRecordId, AccountContext, Int32)], currentAuth: UnauthorizedAccount?), NoError> in
+            return sharedApplicationContext.sharedContext.activeAccountContexts
+        }, AyuGramSettings.signal |> map { $0.dedsecSilence } |> distinctUntilChanged)
+        |> deliverOnMainQueue).start(next: { accountContexts, silent in
+            let previous = ayuPreviousDedsecSilence.swap(silent)
+            guard let previous, previous != silent else {
+                return
+            }
+            for (_, context, _) in accountContexts.accounts {
+                let _ = AyuDedsecSilence.apply(account: context.account, silent: silent).start()
+            }
+        })
             
         self.context.set(self.sharedContextPromise.get()
         |> deliverOnMainQueue
@@ -1624,8 +1640,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         self.resetBadge()
         
         if #available(iOS 9.1, *) {
-            self.quickActionsDisposable.set((self.context.get()
-            |> mapToSignal { context -> Signal<[ApplicationShortcutItem], NoError> in
+            self.quickActionsDisposable.set((combineLatest(self.context.get(), AyuGramSettings.signal
+            |> map { settings -> [Bool] in
+                return [settings.isGhostModeFullyEnabled, settings.dedsecSilence]
+            }
+            |> distinctUntilChanged)
+            |> mapToSignal { context, ayuState -> Signal<[ApplicationShortcutItem], NoError> in
                 if let context = context {
                     let presentationData = context.context.sharedContext.currentPresentationData.with { $0 }
                     
@@ -1642,7 +1662,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                         }
                     } |> mapToSignal { otherAccountName -> Signal<[ApplicationShortcutItem], NoError> in
                         let presentationData = context.context.sharedContext.currentPresentationData.with { $0 }
-                        return .single(applicationShortcutItems(strings: presentationData.strings, otherAccountName: otherAccountName))
+                        return .single(applicationShortcutItems(strings: presentationData.strings, otherAccountName: otherAccountName, ghostModeEnabled: ayuState[0], dedsecSilence: ayuState[1]))
                     }
                 } else {
                     return .single([])
@@ -2965,6 +2985,13 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         return true
     }
     
+    private func ayuShowToast(context: AccountContext, text: String) {
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        Queue.mainQueue().after(0.6, {
+            context.sharedContext.presentGlobalController(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: 3.0, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), nil)
+        })
+    }
+
     func handleShortcutItem(_ shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
         let _ = (self.sharedContextPromise.get()
         |> take(1)
@@ -2990,6 +3017,15 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                                     context.switchAccount()
                                 case .appIcon:
                                     context.openAppIcon()
+                                case .ayuGhostMode:
+                                    let enabled = !AyuGramSettings.current.isGhostModeFullyEnabled
+                                    AyuGramSettings.update { $0.setGhostMode(enabled) }
+                                    self.ayuShowToast(context: context.context, text: enabled ? "👻 " + AyuStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings).ghostToastOn : AyuStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings).ghostToastOff)
+                                case .ayuDedsecSilence:
+                                    let silent = !AyuGramSettings.current.dedsecSilence
+                                    AyuGramSettings.update { $0.dedsecSilence = silent }
+                                    let ayuStrings = AyuStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings)
+                                    self.ayuShowToast(context: context.context, text: silent ? ayuStrings.dedsecToastOn : ayuStrings.dedsecToastOff)
                             }
                         }
                     }

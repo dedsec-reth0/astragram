@@ -74,6 +74,10 @@ public struct AyuGramSettingsValues: Codable, Equatable {
     public var backgroundNotifications: Bool
     /// Stay connected in the background (plays silence so iOS does not suspend the app), so messages arrive and are notified at once. Uses more battery.
     public var keepAliveInBackground: Bool
+    /// DEDSEC: notifications and sounds of all groups and channels are off (chats with their own exception still notify; new groups and channels are silent too).
+    public var dedsecSilence: Bool
+    /// Beta: the Liquid Glass+ look (gradient background, chat list as a floating card).
+    public var liquidGlassBeta: Bool
 
     // MARK: Appearance and chats
     /// Text shown next to the time of a deleted message.
@@ -131,6 +135,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         checkForUpdates: true,
         backgroundNotifications: true,
         keepAliveInBackground: true,
+        dedsecSilence: false,
+        liquidGlassBeta: false,
         deletedMark: "🧹",
         editedMark: "",
         showMessageSeconds: false,
@@ -175,6 +181,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         checkForUpdates: Bool,
         backgroundNotifications: Bool,
         keepAliveInBackground: Bool,
+        dedsecSilence: Bool,
+        liquidGlassBeta: Bool,
         deletedMark: String,
         editedMark: String,
         showMessageSeconds: Bool,
@@ -217,6 +225,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.checkForUpdates = checkForUpdates
         self.backgroundNotifications = backgroundNotifications
         self.keepAliveInBackground = keepAliveInBackground
+        self.dedsecSilence = dedsecSilence
+        self.liquidGlassBeta = liquidGlassBeta
         self.deletedMark = deletedMark
         self.editedMark = editedMark
         self.showMessageSeconds = showMessageSeconds
@@ -264,6 +274,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.checkForUpdates = try container.decodeIfPresent(Bool.self, forKey: .checkForUpdates) ?? d.checkForUpdates
         self.backgroundNotifications = try container.decodeIfPresent(Bool.self, forKey: .backgroundNotifications) ?? d.backgroundNotifications
         self.keepAliveInBackground = try container.decodeIfPresent(Bool.self, forKey: .keepAliveInBackground) ?? d.keepAliveInBackground
+        self.dedsecSilence = try container.decodeIfPresent(Bool.self, forKey: .dedsecSilence) ?? d.dedsecSilence
+        self.liquidGlassBeta = try container.decodeIfPresent(Bool.self, forKey: .liquidGlassBeta) ?? d.liquidGlassBeta
         self.deletedMark = try container.decodeIfPresent(String.self, forKey: .deletedMark) ?? d.deletedMark
         self.editedMark = try container.decodeIfPresent(String.self, forKey: .editedMark) ?? d.editedMark
         self.showMessageSeconds = try container.decodeIfPresent(Bool.self, forKey: .showMessageSeconds) ?? d.showMessageSeconds

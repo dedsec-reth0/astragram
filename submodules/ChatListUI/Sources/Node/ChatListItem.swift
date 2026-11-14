@@ -5649,7 +5649,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     strongSelf.updateSideListSeparatorVisibility()
                     
                     transition.updateFrame(node: strongSelf.backgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.contentSize.width, height: itemHeight)))
-                    let backgroundColor: UIColor
+                    var backgroundColor: UIColor
                     let highlightedBackgroundColor: UIColor
                     if item.selected {
                         backgroundColor = theme.itemSelectedBackgroundColor
@@ -5672,6 +5672,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
                     }
                     
+                    // AyuGram Liquid Glass+ (beta): pinned rows stay inside the card, without a full-width background.
+                    if AyuLiquidGlass.isEnabled && isPinned && !item.selected {
+                        backgroundColor = .clear
+                    }
                     if animated {
                         transition.updateBackgroundColor(node: strongSelf.backgroundNode, color: backgroundColor)
                     } else {
