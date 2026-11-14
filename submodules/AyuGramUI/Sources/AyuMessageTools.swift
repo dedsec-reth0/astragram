@@ -4,6 +4,7 @@ import Postbox
 import SwiftSignalKit
 import TelegramCore
 import TelegramPresentationData
+import TelegramUIPreferences
 import AccountContext
 
 /// Downloads `resource` of `media` in `message` (it may already be cached) and returns the path of its data.
