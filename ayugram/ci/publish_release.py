@@ -12,8 +12,10 @@ The IPA has no API credentials in it (every user enters their own in the app), s
   changes: https://github.com/<repo>/releases/download/sidestore-source/source.json
   AltStore shows "Update" when the source lists a newer build than the installed one.
 * What a build brings is written in ayugram/WHATSNEW.md; the release and the source show it.
-* `--refresh-source` writes the source again with the versions it has (after its look or texts change), and
-  `--notes` puts the text of FILE on one of those versions.
+* The source lists every released build, newest first, so AltStore can offer any of them. The list is read from
+  the releases themselves each time, so it cannot lose a build.
+* `--refresh-source` writes the source again (after its look or texts change), and `--notes` puts the text of
+  FILE on one of its versions.
 """
 import datetime
 import json
@@ -27,10 +29,11 @@ import zipfile
 
 SOURCE_TAG = 'sidestore-source'
 BUNDLE_ID = 'ph.telegra.Telegraph'
-MAX_VERSIONS = 10
 MAX_NEWS = 5
 TINT_COLOR = '#7C4DFF'
 WHATSNEW_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'WHATSNEW.md')
+# What older builds brought, by build number: the text AltStore shows for a build in the list of versions.
+VERSION_NOTES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'version_notes.json')
 
 APP_SUBTITLE = 'Telegram с режимом призрака и удалёнными сообщениями'
 APP_DESCRIPTION = '''Telegram для iPhone с режимом призрака и сохранением удалённых сообщений. Всё включается отдельно в Настройки → AstraGram.
@@ -104,6 +107,47 @@ def load_source(repo, workdir):
     return versions, news
 
 
+def release_versions(repo, known):
+    """Every released build, newest first: what the releases hold, with the texts the source already has."""
+    result = gh('api', 'repos/{}/releases?per_page=100'.format(repo), '--paginate', '--jq', '.[] | tojson')
+    releases = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+    texts = {v.get('buildVersion'): v for v in known}
+    try:
+        with open(VERSION_NOTES_PATH, encoding='utf-8') as f:
+            notes = json.load(f)
+    except (OSError, ValueError):
+        notes = {}
+    versions = []
+    for release in releases:
+        match = re.match(r'^v(.+)-(\d+)$', release.get('tag_name') or '')
+        if not match or release.get('draft'):
+            continue
+        version, build = match.group(1), match.group(2)
+        ipas = [a for a in release.get('assets') or [] if a['name'].endswith('.ipa')]
+        light = [a for a in ipas if not a['name'].endswith('-full.ipa')]
+        if not light:
+            continue
+        asset = light[0]
+        previous = texts.get(build) or {}
+        description = notes.get(build) or previous.get('localizedDescription')
+        if not description:
+            # The first paragraph of the release text is what the build brought.
+            description = (release.get('body') or '').replace('\r\n', '\n').split('\n\n')[0].strip()
+            if len(ipas) == 1:
+                description += '\n\nЭта сборка с расширениями приложения: ей нужно 7 App ID.'
+        versions.append({
+            'version': version,
+            'buildVersion': build,
+            'date': previous.get('date') or release.get('published_at'),
+            'localizedDescription': description,
+            'downloadURL': asset['browser_download_url'],
+            'size': asset['size'],
+            'minOSVersion': '15.0',
+        })
+    versions.sort(key=lambda v: int(v['buildVersion']), reverse=True)
+    return versions
+
+
 def write_source(repo, workdir, versions, news):
     raw = 'https://raw.githubusercontent.com/{}/master'.format(repo)
     source_url = 'https://github.com/{}/releases/download/{}/source.json'.format(repo, SOURCE_TAG)
@@ -164,9 +208,10 @@ def write_source(repo, workdir, versions, news):
 def refresh_source(arguments):
     repo = os.environ['GITHUB_REPOSITORY']
     workdir = tempfile.mkdtemp()
-    versions, news = load_source(repo, workdir)
+    known, news = load_source(repo, workdir)
+    versions = release_versions(repo, known)
     if not versions:
-        sys.exit('the source has no versions: nothing to refresh')
+        sys.exit('no released builds: nothing to refresh')
     if arguments[:1] == ['--notes']:
         build, notes = arguments[1], read_notes(arguments[2], '')
         matched = [v for v in versions if v.get('buildVersion') == build]
@@ -228,8 +273,8 @@ def main():
     workdir = tempfile.mkdtemp()
     versions, news = load_source(repo, workdir)
 
-    versions = [v for v in versions if v.get('buildVersion') != build]
-    versions.insert(0, {
+    known = [v for v in versions if v.get('buildVersion') != build]
+    known.insert(0, {
         'version': version,
         'buildVersion': build,
         'date': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
@@ -238,7 +283,13 @@ def main():
         'size': os.path.getsize(upload_path),
         'minOSVersion': '15.0',
     })
-    versions = versions[:MAX_VERSIONS]
+    # Every released build, the new one included; if the releases cannot be read, what the source had.
+    try:
+        versions = release_versions(repo, known)
+    except (subprocess.CalledProcessError, ValueError, KeyError):
+        versions = []
+    if not versions or versions[0]['buildVersion'] != build:
+        versions = known
     write_source(repo, workdir, versions, news)
 
 
