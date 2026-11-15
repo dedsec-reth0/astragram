@@ -16,7 +16,9 @@ import os
 import shutil
 import subprocess
 import sys
+import re
 import tempfile
+import zipfile
 
 SOURCE_TAG = 'sidestore-source'
 BUNDLE_ID = 'ph.telegra.Telegraph'
@@ -25,6 +27,21 @@ MAX_VERSIONS = 10
 
 def gh(*args, check=True):
     return subprocess.run(['gh'] + list(args), check=check, capture_output=True, text=True)
+
+
+def strip_extensions(source_path, target_path):
+    """Copy the IPA without its app extensions (PlugIns, Watch).
+
+    A free Apple ID may register 10 App IDs a week, and every extension takes one: the full IPA needs 7, so AltStore
+    often fails with "no App IDs available". Without extensions the app needs one App ID, and signing is much faster.
+    AltStore signs the app again anyway, so the stale code signature does not matter.
+    """
+    pattern = re.compile(r'^Payload/[^/]+\.app/(PlugIns|Watch)/')
+    with zipfile.ZipFile(source_path) as source, zipfile.ZipFile(target_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as target:
+        for info in source.infolist():
+            if pattern.match(info.filename):
+                continue
+            target.writestr(info, source.read(info.filename), compress_type=info.compress_type, compresslevel=9)
 
 
 def main():
@@ -36,12 +53,15 @@ def main():
     source_url = 'https://github.com/{}/releases/download/{}/source.json'.format(repo, SOURCE_TAG)
     commit_title = subprocess.run(['git', 'log', '-1', '--pretty=%s'], capture_output=True, text=True).stdout.strip()
 
-    notes = '{}\n\nУстановка: AltStore → Browse → Sources → + → {}\n\nПри первом запуске введите свои API ID и API Hash с my.telegram.org.'.format(commit_title, source_url)
+    notes = '{}\n\nAyuGram-*.ipa: no app extensions, needs 1 App ID (free Apple ID). *-full.ipa: with extensions, needs 7 App IDs.\n\nУстановка: AltStore → Browse → Sources → + → {}\n\nПри первом запуске введите свои API ID и API Hash с my.telegram.org.'.format(commit_title, source_url)
     # The uploaded file keeps its own name (a `#label` only changes the label), so it is copied under the asset name.
     upload_dir = tempfile.mkdtemp()
     upload_path = os.path.join(upload_dir, asset_name)
-    shutil.copyfile(ipa, upload_path)
-    gh('release', 'create', tag, upload_path, '--repo', repo, '--title', 'AyuGram {} ({})'.format(version, build), '--notes', notes, '--latest')
+    strip_extensions(ipa, upload_path)
+    # The untouched build, with the share extension, widgets and the rest, for those with a paid developer account.
+    full_path = os.path.join(upload_dir, 'AyuGram-{}-{}-full.ipa'.format(version, build))
+    shutil.copyfile(ipa, full_path)
+    gh('release', 'create', tag, upload_path, full_path, '--repo', repo, '--title', 'AyuGram {} ({})'.format(version, build), '--notes', notes, '--latest')
     print('released', tag)
 
     # The current source, if there is one.
@@ -64,7 +84,7 @@ def main():
         'date': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'localizedDescription': commit_title,
         'downloadURL': download_url,
-        'size': os.path.getsize(ipa),
+        'size': os.path.getsize(upload_path),
         'minOSVersion': '15.0',
     })
     versions = versions[:MAX_VERSIONS]
