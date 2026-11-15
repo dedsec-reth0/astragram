@@ -1,116 +1,163 @@
-# Telegram iOS Source Code Compilation Guide
+<p align="center">
+  <img src="ayugram/assets/banner.png" alt="AyuGram для iOS" width="100%">
+</p>
 
-We welcome all developers to use our API and source code to create applications on our platform.
-There are several things we require from **all developers** for the moment.
+<h1 align="center">AyuGram для iOS</h1>
 
-# Creating your Telegram Application
+<p align="center">
+  Telegram для iPhone с режимом призрака, сохранением удалённых сообщений и плагинами.<br>
+  Собран из исходников Telegram-iOS, ставится через AltStore, без джейлбрейка.
+</p>
 
-1. [**Obtain your own api_id**](https://core.telegram.org/api/obtaining_api_id) for your application.
-2. Please **do not** use the name Telegram for your app — or make sure your users understand that it is unofficial.
-3. Kindly **do not** use our standard logo (white paper plane in a blue circle) as your app's logo.
-3. Please study our [**security guidelines**](https://core.telegram.org/mtproto/security_guidelines) and take good care of your users' data and privacy.
-4. Please remember to publish **your** code too in order to comply with the licences.
+<p align="center">
+  <a href="https://github.com/dedsec-reth0/ayugram/releases/latest"><img alt="Версия" src="https://img.shields.io/github/v/release/dedsec-reth0/ayugram?style=flat-square&label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=181818&labelColor=292929"></a>
+  <a href="https://github.com/dedsec-reth0/ayugram/actions/workflows/build.yml"><img alt="Сборка" src="https://img.shields.io/github/actions/workflow/status/dedsec-reth0/ayugram/build.yml?branch=master&style=flat-square&label=%D1%81%D0%B1%D0%BE%D1%80%D0%BA%D0%B0&labelColor=292929"></a>
+  <a href="https://github.com/dedsec-reth0/ayugram/releases"><img alt="Загрузки" src="https://img.shields.io/github/downloads/dedsec-reth0/ayugram/total?style=flat-square&label=%D0%B7%D0%B0%D0%B3%D1%80%D1%83%D0%B7%D0%BA%D0%B8&color=181818&labelColor=292929"></a>
+  <img alt="iOS 15+" src="https://img.shields.io/badge/iOS-15%2B-181818?style=flat-square&labelColor=292929">
+</p>
 
-# Quick Compilation Guide
+<p align="center">
+  <a href="#установка"><b>Установка</b></a> ·
+  <a href="#возможности"><b>Возможности</b></a> ·
+  <a href="#первый-запуск"><b>Первый запуск</b></a> ·
+  <a href="#ограничения"><b>Ограничения</b></a> ·
+  <a href="#сборка-из-исходников"><b>Сборка</b></a>
+</p>
 
-## Get the Code
+---
 
-```
-git clone --recursive -j8 https://github.com/TelegramMessenger/Telegram-iOS.git
-```
+> [!NOTE]
+> Проект в разработке. Сборки выходят часто и проверяются автоматически (сборка, целостность IPA), но не на всех
+> устройствах и версиях iOS. Это неофициальный клиент: он не связан ни с Telegram, ни с авторами AyuGram для
+> Android и компьютеров.
 
-## Setup Xcode
+## Установка
 
-Install Xcode (directly from https://developer.apple.com/download/applications or using the App Store).
+Нужен iPhone с iOS 15 или новее и [AltStore](https://altstore.io).
 
-## Adjust Configuration
+1. Откройте AltStore → **Browse** → **Sources** → **+**.
+2. Вставьте адрес источника:
 
-1. Generate a random identifier:
-```
-openssl rand -hex 8
-```
-2. Create a new Xcode project. Use `Telegram` as the Product Name. Use `org.{identifier from step 1}` as the Organization Identifier.
-3. Open `Keychain Access` and navigate to `Certificates`. Locate `Apple Development: your@email.address (XXXXXXXXXX)` and double tap the certificate. Under `Details`, locate `Organizational Unit`. This is the Team ID.
-4. Edit `build-system/template_minimal_development_configuration.json`. Use data from the previous steps.
+   ```
+   https://github.com/dedsec-reth0/ayugram/releases/download/sidestore-source/source.json
+   ```
 
-## Generate an Xcode project
+3. Откройте **AyuGram** в списке и нажмите **Free**. AltStore подпишет приложение вашим Apple ID.
+4. Обновления приходят туда же: когда выходит новая сборка, в AltStore появляется кнопка **Update**.
 
-```
-python3 build-system/Make/Make.py \
-    --cacheDir="$HOME/telegram-bazel-cache" \
-    generateProject \
-    --configurationPath=build-system/template_minimal_development_configuration.json \
-    --xcodeManagedCodesigning
-```
+Можно поставить и вручную: скачайте IPA со страницы [последнего релиза](https://github.com/dedsec-reth0/ayugram/releases/latest)
+и откройте его в AltStore через **My Apps** → **+**.
 
-# Advanced Compilation Guide
+| Файл | Для кого | App ID |
+| --- | --- | --- |
+| `AyuGram-<версия>-<сборка>.ipa` | Бесплатный Apple ID. Без расширений (виджеты, «Поделиться»). | 1 |
+| `AyuGram-<версия>-<сборка>-full.ipa` | Платный аккаунт разработчика. Со всеми расширениями. | 7 |
 
-## Xcode
+## Первый запуск
 
-1. Copy and edit `build-system/appstore-configuration.json`.
-2. Copy `build-system/fake-codesigning`. Create and download provisioning profiles, using the `profiles` folder as a reference for the entitlements.
-3. Generate an Xcode project:
-```
-python3 build-system/Make/Make.py \
-    --cacheDir="$HOME/telegram-bazel-cache" \
-    generateProject \
-    --configurationPath=configuration_from_step_1.json \
-    --codesigningInformationPath=directory_from_step_2
-```
+В сборке нет ключей Telegram API: у каждого они свои.
 
-## IPA
+1. Откройте [my.telegram.org](https://my.telegram.org), войдите по номеру и выберите **API development tools**.
+2. Создайте приложение и скопируйте **api_id** и **api_hash**.
+3. Введите их в AyuGram при первом запуске. Потом их можно сменить: **Настройки → AyuGram → API ID и Hash**.
 
-1. Repeat the steps from the previous section. Use distribution provisioning profiles.
-2. Run:
-```
-python3 build-system/Make/Make.py \
-    --cacheDir="$HOME/telegram-bazel-cache" \
-    build \
-    --configurationPath=...see previous section... \
-    --codesigningInformationPath=...see previous section... \
-    --buildNumber=100001 \
-    --configuration=release_arm64
-```
+Все функции AyuGram лежат в **Настройки → AyuGram**. Каждая включается отдельно.
 
-# FAQ
+## Возможности
 
-## Xcode is stuck at "build-request.json not updated yet"
+<table>
+<tr>
+<td width="50%" valign="top">
 
-Occasionally, you might observe the following message in your build log:
-```
-"/Users/xxx/Library/Developer/Xcode/DerivedData/Telegram-xxx/Build/Intermediates.noindex/XCBuildData/xxx.xcbuilddata/build-request.json" not updated yet, waiting...
-```
+**Режим призрака**
 
-Should this occur, simply cancel the ongoing build and initiate a new one.
+- не отправлять «в сети», прочтение и «печатает»
+- не отмечать просмотр историй, прослушивание голосовых и кружков
+- прочитать при ответе, реакции или голосовании
+- включается и с иконки на домашнем экране
 
-## Telegram_xcodeproj: no such package 
+</td>
+<td width="50%" valign="top">
 
-Following a system restart, the auto-generated Xcode project might encounter a build failure accompanied by this error:
-```
-ERROR: Skipping '@rules_xcodeproj_generated//generator/Telegram/Telegram_xcodeproj:Telegram_xcodeproj': no such package '@rules_xcodeproj_generated//generator/Telegram/Telegram_xcodeproj': BUILD file not found in directory 'generator/Telegram/Telegram_xcodeproj' of external repository @rules_xcodeproj_generated. Add a BUILD file to a directory to mark it as a package.
-```
+**История сообщений**
 
-If you encounter this issue, re-run the project generation steps in the README.
+- сохранять удалённые сообщения, в том числе в каналах
+- оставлять их в чате с меткой
+- история правок каждого сообщения
+- не сжигать одноразовые фото и видео
+- журнал удалённого по всем чатам
 
+</td>
+</tr>
+<tr>
+<td valign="top">
 
-# Tips
+**Чаты**
 
-## Codesigning is not required for simulator-only builds
+- фильтры по словам и регулярным выражениям
+- скрывать стикеры и GIF других, сообщения заблокированных
+- подтверждение перед отправкой стикеров, GIF и сообщений
+- закладки, шаблоны, уведомления по словам
+- детали сообщения, ID в профиле, секунды во времени
 
-Add `--disableProvisioningProfiles`:
-```
-python3 build-system/Make/Make.py \
-    --cacheDir="$HOME/telegram-bazel-cache" \
-    generateProject \
-    --configurationPath=path-to-configuration.json \
-    --codesigningInformationPath=path-to-provisioning-data \
-    --disableProvisioningProfiles
-```
+</td>
+<td valign="top">
 
-## Versions
+**Меньше лишнего**
 
-Each release is built using a specific Xcode version (see `versions.json`). The helper script checks the versions of the installed software and reports an error if they don't match the ones specified in `versions.json`. It is possible to bypass these checks:
+- без рекламы в каналах
+- без историй над списком чатов
+- без похожих каналов и счётчиков на папках
+- DEDSEC: тишина всех групп и каналов одной кнопкой
+- режим стримера, скриншоты и копирование без запретов
 
-```
-python3 build-system/Make/Make.py --overrideXcodeVersion build ... # Don't check the version of Xcode
-```
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**AI и плагины**
+
+- AI через любой OpenAI-совместимый API со своим ключом: перевод, пересказ чата, ответ, расшифровка голосовых, текст с фото
+- плагины на JavaScript: [как писать](ayugram/plugins/README.md), [примеры](ayugram/plugins/examples)
+
+</td>
+<td valign="top">
+
+**Вид**
+
+- монохромное оформление: только чёрный, белый и серые
+- материал стекла: стандартный, прозрачный, матовый
+- пружинящий отклик кнопок
+- круглые кнопки и музыка капсулой в профиле
+- вкладки «Контакты» и «Звонки» по выбору
+
+</td>
+</tr>
+</table>
+
+Ещё: проверка обновлений из приложения, экспорт и импорт настроек, уведомления без push, перезапуск одной кнопкой.
+
+## Ограничения
+
+- **Подпись на 7 дней.** С бесплатным Apple ID приложение нужно обновлять в AltStore раз в неделю (**Refresh All**).
+- **Push-уведомления.** Серверы Telegram шлют push только приложениям с известным им сертификатом, поэтому при
+  закрытом приложении уведомления не приходят. Частично помогает **Настройки → AyuGram → Уведомления без push**.
+- **Перезапуск.** iOS не даёт приложению открыть себя заново: кнопка перезапуска закрывает AyuGram и оставляет
+  уведомление, по которому он открывается.
+- **Режим призрака не всесилен.** Собеседник не видит прочтения, пока вы сами его не отправите, но сервер Telegram
+  знает о вашем подключении.
+
+## Сборка из исходников
+
+Сборка идёт на GitHub Actions: каждый push в `master` запускает [Build AyuGram](.github/workflows/build.yml), а по
+окончании релиз и источник AltStore обновляются сами.
+
+- [ayugram/INSTALL.md](ayugram/INSTALL.md) — как устроена сборка и публикация;
+- [docs/telegram-ios-build.md](docs/telegram-ios-build.md) — исходная инструкция Telegram по сборке в Xcode.
+
+## Лицензия
+
+Основано на [Telegram-iOS](https://github.com/TelegramMessenger/Telegram-iOS), исходный код которого опубликован под
+GPL-2.0. Изменения этого репозитория распространяются на тех же условиях. Название и логотип Telegram принадлежат их
+владельцу.

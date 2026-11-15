@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Publish a built IPA as a GitHub release and add it to the SideStore source.
+"""Publish a built IPA as a GitHub release and add it to the AltStore source.
 
-usage: publish_release.py IPA VERSION BUILD_NUMBER   (GH_TOKEN and GITHUB_REPOSITORY in the environment)
+usage: publish_release.py IPA VERSION BUILD_NUMBER
+       publish_release.py --refresh-source [--notes BUILD_NUMBER FILE]
+(GH_TOKEN and GITHUB_REPOSITORY in the environment)
 
 The IPA has no API credentials in it (every user enters their own in the app), so it can be public.
 
 * The release `v<VERSION>-<BUILD_NUMBER>` gets the IPA; it becomes the latest release, which the app checks for updates.
-* The SideStore/AltStore source (source.json) lives as an asset of the pre-release `sidestore-source`, so its URL never
+* The AltStore/SideStore source (source.json) lives as an asset of the pre-release `sidestore-source`, so its URL never
   changes: https://github.com/<repo>/releases/download/sidestore-source/source.json
-  SideStore shows "Update" when the source lists a newer build than the installed one.
+  AltStore shows "Update" when the source lists a newer build than the installed one.
+* What a build brings is written in ayugram/WHATSNEW.md; the release and the source show it.
+* `--refresh-source` writes the source again with the versions it has (after its look or texts change), and
+  `--notes` puts the text of FILE on one of those versions.
 """
 import datetime
 import json
@@ -23,10 +28,39 @@ import zipfile
 SOURCE_TAG = 'sidestore-source'
 BUNDLE_ID = 'ph.telegra.Telegraph'
 MAX_VERSIONS = 10
+MAX_NEWS = 5
+TINT_COLOR = '#2AABEE'
+WHATSNEW_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'WHATSNEW.md')
+
+APP_SUBTITLE = 'Telegram с режимом призрака и удалёнными сообщениями'
+APP_DESCRIPTION = '''Telegram для iPhone с функциями AyuGram. Всё включается отдельно в Настройки → AyuGram.
+
+РЕЖИМ ПРИЗРАКА
+Не отправлять «в сети», прочтение и «печатает», не отмечать просмотр историй и прослушивание голосовых.
+
+ИСТОРИЯ СООБЩЕНИЙ
+Удалённые сообщения остаются в чате с меткой, у изменённых есть история правок, одноразовые медиа не сгорают.
+
+ЧАТЫ
+Фильтры по словам, закладки, шаблоны, уведомления по словам, без рекламы в каналах и историй над чатами.
+
+AI И ПЛАГИНЫ
+AI через любой OpenAI-совместимый API со своим ключом и плагины на JavaScript.
+
+ВИД
+Монохромное оформление, материал стекла, пружинящие нажатия, вкладки по выбору.
+
+ПЕРВЫЙ ЗАПУСК
+Введите свои API ID и API Hash с my.telegram.org: в сборке ключей нет.
+
+Неофициальный клиент. Push-уведомления при закрытом приложении не приходят.'''
+SOURCE_DESCRIPTION = '''Сборки AyuGram для iOS: Telegram с режимом призрака, сохранением удалённых сообщений и плагинами.
+
+Каждая сборка выходит здесь сразу после GitHub Actions. В ней нет ключей Telegram API: при первом запуске введите свои с my.telegram.org.'''
 
 
 def gh(*args, check=True):
-    return subprocess.run(['gh'] + list(args), check=check, capture_output=True, text=True)
+    return subprocess.run(['gh'] + list(args), check=check, capture_output=True, text=True, encoding='utf-8', errors='replace')
 
 
 def strip_extensions(source_path, target_path):
@@ -44,76 +78,168 @@ def strip_extensions(source_path, target_path):
             target.writestr(info, source.read(info.filename), compress_type=info.compress_type, compresslevel=9)
 
 
+def read_notes(path, fallback):
+    """What the build brings: the text of WHATSNEW.md, or the commit title when there is none."""
+    try:
+        with open(path, encoding='utf-8') as f:
+            text = f.read().strip()
+    except OSError:
+        text = ''
+    return text or fallback
+
+
+def load_source(repo, workdir):
+    """The versions and the news of the published source, if there is one."""
+    if gh('release', 'download', SOURCE_TAG, '--repo', repo, '--pattern', 'source.json', '--dir', workdir, check=False).returncode != 0:
+        return [], []
+    path = os.path.join(workdir, 'source.json')
+    try:
+        with open(path, encoding='utf-8') as f:
+            source = json.load(f)
+        versions = source['apps'][0]['versions']
+        news = source.get('news') or []
+    except (OSError, ValueError, KeyError, IndexError):
+        versions, news = [], []
+    os.remove(path)
+    return versions, news
+
+
+def write_source(repo, workdir, versions, news):
+    raw = 'https://raw.githubusercontent.com/{}/master'.format(repo)
+    source_url = 'https://github.com/{}/releases/download/{}/source.json'.format(repo, SOURCE_TAG)
+    icon_url = raw + '/Telegram/Telegram-iOS/AppIcons.xcassets/BlueIcon.appiconset/Icon1@180x180.png'
+    banner_url = raw + '/ayugram/assets/banner.png'
+
+    # The news shows the latest build.
+    if versions:
+        latest = versions[0]
+        identifier = 'build-{}'.format(latest['buildVersion'])
+        news = [item for item in news if item.get('identifier') != identifier]
+        news.insert(0, {
+            'title': 'AyuGram {} ({})'.format(latest['version'], latest['buildVersion']),
+            'identifier': identifier,
+            'caption': latest.get('localizedDescription', ''),
+            'date': latest['date'],
+            'tintColor': '#181818',
+            'imageURL': banner_url,
+            'notify': False,
+            'appID': BUNDLE_ID,
+        })
+        news = news[:MAX_NEWS]
+
+    source = {
+        'name': 'AyuGram для iOS',
+        'identifier': 'com.github.{}'.format(repo.replace('/', '.').lower()),
+        'subtitle': 'Режим призрака, удалённые сообщения, плагины',
+        'description': SOURCE_DESCRIPTION,
+        'iconURL': icon_url,
+        'headerURL': banner_url,
+        'website': 'https://github.com/{}'.format(repo),
+        'sourceURL': source_url,
+        'tintColor': TINT_COLOR,
+        'featuredApps': [BUNDLE_ID],
+        'apps': [{
+            'name': 'AyuGram',
+            'bundleIdentifier': BUNDLE_ID,
+            'developerName': 'AyuGram для iOS',
+            'subtitle': APP_SUBTITLE,
+            'localizedDescription': APP_DESCRIPTION,
+            'iconURL': icon_url,
+            'tintColor': TINT_COLOR,
+            'category': 'social',
+            'versions': versions,
+            'appPermissions': {'entitlements': [], 'privacy': {}},
+        }],
+        'news': news,
+    }
+    path = os.path.join(workdir, 'source.json')
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(source, f, ensure_ascii=False, indent=2)
+    gh('release', 'upload', SOURCE_TAG, path, '--repo', repo, '--clobber')
+    gh('release', 'edit', SOURCE_TAG, '--repo', repo, '--title', 'Источник AltStore', '--notes',
+       'Источник AyuGram для AltStore и SideStore. Добавьте этот адрес в **Browse → Sources → +**:\n\n```\n{}\n```\n\nФайл обновляется сам после каждой сборки.'.format(source_url), check=False)
+    print('source updated:', source_url)
+
+
+def refresh_source(arguments):
+    repo = os.environ['GITHUB_REPOSITORY']
+    workdir = tempfile.mkdtemp()
+    versions, news = load_source(repo, workdir)
+    if not versions:
+        sys.exit('the source has no versions: nothing to refresh')
+    if arguments[:1] == ['--notes']:
+        build, notes = arguments[1], read_notes(arguments[2], '')
+        matched = [v for v in versions if v.get('buildVersion') == build]
+        if not matched or not notes:
+            sys.exit('no version {} in the source, or no notes'.format(build))
+        matched[0]['localizedDescription'] = notes
+    write_source(repo, workdir, versions, news)
+
+
 def main():
+    if sys.argv[1:2] == ['--refresh-source']:
+        refresh_source(sys.argv[2:])
+        return
     ipa, version, build = sys.argv[1], sys.argv[2], sys.argv[3]
     repo = os.environ['GITHUB_REPOSITORY']
     tag = 'v{}-{}'.format(version, build)
     asset_name = 'AyuGram-{}-{}.ipa'.format(version, build)
+    full_name = 'AyuGram-{}-{}-full.ipa'.format(version, build)
     download_url = 'https://github.com/{}/releases/download/{}/{}'.format(repo, tag, asset_name)
     source_url = 'https://github.com/{}/releases/download/{}/source.json'.format(repo, SOURCE_TAG)
     commit_title = subprocess.run(['git', 'log', '-1', '--pretty=%s'], capture_output=True, text=True).stdout.strip()
+    whats_new = read_notes(WHATSNEW_PATH, commit_title)
 
-    notes = '{}\n\nAyuGram-*.ipa: no app extensions, needs 1 App ID (free Apple ID). *-full.ipa: with extensions, needs 7 App IDs.\n\nУстановка: AltStore → Browse → Sources → + → {}\n\nПри первом запуске введите свои API ID и API Hash с my.telegram.org.'.format(commit_title, source_url)
+    # The app's update alert shows the first line of the release text, so what is new comes first.
+    notes = '''{whats_new}
+
+## Установка
+
+В AltStore: **Browse → Sources → +**, адрес источника:
+
+```
+{source_url}
+```
+
+Или скачайте файл ниже и откройте его в AltStore: **My Apps → +**.
+
+| Файл | Для кого |
+| --- | --- |
+| `{asset_name}` | Бесплатный Apple ID: без расширений, нужен 1 App ID |
+| `{full_name}` | Платный аккаунт разработчика: все расширения, нужно 7 App ID |
+
+При первом запуске введите свои API ID и API Hash с [my.telegram.org](https://my.telegram.org).
+
+<sub>Коммит: {commit_title}</sub>
+'''.format(whats_new=whats_new, source_url=source_url, asset_name=asset_name, full_name=full_name, commit_title=commit_title)
     # The uploaded file keeps its own name (a `#label` only changes the label), so it is copied under the asset name.
     upload_dir = tempfile.mkdtemp()
     upload_path = os.path.join(upload_dir, asset_name)
     strip_extensions(ipa, upload_path)
     # The untouched build, with the share extension, widgets and the rest, for those with a paid developer account.
-    full_path = os.path.join(upload_dir, 'AyuGram-{}-{}-full.ipa'.format(version, build))
+    full_path = os.path.join(upload_dir, full_name)
     shutil.copyfile(ipa, full_path)
     gh('release', 'create', tag, upload_path, full_path, '--repo', repo, '--title', 'AyuGram {} ({})'.format(version, build), '--notes', notes, '--latest')
     print('released', tag)
 
     # The current source, if there is one.
     if gh('release', 'view', SOURCE_TAG, '--repo', repo, check=False).returncode != 0:
-        gh('release', 'create', SOURCE_TAG, '--repo', repo, '--title', 'SideStore source', '--prerelease', '--notes', 'SideStore / AltStore source: {}'.format(source_url))
+        gh('release', 'create', SOURCE_TAG, '--repo', repo, '--title', 'Источник AltStore', '--prerelease', '--notes', 'AltStore / SideStore source: {}'.format(source_url))
     workdir = tempfile.mkdtemp()
-    versions = []
-    if gh('release', 'download', SOURCE_TAG, '--repo', repo, '--pattern', 'source.json', '--dir', workdir, check=False).returncode == 0:
-        try:
-            with open(os.path.join(workdir, 'source.json')) as f:
-                versions = json.load(f)['apps'][0]['versions']
-        except (OSError, ValueError, KeyError, IndexError):
-            versions = []
-        os.remove(os.path.join(workdir, 'source.json'))
+    versions, news = load_source(repo, workdir)
 
     versions = [v for v in versions if v.get('buildVersion') != build]
     versions.insert(0, {
         'version': version,
         'buildVersion': build,
         'date': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-        'localizedDescription': commit_title,
+        'localizedDescription': whats_new,
         'downloadURL': download_url,
         'size': os.path.getsize(upload_path),
         'minOSVersion': '15.0',
     })
     versions = versions[:MAX_VERSIONS]
-
-    source = {
-        'name': 'AyuGram for iOS',
-        'identifier': 'com.github.{}'.format(repo.replace('/', '.').lower()),
-        'subtitle': 'AyuGram: ghost mode, anti-delete, plugins',
-        'sourceURL': source_url,
-        'website': 'https://github.com/{}'.format(repo),
-        'apps': [{
-            'name': 'AyuGram',
-            'bundleIdentifier': BUNDLE_ID,
-            'developerName': 'AyuGram for iOS',
-            'subtitle': 'Telegram с режимом призрака и сохранением удалённых сообщений',
-            'localizedDescription': 'Telegram для iOS с функциями AyuGram: режим призрака, сохранение удалённых и изменённых сообщений, одноразовые медиа, фильтры, плагины. При первом запуске введите свои API ID и API Hash с my.telegram.org.',
-            'iconURL': 'https://raw.githubusercontent.com/{}/master/Telegram/Telegram-iOS/AppIcons.xcassets/BlueIcon.appiconset/Icon1@180x180.png'.format(repo),
-            'tintColor': '#2AABEE',
-            'category': 'social',
-            'versions': versions,
-            'appPermissions': {'entitlements': [], 'privacy': {}},
-        }],
-        'news': [],
-    }
-    path = os.path.join(workdir, 'source.json')
-    with open(path, 'w') as f:
-        json.dump(source, f, ensure_ascii=False, indent=2)
-    gh('release', 'upload', SOURCE_TAG, path, '--repo', repo, '--clobber')
-    print('source updated:', source_url)
+    write_source(repo, workdir, versions, news)
 
 
 if __name__ == '__main__':
