@@ -5,6 +5,7 @@ import AsyncDisplayKit
 import TelegramCore
 import SwiftSignalKit
 import TelegramPresentationData
+import TelegramUIPreferences
 import AccountContext
 import ContactListUI
 import CallListUI
@@ -82,6 +83,8 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     /// The Contacts screen `openContacts()` pushed; `getContactsController()` returns it while it is open.
     private weak var contactsController: ContactsController?
     private var ayuContactsTabController: ContactsController?
+    private var ayuTabsDisposable: Disposable?
+    private var ayuShowNewsTab = false
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
@@ -150,6 +153,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     
     deinit {
         self.permissionsDisposable?.dispose()
+        self.ayuTabsDisposable?.dispose()
         self.presentationDataDisposable?.dispose()
         self.applicationInFocusDisposable?.dispose()
         self.storyUploadEventsDisposable?.dispose()
@@ -215,22 +219,25 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         
         var controllers: [ViewController] = []
         
-        // AyuGram Liquid Glass+ (beta): the tab bar of the concept, Contacts / Chats / Settings.
-        if AyuGramSettings.current.liquidGlassBeta {
-            let contactsTabController = ContactsController(context: self.context)
-            let contactsIcon = UIImage(bundleImageName: "Chat List/Tabs/IconContacts")
-            contactsTabController.tabBarItem.title = self.presentationData.strings.Contacts_Title
-            contactsTabController.tabBarItem.image = contactsIcon
-            contactsTabController.tabBarItem.selectedImage = contactsIcon
-            self.ayuContactsTabController = contactsTabController
+        // AyuGram: the Contacts and the Calls tabs follow their own switches (AyuGram settings, "Look"), so the tab bar
+        // can be Contacts / Calls / Chats / Settings. Both are created even when hidden: `updateRootControllers`
+        // shows and hides them.
+        let contactsTabController = ContactsController(context: self.context)
+        let contactsIcon = UIImage(bundleImageName: "Chat List/Tabs/IconContacts")
+        contactsTabController.tabBarItem.title = self.presentationData.strings.Contacts_Title
+        contactsTabController.tabBarItem.image = contactsIcon
+        contactsTabController.tabBarItem.selectedImage = contactsIcon
+        self.ayuContactsTabController = contactsTabController
+        self.ayuShowNewsTab = showNewsTab
+        let ayuSettings = AyuGramSettings.current
+        if ayuSettings.contactsTab {
             controllers.append(contactsTabController)
-        } else {
-            if showCallsTab {
-                controllers.append(callListController)
-            }
-            if showNewsTab {
-                controllers.append(newsController)
-            }
+        }
+        if ayuSettings.callsTab {
+            controllers.append(callListController)
+        }
+        if showNewsTab {
+            controllers.append(newsController)
         }
         controllers.append(chatListController)
         
@@ -262,6 +269,34 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.accountSettingsController = accountSettingsController
         self.rootTabController = tabBarController
         self.pushViewController(tabBarController, animated: false)
+
+        // AyuGram: the tab bar follows the Contacts and the Calls switches at once.
+        if self.ayuTabsDisposable == nil {
+            let accountManager = self.context.sharedContext.accountManager
+            var isFirst = true
+            self.ayuTabsDisposable = (AyuGramSettings.signal
+            |> map { settings -> Int32 in
+                return (settings.contactsTab ? 1 : 0) | (settings.callsTab ? 2 : 0)
+            }
+            |> distinctUntilChanged
+            |> deliverOnMainQueue).start(next: { [weak self] value in
+                // Telegram's own "Show Calls Tab" switch mirrors the AyuGram one.
+                let showCallsTab = (value & 2) != 0
+                let _ = updateCallListSettingsInteractively(accountManager: accountManager, { settings in
+                    var settings = settings
+                    settings.showTab = showCallsTab
+                    return settings
+                }).start()
+                if isFirst {
+                    isFirst = false
+                    return
+                }
+                guard let self else {
+                    return
+                }
+                self.updateRootControllers(showCallsTab: showCallsTab, showNewsTab: self.ayuShowNewsTab)
+            })
+        }
     }
         
     public func updateRootControllers(showCallsTab: Bool, showNewsTab: Bool) {
@@ -269,15 +304,16 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             return
         }
         var controllers: [ViewController] = []
-        if let ayuContactsTabController = self.ayuContactsTabController {
+        self.ayuShowNewsTab = showNewsTab
+        let ayuSettings = AyuGramSettings.current
+        if ayuSettings.contactsTab, let ayuContactsTabController = self.ayuContactsTabController {
             controllers.append(ayuContactsTabController)
-        } else {
-            if showCallsTab {
-                controllers.append(self.callListController!)
-            }
-            if showNewsTab, let newsController = self.newsController {
-                controllers.append(newsController)
-            }
+        }
+        if ayuSettings.callsTab, let callListController = self.callListController {
+            controllers.append(callListController)
+        }
+        if showNewsTab, let newsController = self.newsController {
+            controllers.append(newsController)
         }
         controllers.append(self.chatListController!)
         controllers.append(self.accountSettingsController!)

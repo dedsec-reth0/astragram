@@ -253,4 +253,15 @@ public struct AyuStrings {
     public var exportChat: String { t("Экспорт чата и статистика", "Export Chat and Statistics") }
     public var aiNotConfiguredShort: String { t("Сначала добавьте ключ в Настройки → AyuGram → AI", "First add a key in Settings → AyuGram → AI") }
     public var aiFree: String { t("бесплатный", "free") }
+    public var lookHeader: String { t("ВИД", "LOOK") }
+    public var roundProfileButtons: String { t("Круглые кнопки в профиле", "Round Profile Buttons") }
+    public var profileMusicCapsule: String { t("Музыка капсулой в профиле", "Profile Music as a Capsule") }
+    public var contactsTab: String { t("Вкладка «Контакты»", "Contacts Tab") }
+    public var callsTab: String { t("Вкладка «Звонки»", "Calls Tab") }
+    public var monochrome: String { t("Монохромное оформление", "Monochrome Look") }
+    public var lookFooter: String { t("Каждая часть вида включается отдельно. Монохром оставляет только чёрный, белый и серые; тёмный или светлый вариант берётся из вашей темы и ночного режима, а фото, стикеры и эмодзи остаются цветными. Вкладки и монохром применяются сразу, кнопки и музыка при следующем открытии профиля. Заглушки аватаров перекрашиваются после перезапуска.", "Every part of the look has its own switch. Monochrome leaves only black, white and grays; the dark or the light variant follows your theme and night mode, while photos, stickers and emoji keep their colors. Tabs and Monochrome apply at once, buttons and music the next time a profile opens. Avatar placeholders are repainted after a restart.") }
+    public var restartApp: String { t("Перезапустить AyuGram", "Restart AyuGram") }
+    public var restartFooter: String { t("iOS не позволяет приложению открыть себя заново. AyuGram закроется и пришлёт уведомление: нажмите на него, и приложение откроется снова. Если уведомления выключены, откройте его с домашнего экрана.", "iOS does not let an app reopen itself. AyuGram closes and sends a notification: tap it and the app opens again. If notifications are off, open it from the Home Screen.") }
+    public var restartNotificationTitle: String { t("AyuGram закрыт", "AyuGram is closed") }
+    public var restartNotificationText: String { t("Нажмите, чтобы открыть снова.", "Tap to open it again.") }
 }

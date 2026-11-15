@@ -699,9 +699,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
         let musicHeight: CGFloat = hasBackground || self.isAvatarExpanded ? 24.0 : 16.0
         let bottomInset: CGFloat = currentSavedMusic != nil ? musicHeight : 0.0
-        // AyuGram "Liquid Glass+ (beta)": the music is a capsule under the status, above the buttons, as in the concept
-        // (not a strip under the buttons). The expanded photo keeps the regular layout.
-        let ayuMusicAbove = AyuGramSettings.current.liquidGlassBeta && currentSavedMusic != nil && !self.isAvatarExpanded
+        // AyuGram "Profile Music as a Capsule": the music is a capsule under the status, above the buttons, as in the
+        // concept (not a strip under the buttons). The expanded photo keeps the regular layout, and so does a profile
+        // without buttons (your own): there is no room between the status and the buttons there.
+        let ayuMusicAbove = AyuGramSettings.current.profileMusicCapsule && currentSavedMusic != nil && !self.isAvatarExpanded && !buttonKeys.isEmpty
         let balanceInset: CGFloat = currentWalletBalance != nil ? 32.0 : 0.0
         
         let isLandscape = containerInset > 16.0
@@ -2789,7 +2790,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 )
                 var musicFrame = CGRect(origin: CGPoint(x: stripLeft, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0) + 1.0 - UIScreenPixel), size: musicSize)
                 if ayuMusicAbove {
-                    musicFrame.origin.y = (apparentBackgroundHeight - backgroundHeight) + buttonRightOrigin.y - floor((bottomInset + 16.0 + musicSize.height) / 2.0)
+                    // Round buttons overflow their frame upwards, so the capsule moves up to stay in the middle of the gap.
+                    let ayuRoundButtonsOffset: CGFloat = AyuGramSettings.current.roundProfileButtons ? 5.0 : 0.0
+                    musicFrame.origin.y = (apparentBackgroundHeight - backgroundHeight) + buttonRightOrigin.y - floor((bottomInset + 16.0 + musicSize.height) / 2.0) - ayuRoundButtonsOffset
                 }
                 if let musicView = music.view {
                     if ayuMusicAbove {

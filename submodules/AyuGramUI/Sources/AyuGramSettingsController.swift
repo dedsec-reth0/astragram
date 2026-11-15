@@ -344,7 +344,7 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openTool(kind)
                 })
-            case .backupExport, .backupImport:
+            case .backupExport, .backupImport, .restartApp:
                 return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .generic, alignment: .natural, sectionId: section, style: .blocks, action: {
                     arguments.openTool(kind)
                 })
@@ -376,6 +376,7 @@ private enum AyuGramSettingsButtonKind: Equatable {
     case bookmarks
     case backupExport
     case backupImport
+    case restartApp
 }
 
 private func formatFileSize(_ size: Int64) -> String {
@@ -414,10 +415,6 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.saveEdits(strings.saveEdits, settings.saveEditHistory))
     entries.append(.keepSelfDestructing(strings.keepSelfDestructing, settings.keepSelfDestructingMedia))
     entries.append(.antiDeleteFooter(strings.antiDeleteFooter))
-
-    entries.append(.header(id: 27, section: .look, text: strings.themesHeader))
-    entries.append(.flag(id: 28, section: .look, title: strings.liquidGlassBeta, value: settings.liquidGlassBeta, enabled: true, keyPath: \.liquidGlassBeta))
-    entries.append(.footer(id: 29, section: .look, text: strings.liquidGlassFooter))
 
     entries.append(.deletedMessages(strings.deletedMessages, statistics.flatMap { "\($0.deletedCount)" } ?? ""))
     entries.append(.storageSize(strings.storageUsage, statistics.flatMap { formatFileSize($0.fileSize) } ?? ""))
@@ -492,6 +489,17 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.button(id: 104, section: .tools, title: strings.bookmarks, label: "", kind: .bookmarks))
     entries.append(.button(id: 105, section: .tools, title: strings.backupExport, label: "", kind: .backupExport))
     entries.append(.button(id: 106, section: .tools, title: strings.backupImport, label: "", kind: .backupImport))
+
+    // The look: every part has its own switch.
+    entries.append(.header(id: 110, section: .look, text: strings.lookHeader))
+    entries.append(.flag(id: 111, section: .look, title: strings.monochrome, value: settings.monochrome, enabled: true, keyPath: \.monochrome))
+    entries.append(.flag(id: 112, section: .look, title: strings.roundProfileButtons, value: settings.roundProfileButtons, enabled: true, keyPath: \.roundProfileButtons))
+    entries.append(.flag(id: 113, section: .look, title: strings.profileMusicCapsule, value: settings.profileMusicCapsule, enabled: true, keyPath: \.profileMusicCapsule))
+    entries.append(.flag(id: 114, section: .look, title: strings.contactsTab, value: settings.contactsTab, enabled: true, keyPath: \.contactsTab))
+    entries.append(.flag(id: 115, section: .look, title: strings.callsTab, value: settings.callsTab, enabled: true, keyPath: \.callsTab))
+    entries.append(.footer(id: 116, section: .look, text: strings.lookFooter))
+    entries.append(.button(id: 117, section: .onlineExceptions, title: strings.restartApp, label: "", kind: .restartApp))
+    entries.append(.footer(id: 118, section: .onlineExceptions, text: strings.restartFooter))
     entries.append(.reset(strings.resetSettings))
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
     let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
@@ -578,6 +586,8 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
                 pushControllerImpl?(ayuStringListController(context: context, title: strings.keywordAlerts, placeholder: strings.keywordPlaceholder, footer: strings.keywordAlertsFooter, keyPath: \.keywordAlerts))
             case .bookmarks:
                 pushControllerImpl?(ayuBookmarksController(context: context))
+            case .restartApp:
+                AyuAppRestart.perform(title: strings.restartNotificationTitle, text: strings.restartNotificationText)
             case .backupExport:
                 guard let data = AyuBackup.exportData() else {
                     return

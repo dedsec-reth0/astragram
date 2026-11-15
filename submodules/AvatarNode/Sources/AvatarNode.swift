@@ -81,6 +81,14 @@ public final class AvatarNodeParameters: NSObject {
 }
 
 public func calculateAvatarColors(context: AccountContext?, explicitColorIndex: Int?, peerId: EnginePeer.Id?, nameColor: PeerColor?, icon: AvatarNodeIcon, theme: PresentationTheme?) -> [UIColor] {
+    // AyuGram "Monochrome": placeholders (initials and icons) are gray.
+    if AyuGramSettings.current.monochrome {
+        if let theme, theme.overallDarkAppearance {
+            return [UIColor(rgb: 0x4a4a4a), UIColor(rgb: 0x2e2e2e)]
+        } else {
+            return AvatarNode.grayscaleColors
+        }
+    }
     let colorIndex: Int
     if let explicitColorIndex = explicitColorIndex {
         colorIndex = explicitColorIndex

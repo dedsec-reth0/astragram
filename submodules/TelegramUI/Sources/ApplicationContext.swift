@@ -817,6 +817,10 @@ final class AuthorizedApplicationContext {
             if let strongSelf = self {
                 if strongSelf.showCallsTab != value {
                     strongSelf.showCallsTab = value
+                    // AyuGram: the Calls tab follows the AyuGram switch, which Telegram's own switch drives too.
+                    if AyuGramSettings.current.callsTab != value {
+                        AyuGramSettings.update { $0.callsTab = value }
+                    }
                     strongSelf.rootController.updateRootControllers(showCallsTab: value, showNewsTab: strongSelf.showNewsTab)
                 }
             }

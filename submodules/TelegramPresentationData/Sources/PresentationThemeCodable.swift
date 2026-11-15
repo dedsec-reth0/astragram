@@ -3,6 +3,25 @@ import UIKit
 import TelegramCore
 import TelegramUIPreferences
 
+/// AyuGram "Monochrome": while this key is set on the decoding thread, every color a theme decodes turns into the gray
+/// of its brightness (see `makeAyuMonochromePresentationTheme`).
+let ayuThemeGrayscaleDecodingKey: NSString = "ayugram.theme.grayscaleDecoding"
+
+private func ayuDecodedColor(_ color: UIColor) -> UIColor {
+    guard Thread.current.threadDictionary.object(forKey: ayuThemeGrayscaleDecodingKey) != nil else {
+        return color
+    }
+    var red: CGFloat = 0.0
+    var green: CGFloat = 0.0
+    var blue: CGFloat = 0.0
+    var alpha: CGFloat = 0.0
+    guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+        return color
+    }
+    let gray = 0.299 * red + 0.587 * green + 0.114 * blue
+    return UIColor(red: gray, green: gray, blue: gray, alpha: alpha)
+}
+
 private func decodeColor<Key>(_ values: KeyedDecodingContainer<Key>, _ key: Key, decoder: Decoder? = nil, fallbackKey: String? = nil) throws -> UIColor {
     if let decoder = decoder as? PresentationThemeDecoding, let fallbackKey = fallbackKey {
         var codingPath = decoder.codingPath.map { $0.stringValue }
@@ -16,7 +35,7 @@ private func decodeColor<Key>(_ values: KeyedDecodingContainer<Key>, _ key: Key,
     if value.lowercased() == "clear" {
         return UIColor.clear
     } else if let color = UIColor(hexString: value) {
-        return color
+        return ayuDecodedColor(color)
     } else {
         throw PresentationThemeDecodingError.generic
     }
@@ -40,7 +59,7 @@ private func decodeColorList<Key>(_ values: KeyedDecodingContainer<Key>, _ key: 
         if value.lowercased() == "clear" {
             result.append(UIColor.clear)
         } else if let color = UIColor(hexString: value) {
-            result.append(color)
+            result.append(ayuDecodedColor(color))
         } else {
             throw PresentationThemeDecodingError.generic
         }
