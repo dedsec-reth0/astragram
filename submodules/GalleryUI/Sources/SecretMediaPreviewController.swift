@@ -13,6 +13,8 @@ import AppBundle
 import LocalizedPeerData
 import TooltipUI
 import TelegramNotices
+import SaveToCameraRoll
+import UndoUI
 
 private func galleryMediaForMedia(media: Media) -> Media? {
     if let media = media as? TelegramMediaImage {
@@ -101,6 +103,52 @@ private final class SecretMediaPreviewControllerNode: GalleryControllerNode {
         }
     }
     
+    // AstraGram: the button that saves the media to Photos as it was sent.
+    private var astraSaveNode: HighlightableButtonNode?
+    var astraSavePressed: () -> Void = {}
+
+    var astraShowsSave: Bool = false {
+        didSet {
+            if self.astraShowsSave == oldValue {
+                return
+            }
+            if self.astraShowsSave {
+                let node = HighlightableButtonNode()
+                node.setImage(generateImage(CGSize(width: 28.0, height: 28.0), rotatedContext: { size, context in
+                    context.clear(CGRect(origin: CGPoint(), size: size))
+                    context.setFillColor(UIColor(white: 0.0, alpha: 0.5).cgColor)
+                    context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
+                    if let icon = generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: .white) {
+                        UIGraphicsPushContext(context)
+                        icon.draw(in: CGRect(origin: CGPoint(x: 5.0, y: 5.0), size: CGSize(width: 18.0, height: 18.0)))
+                        UIGraphicsPopContext()
+                    }
+                }), for: [])
+                node.hitTestSlop = UIEdgeInsets(top: -10.0, left: -10.0, bottom: -10.0, right: -10.0)
+                node.addTarget(self, action: #selector(self.astraSaveTapped), forControlEvents: .touchUpInside)
+                self.astraSaveNode = node
+                self.addSubnode(node)
+                if let (layout, navigationHeight) = self.validLayout {
+                    self.layoutTimeoutNode(layout, navigationBarHeight: navigationHeight, transition: .immediate)
+                }
+            } else if let node = self.astraSaveNode {
+                self.astraSaveNode = nil
+                node.removeFromSupernode()
+            }
+        }
+    }
+
+    var astraSaveIsBusy: Bool = false {
+        didSet {
+            self.astraSaveNode?.isUserInteractionEnabled = !self.astraSaveIsBusy
+            self.astraSaveNode?.imageNode.alpha = self.astraSaveIsBusy ? 0.4 : 1.0
+        }
+    }
+
+    @objc private func astraSaveTapped() {
+        self.astraSavePressed()
+    }
+
     var statusPressed: (UIView) -> Void = { _ in }
     @objc private func statusTapGesture() {
         if let sourceView = self.timeoutNode?.view {
@@ -112,8 +160,9 @@ private final class SecretMediaPreviewControllerNode: GalleryControllerNode {
     
     override func animateIn(animateContent: Bool, useSimpleAnimation: Bool) {
         super.animateIn(animateContent: animateContent, useSimpleAnimation: useSimpleAnimation)
-        
+
         self.timeoutNode?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+        self.astraSaveNode?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
     }
     
     override func animateOut(animateContent: Bool, completion: @escaping () -> Void) {
@@ -122,10 +171,14 @@ private final class SecretMediaPreviewControllerNode: GalleryControllerNode {
         if let timeoutNode = self.timeoutNode {
             timeoutNode.layer.animateAlpha(from: timeoutNode.alpha, to: 0.0, duration: 0.2, removeOnCompletion: false)
         }
+        if let astraSaveNode = self.astraSaveNode {
+            astraSaveNode.layer.animateAlpha(from: astraSaveNode.alpha, to: 0.0, duration: 0.2, removeOnCompletion: false)
+        }
     }
     
     override func updateDismissTransition(_ value: CGFloat) {
         self.timeoutNode?.alpha = value
+        self.astraSaveNode?.alpha = value
         self.onDismissTransitionUpdate(value)
     }
     
@@ -141,6 +194,15 @@ private final class SecretMediaPreviewControllerNode: GalleryControllerNode {
             let diameter: CGFloat = 28.0
             // In the bar's trailing place, clear of a status island beside the bar (iPhone Duo).
             transition.updateFrame(node: timeoutNode, frame: CGRect(origin: CGPoint(x: layout.size.width - layout.safeInsets.right - layout.navigationBarTrailingButtonsInset - diameter - 9.0, y: navigationBarHeight - 9.0 - diameter), size: CGSize(width: diameter, height: diameter)))
+        }
+        // AstraGram: the save button takes the same place, or the one before it while the timer is shown.
+        if let astraSaveNode = self.astraSaveNode {
+            let diameter: CGFloat = 28.0
+            var x = layout.size.width - layout.safeInsets.right - layout.navigationBarTrailingButtonsInset - diameter - 9.0
+            if self.timeoutNode != nil {
+                x -= diameter + 14.0
+            }
+            transition.updateFrame(node: astraSaveNode, frame: CGRect(origin: CGPoint(x: x, y: navigationBarHeight - 9.0 - diameter), size: CGSize(width: diameter, height: diameter)))
         }
     }
 }
@@ -264,6 +326,10 @@ public final class SecretMediaPreviewController: ViewController {
             if let self {
                 self.presentViewOnceTooltip()
             }
+        }
+
+        self.controllerNode.astraSavePressed = { [weak self] in
+            self?.astraSaveOriginalMedia()
         }
         
         self.controllerNode.onDismissTransitionUpdate = { [weak self] _ in
@@ -513,6 +579,7 @@ public final class SecretMediaPreviewController: ViewController {
         if let message = message {
             if self.currentNodeMessageId != message.id {
                 self.currentNodeMessageId = message.id
+                self.controllerNode.astraShowsSave = message.flags.contains(.Incoming) && message.id.peerId.namespace != Namespaces.Peer.SecretChat
                 var tempFilePath: String?
                 var duration: Double = 0.0
                 for media in message.media {
@@ -599,6 +666,32 @@ public final class SecretMediaPreviewController: ViewController {
         }
     }
     
+    /// AstraGram: saves the media being viewed to Photos as it was sent, with no re-encoding.
+    private func astraSaveOriginalMedia() {
+        guard !self.controllerNode.astraSaveIsBusy, let message = self.messageView?.message, let media = mediaForMessage(message: message) else {
+            return
+        }
+        self.controllerNode.astraSaveIsBusy = true
+        let context = self.context
+        let presentationData = self.presentationData
+        let strings = AstraSaveOriginalStrings(isRussian: presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru"))
+        let _ = (astraSaveOriginal(context: context, userLocation: .peer(message.id.peerId), mediaReference: .message(message: MessageReference(message), media: media))
+        |> deliverOnMainQueue).startStandalone(next: { [weak self] result in
+            guard let text = strings.text(for: result) else {
+                self?.controllerNode.astraSaveIsBusy = false
+                return
+            }
+            let controller = UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: 3.0, customUndoText: nil), elevatedLayout: false, action: { _ in return false })
+            // The viewer may have been closed while the media was being saved.
+            if let self, self.isViewLoaded, self.view.window != nil {
+                self.controllerNode.astraSaveIsBusy = false
+                self.present(controller, in: .window(.root))
+            } else {
+                context.sharedContext.presentGlobalController(controller, nil)
+            }
+        })
+    }
+
     private func dismissAllTooltips() {
         if let tooltipController = self.tooltipController {
             self.tooltipController = nil

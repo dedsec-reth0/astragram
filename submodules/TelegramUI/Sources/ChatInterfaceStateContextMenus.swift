@@ -1427,6 +1427,29 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         controllerInteraction.displayUndo(.info(title: nil, text: astraStrings.readUntilDone, timeout: 2.0, customUndoText: nil))
                     })))
                 }
+                if astraMessage.flags.contains(.Incoming) && astraMessage.containsSecretMedia && astraMessage.id.peerId.namespace != Namespaces.Peer.SecretChat, let astraSecretMedia = astraMessage.media.first(where: { $0 is TelegramMediaImage || $0 is TelegramMediaFile }) {
+                    let astraSaveStrings = AstraSaveOriginalStrings(isRussian: astraStrings.isRussian)
+                    subItems.append(.action(ContextMenuActionItem(text: astraSaveStrings.title, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Save"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { _, f in
+                        f(.default)
+                        controllerInteraction.displayUndo(.info(title: nil, text: astraSaveStrings.saving, timeout: 2.0, customUndoText: nil))
+                        let _ = (astraSaveOriginal(context: context, userLocation: .peer(astraMessage.id.peerId), mediaReference: .message(message: MessageReference(astraMessage), media: astraSecretMedia))
+                        |> deliverOnMainQueue).startStandalone(next: { result in
+                            if case let .file(url) = result {
+                                // A voice message: Photos does not take it, the share sheet saves it to Files.
+                                if let window = controllerInteraction.navigationController()?.view.window {
+                                    let activityController = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                                    activityController.popoverPresentationController?.sourceView = window
+                                    activityController.popoverPresentationController?.sourceRect = CGRect(origin: CGPoint(x: window.bounds.midX, y: window.bounds.midY), size: CGSize(width: 1.0, height: 1.0))
+                                    astraPresentNative(activityController, in: window)
+                                }
+                            } else if let text = astraSaveStrings.text(for: result) {
+                                controllerInteraction.displayUndo(.info(title: nil, text: text, timeout: 3.0, customUndoText: nil))
+                            }
+                        })
+                    })))
+                }
                 if astraMessage.flags.contains(.Incoming) && astraMessage.containsSecretMedia && AstraGramSettings.current.keepSelfDestructingMedia {
                     subItems.append(.action(ContextMenuActionItem(text: astraStrings.burnNow, textColor: .destructive, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Timer"), color: theme.actionSheet.destructiveActionTextColor)
