@@ -703,6 +703,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         // concept (not a strip under the buttons). The expanded photo keeps the regular layout, and so does a profile
         // without buttons (your own): there is no room between the status and the buttons there.
         let astraMusicAbove = AstraGramSettings.current.profileMusicCapsule && currentSavedMusic != nil && !self.isAvatarExpanded && !buttonKeys.isEmpty
+        // AstraGram: round buttons carry their labels under the circles, below the buttons' frame. The header leaves
+        // room under them: its background ends lower, and over an expanded photo the name and the buttons stand higher.
+        let astraRoundButtonsExtra: CGFloat = (AstraGramSettings.current.roundProfileButtons && !buttonKeys.isEmpty) ? 12.0 : 0.0
         let balanceInset: CGFloat = currentWalletBalance != nil ? 32.0 : 0.0
         
         let isLandscape = containerInset > 16.0
@@ -1786,6 +1789,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if !self.isSettings && !self.isMyProfile {
                 minTitleFrame.origin.y -= 83.0
             }
+            minTitleFrame.origin.y -= astraRoundButtonsExtra
 
             titleFrame = CGRect(origin: CGPoint(x: minTitleFrame.midX - titleSize.width / 2.0, y: minTitleFrame.midY - titleSize.height / 2.0), size: titleSize)
             
@@ -2114,7 +2118,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     expandablePart += 99.0
                 }
             }
-            expandablePart += bottomInset
+            expandablePart += bottomInset + astraRoundButtonsExtra
             height = navigationHeight + max(0.0, expandablePart)
             maxY = navigationHeight + panelWithAvatarHeight - contentOffset
             backgroundHeight = height
@@ -2245,7 +2249,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         let actionButtonWidth = (width - stripLeft - stripRight - buttonSideInset * 2.0 + buttonSpacing) / CGFloat(actionButtonKeys.count) - buttonSpacing
         let actionButtonSize = CGSize(width: actionButtonWidth, height: 40.0)
-        var actionButtonRightOrigin = CGPoint(x: width - stripRight - buttonSideInset, y: backgroundHeight - 16.0 - actionButtonSize.height)
+        var actionButtonRightOrigin = CGPoint(x: width - stripRight - buttonSideInset, y: backgroundHeight - astraRoundButtonsExtra - 16.0 - actionButtonSize.height)
         
         for buttonKey in actionButtonKeys.reversed() {
             let buttonNode: PeerInfoHeaderActionButtonNode
@@ -2301,14 +2305,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         let buttonWidth = (width - stripLeft - stripRight - buttonSideInset * 2.0 + buttonSpacing) / CGFloat(buttonKeys.count) - buttonSpacing
         let buttonSize = CGSize(width: buttonWidth, height: 58.0)
-        var buttonRightOrigin = CGPoint(x: width - stripRight - buttonSideInset, y: backgroundHeight - (astraMusicAbove ? 0.0 : bottomInset) - 16.0 - buttonSize.height)
+        var buttonRightOrigin = CGPoint(x: width - stripRight - buttonSideInset, y: backgroundHeight - astraRoundButtonsExtra - (astraMusicAbove ? 0.0 : bottomInset) - 16.0 - buttonSize.height)
         if !actionButtonKeys.isEmpty {
             buttonRightOrigin.y += actionButtonSize.height + 24.0
         }
         
         // AstraGram: round buttons reach above their frame, and so must the background their circles are cut from.
         let astraButtonsOverflow: CGFloat = AstraGramSettings.current.roundProfileButtons ? 12.0 : 0.0
-        transition.updateFrameAdditive(node: self.buttonsBackgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: buttonRightOrigin.y - astraButtonsOverflow), size: CGSize(width: width, height: buttonSize.height + 40.0 + astraButtonsOverflow)))
+        transition.updateFrameAdditive(node: self.buttonsBackgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: buttonRightOrigin.y - astraButtonsOverflow), size: CGSize(width: width, height: buttonSize.height + 40.0 + astraButtonsOverflow + astraRoundButtonsExtra)))
         self.buttonsBackgroundNode.update(size: self.buttonsBackgroundNode.bounds.size, transition: transition)
         self.buttonsBackgroundNode.updateColor(color: contentButtonBackgroundColor, enableBlur: true, transition: transition)
         if isReduceTransparencyEnabled() {
@@ -2434,7 +2438,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         if self.isAvatarExpanded {
             resolvedRegularHeight = expandedAvatarListSize.height
         } else {
-            resolvedRegularHeight = panelWithAvatarHeight + navigationHeight + bottomInset
+            resolvedRegularHeight = panelWithAvatarHeight + navigationHeight + bottomInset + astraRoundButtonsExtra
         }
         
         let backgroundFrame: CGRect
