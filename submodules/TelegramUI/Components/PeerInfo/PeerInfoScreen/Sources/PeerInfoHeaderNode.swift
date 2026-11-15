@@ -581,8 +581,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         case fake
         case scam
         case emojiStatus(PeerEmojiStatus)
+        /// AstraGram: the user uses AstraGram.
+        case astraGram
     }
-    
+
     private var currentCredibilityIcon: CredibilityIcon?
     private var currentVerifiedIcon: CredibilityIcon?
     private var currentStatusIcon: CredibilityIcon?
@@ -730,6 +732,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 credibilityIcon = .premium
             } else {
                 credibilityIcon = .none
+            }
+            // AstraGram: the badge of a user who uses AstraGram, in place of the Premium star.
+            if peer.astraUsesAstraGram && !peer.isScam && !peer.isFake {
+                credibilityIcon = .astraGram
             }
             if peer.isVerified {
                 credibilityIcon = .verified
@@ -1021,6 +1027,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 emojiRegularStatusContent = .premium(color: navigationContentsAccentColor)
                 emojiExpandedStatusContent = .premium(color: navigationContentsAccentColor)
                 emojiStatusSize = CGSize(width: 30.0, height: 30.0)
+            case .astraGram:
+                emojiRegularStatusContent = .astraGram
+                emojiExpandedStatusContent = .astraGram
+                emojiStatusSize = CGSize(width: 26.0, height: 26.0)
             case .verified:
                 emojiRegularStatusContent = .verified(fillColor: presentationData.theme.list.itemCheckColors.fillColor, foregroundColor: presentationData.theme.list.itemCheckColors.foregroundColor, sizeType: .large)
                 emojiExpandedStatusContent = .verified(fillColor: navigationContentsAccentColor, foregroundColor: .clear, sizeType: .large)

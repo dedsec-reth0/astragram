@@ -270,6 +270,7 @@ public struct AstraStrings {
     public var glassMaterialMatte: String { t("Матовый", "Matte") }
     public var springPresses: String { t("Пружинящие нажатия", "Springy Presses") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }
+    public var astraBadge: String { t("Значок AstraGram у имени", "AstraGram Badge by My Name") }
     public var securityHeader: String { t("БЕЗОПАСНОСТЬ", "SECURITY") }
     public var securityCheck: String { t("Проверка безопасности", "Security Check") }
     public var lockedChats: String { t("Чаты под Face ID", "Chats Locked with Face ID") }

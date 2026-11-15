@@ -902,6 +902,10 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                         credibilityStatusIcon = .premium(color: item.presentationData.theme.list.itemAccentColor)
                     }
                     
+                    // AstraGram: the badge of a user who uses AstraGram, in place of the Premium star.
+                    if peer.astraUsesAstraGram && !peer.isScam && !peer.isFake {
+                        credibilityStatusIcon = .astraGram
+                    }
                     if peer.isVerified {
                         credibilityStatusIcon = .verified(fillColor: item.presentationData.theme.list.itemCheckColors.fillColor, foregroundColor: item.presentationData.theme.list.itemCheckColors.foregroundColor, sizeType: .compact)
                     }

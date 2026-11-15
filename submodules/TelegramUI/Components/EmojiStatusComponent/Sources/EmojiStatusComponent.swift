@@ -776,3 +776,43 @@ public final class StarsEffectLayer: SimpleLayer {
         self.emitterLayer.emitterPosition = CGPoint(x: size.width / 2.0, y: size.height / 2.0)
     }
 }
+
+/// AstraGram: the badge beside the name of a user who uses AstraGram (see `AstraBadge`): a four-pointed star on a
+/// violet to cyan circle, in the colors of the app icon.
+private let astraGramBadgeImage: UIImage = {
+    let size = CGSize(width: 20.0, height: 20.0)
+    let format = UIGraphicsImageRendererFormat()
+    format.opaque = false
+    return UIGraphicsImageRenderer(size: size, format: format).image { rendererContext in
+        let context = rendererContext.cgContext
+        let circle = CGRect(x: 2.0, y: 2.0, width: 16.0, height: 16.0)
+        context.saveGState()
+        context.addEllipse(in: circle)
+        context.clip()
+        let colors = [UIColor(red: 0.486, green: 0.302, blue: 1.0, alpha: 1.0).cgColor, UIColor(red: 0.251, green: 0.878, blue: 1.0, alpha: 1.0).cgColor] as CFArray
+        if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0.0, 1.0]) {
+            context.drawLinearGradient(gradient, start: CGPoint(x: circle.minX, y: circle.minY), end: CGPoint(x: circle.maxX, y: circle.maxY), options: [])
+        }
+        context.restoreGState()
+        // The star: four points joined by curves that bow inwards.
+        let center = CGPoint(x: 10.0, y: 10.0)
+        let outer: CGFloat = 5.6
+        let inner: CGFloat = 1.1
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: center.x, y: center.y - outer))
+        path.addQuadCurve(to: CGPoint(x: center.x + outer, y: center.y), controlPoint: CGPoint(x: center.x + inner, y: center.y - inner))
+        path.addQuadCurve(to: CGPoint(x: center.x, y: center.y + outer), controlPoint: CGPoint(x: center.x + inner, y: center.y + inner))
+        path.addQuadCurve(to: CGPoint(x: center.x - outer, y: center.y), controlPoint: CGPoint(x: center.x - inner, y: center.y + inner))
+        path.addQuadCurve(to: CGPoint(x: center.x, y: center.y - outer), controlPoint: CGPoint(x: center.x - inner, y: center.y - inner))
+        path.close()
+        UIColor.white.setFill()
+        path.fill()
+    }
+}()
+
+public extension EmojiStatusComponent.Content {
+    /// AstraGram: the badge of a user who uses AstraGram.
+    static var astraGram: EmojiStatusComponent.Content {
+        return .image(image: astraGramBadgeImage, tintColor: nil)
+    }
+}

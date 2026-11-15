@@ -3806,6 +3806,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                                 currentCredibilityIconContent = .premium(color: item.presentationData.theme.list.itemAccentColor)
                             }
                             
+                            // AstraGram: the badge of a user who uses AstraGram, in place of the Premium star.
+                            if peer.astraUsesAstraGram && !peer.isScam && !peer.isFake {
+                                currentCredibilityIconContent = .astraGram
+                            }
                             if peer.isVerified {
                                 currentCredibilityIconContent = .verified(fillColor: item.presentationData.theme.list.itemCheckColors.fillColor, foregroundColor: item.presentationData.theme.list.itemCheckColors.foregroundColor, sizeType: .compact)
                             }
@@ -3837,6 +3841,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         currentCredibilityIconContent = .premium(color: item.presentationData.theme.list.itemAccentColor)
                     }
                     
+                    // AstraGram: the badge of a user who uses AstraGram, in place of the Premium star.
+                    if peer.astraUsesAstraGram && !peer.isScam && !peer.isFake {
+                        currentCredibilityIconContent = .astraGram
+                    }
                     if peer.isVerified {
                         currentCredibilityIconContent = .verified(fillColor: item.presentationData.theme.list.itemCheckColors.fillColor, foregroundColor: item.presentationData.theme.list.itemCheckColors.foregroundColor, sizeType: .compact)
                     }

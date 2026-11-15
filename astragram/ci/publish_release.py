@@ -167,7 +167,7 @@ def write_source(repo, workdir, versions, news):
         # A caption is one sentence: the first line of what the build brought.
         caption = (latest.get('localizedDescription') or '').split(chr(10))[0].lstrip('• ').strip()
         news.insert(0, {
-            'title': 'AstraGram {} ({})'.format(latest['version'], latest['buildVersion']),
+            'title': 'AstraGram 1.0 Alpha ({})'.format(latest['buildVersion']),
             'identifier': identifier,
             'caption': caption,
             'date': latest['date'],
@@ -286,7 +286,7 @@ def main():
     # The untouched build, with the share extension, widgets and the rest, for those with a paid developer account.
     full_path = os.path.join(upload_dir, full_name)
     shutil.copyfile(ipa, full_path)
-    gh('release', 'create', tag, upload_path, full_path, '--repo', repo, '--title', 'AstraGram {} ({})'.format(version, build), '--notes', notes, '--latest')
+    gh('release', 'create', tag, upload_path, full_path, '--repo', repo, '--title', 'AstraGram 1.0 Alpha ({})'.format(build), '--notes', notes, '--latest')
     print('released', tag)
 
     # The current source, if there is one.

@@ -177,6 +177,8 @@ enum ChatTitleCredibilityIcon: Equatable {
     case verified
     case premium
     case emojiStatus(PeerEmojiStatus)
+    /// AstraGram: the user uses AstraGram.
+    case astraGram
 }
 
 public final class ChatTitleView: UIView, NavigationBarTitleView {
@@ -318,6 +320,10 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
                                         titleCredibilityIcon = .premium
                                     }
                                     
+                                    // AstraGram: the badge of a user who uses AstraGram, in place of the Premium star.
+                                    if peer.astraUsesAstraGram && !peer.isScam && !peer.isFake {
+                                        titleCredibilityIcon = .astraGram
+                                    }
                                     if peer.isVerified {
                                         titleCredibilityIcon = .verified
                                     }
@@ -928,6 +934,8 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             titleCredibilityContent = .none
         case .premium:
             titleCredibilityContent = .premium(color: self.theme.list.itemAccentColor)
+        case .astraGram:
+            titleCredibilityContent = .astraGram
         case .verified:
             titleCredibilityContent = .verified(fillColor: self.theme.list.itemCheckColors.fillColor, foregroundColor: self.theme.list.itemCheckColors.foregroundColor, sizeType: .large)
         case .fake:
@@ -944,6 +952,8 @@ public final class ChatTitleView: UIView, NavigationBarTitleView {
             titleVerifiedContent = .none
         case .premium:
             titleVerifiedContent = .premium(color: self.theme.list.itemAccentColor)
+        case .astraGram:
+            titleVerifiedContent = .astraGram
         case .verified:
             titleVerifiedContent = .verified(fillColor: self.theme.list.itemCheckColors.fillColor, foregroundColor: self.theme.list.itemCheckColors.foregroundColor, sizeType: .large)
         case .fake:

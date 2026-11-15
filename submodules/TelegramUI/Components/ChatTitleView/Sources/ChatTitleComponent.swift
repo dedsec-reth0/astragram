@@ -765,6 +765,10 @@ public final class ChatTitleComponent: Component {
                                 titleCredibilityIcon = .premium
                             }
                             
+                            // AstraGram: the badge of a user who uses AstraGram, in place of the Premium star.
+                            if peer.astraUsesAstraGram && !peer.isScam && !peer.isFake {
+                                titleCredibilityIcon = .astraGram
+                            }
                             if peer.isVerified {
                                 titleCredibilityIcon = .verified
                             }
@@ -1302,6 +1306,8 @@ public final class ChatTitleComponent: Component {
                     return nil
                 case .premium:
                     return .premium(color: component.theme.list.itemAccentColor)
+                case .astraGram:
+                    return .astraGram
                 case .verified:
                     return .verified(fillColor: component.theme.list.itemCheckColors.fillColor, foregroundColor: component.theme.list.itemCheckColors.foregroundColor, sizeType: .large)
                 case .fake:

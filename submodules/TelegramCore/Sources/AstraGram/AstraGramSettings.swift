@@ -108,6 +108,10 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var aiConsentEndpoint: String
     /// Look: with Monochrome, chats get a plain black or white background instead of the chosen one.
     public var monochromePlainBackground: Bool
+    /// The AstraGram mark in the account's name, so other AstraGram users see a badge beside it (see `AstraBadge`).
+    public var astraBadge: Bool
+    /// Whether the user has been asked about the AstraGram badge.
+    public var astraBadgeAsked: Bool
     /// Look: the material of glass panels and buttons (0 Telegram's own, 1 clear, 2 matte).
     public var glassMaterial: Int
     /// Look: buttons answer a press with a spring, the chat list highlights a row as a rounded plate.
@@ -200,6 +204,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         clipboardLocalOnly: false,
         aiConsentEndpoint: "",
         monochromePlainBackground: false,
+        astraBadge: false,
+        astraBadgeAsked: false,
         glassMaterial: 0,
         springPresses: false,
         hideStickersFromOthers: false,
@@ -270,6 +276,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         clipboardLocalOnly: Bool,
         aiConsentEndpoint: String,
         monochromePlainBackground: Bool,
+        astraBadge: Bool,
+        astraBadgeAsked: Bool,
         glassMaterial: Int,
         springPresses: Bool,
         hideStickersFromOthers: Bool,
@@ -338,6 +346,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.clipboardLocalOnly = clipboardLocalOnly
         self.aiConsentEndpoint = aiConsentEndpoint
         self.monochromePlainBackground = monochromePlainBackground
+        self.astraBadge = astraBadge
+        self.astraBadgeAsked = astraBadgeAsked
         self.glassMaterial = glassMaterial
         self.springPresses = springPresses
         self.hideStickersFromOthers = hideStickersFromOthers
@@ -411,6 +421,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.clipboardLocalOnly = try container.decodeIfPresent(Bool.self, forKey: .clipboardLocalOnly) ?? d.clipboardLocalOnly
         self.aiConsentEndpoint = try container.decodeIfPresent(String.self, forKey: .aiConsentEndpoint) ?? d.aiConsentEndpoint
         self.monochromePlainBackground = try container.decodeIfPresent(Bool.self, forKey: .monochromePlainBackground) ?? d.monochromePlainBackground
+        self.astraBadge = try container.decodeIfPresent(Bool.self, forKey: .astraBadge) ?? d.astraBadge
+        self.astraBadgeAsked = try container.decodeIfPresent(Bool.self, forKey: .astraBadgeAsked) ?? d.astraBadgeAsked
         self.glassMaterial = try container.decodeIfPresent(Int.self, forKey: .glassMaterial) ?? d.glassMaterial
         self.springPresses = try container.decodeIfPresent(Bool.self, forKey: .springPresses) ?? d.springPresses
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
