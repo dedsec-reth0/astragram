@@ -54,6 +54,7 @@ import WalletContext
 import WalletSendScreen
 import PasscodeCore
 import LiquidGlassShapes
+import GlassBackgroundComponent
 import MTProtoRustEngine
 
 #if DEBUG
@@ -509,16 +510,18 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         // AstraGram look: the glass material and the springy presses, for the modules below the settings.
         AstraLook.glassMaterial = AstraGramSettings.current.glassMaterial
         AstraLook.springPresses = AstraGramSettings.current.springPresses
+        GlassBackgroundView.astraMonochrome = AstraGramSettings.current.monochrome
         let _ = (AstraGramSettings.signal
-        |> map { settings -> (Int, Bool) in
-            return (settings.glassMaterial, settings.springPresses)
+        |> map { settings -> (Int, Bool, Bool) in
+            return (settings.glassMaterial, settings.springPresses, settings.monochrome)
         }
         |> distinctUntilChanged(isEqual: { lhs, rhs in
             return lhs == rhs
         })
-        |> deliverOnMainQueue).start(next: { glassMaterial, springPresses in
+        |> deliverOnMainQueue).start(next: { glassMaterial, springPresses, monochrome in
             AstraLook.glassMaterial = glassMaterial
             AstraLook.springPresses = springPresses
+            GlassBackgroundView.astraMonochrome = monochrome
         })
         let astraWindowLayer = window.layer
         let _ = (AstraGramSettings.signal

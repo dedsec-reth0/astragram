@@ -2125,6 +2125,10 @@ extension GlassBackgroundContainerView {
 }
 
 extension GlassBackgroundView {
+    /// AstraGram look: the Monochrome look is on (the app delegate keeps it current). Over its black page glass has
+    /// nothing to bend or darken, so what is drawn with glass alone needs a fill of its own.
+    public static var astraMonochrome: Bool = false
+
     /// AstraGram look: the tint a panel gets under the chosen glass material. Clear turns plain panels into clear
     /// glass, matte fills them almost solid; tints with a color of their own stay as they are.
     static func astraMaterialTint(_ tintColor: TintColor, isDark: Bool) -> TintColor {

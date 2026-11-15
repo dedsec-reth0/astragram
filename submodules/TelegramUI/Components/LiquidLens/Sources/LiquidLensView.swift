@@ -38,7 +38,17 @@ private final class RestingBackgroundView: UIVisualEffectView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// AstraGram look: the resting selection only changes the colors of what is behind it, so on the black page of
+    /// Monochrome, and under matte glass, there is nothing to see. There it gets a fill of its own.
+    static var astraHasOwnFill: Bool {
+        return GlassBackgroundView.astraMonochrome || AstraLook.glassMaterial == 2
+    }
+
     func update(isDark: Bool) {
+        let fillColor: UIColor = RestingBackgroundView.astraHasOwnFill ? (isDark ? UIColor(white: 1.0, alpha: 0.2) : UIColor(white: 0.0, alpha: 0.09)) : UIColor.clear
+        if self.contentView.backgroundColor != fillColor {
+            self.contentView.backgroundColor = fillColor
+        }
         if self.isDark == isDark {
             return
         }
@@ -807,6 +817,9 @@ public final class LiquidLensView: UIView {
             return
         }
         let isLifted = self.lensView != nil ? self.isLensLifted : params.isLifted
-        transition.setAlpha(view: self.restingBackgroundView, alpha: (isLifted || params.isCollapsed) ? 0.0 : 1.0)
+        // With a fill of its own the selection also shows while the lens flies between the items: the lens alone
+        // cannot be seen over black.
+        let hidesWhileLifted = isLifted && !RestingBackgroundView.astraHasOwnFill
+        transition.setAlpha(view: self.restingBackgroundView, alpha: (hidesWhileLifted || params.isCollapsed) ? 0.0 : 1.0)
     }
 }
