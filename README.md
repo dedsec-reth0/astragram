@@ -31,6 +31,14 @@
 > Проект в разработке. Сборки выходят часто и проверяются автоматически (сборка, целостность IPA), но не на всех
 > устройствах и версиях iOS. Это неофициальный клиент: он не связан с Telegram.
 
+<p align="center">
+  <img src="astragram/assets/altstore/card-1.jpg" alt="" width="19%">
+  <img src="astragram/assets/altstore/card-2.jpg" alt="" width="19%">
+  <img src="astragram/assets/altstore/card-3.jpg" alt="" width="19%">
+  <img src="astragram/assets/altstore/card-4.jpg" alt="" width="19%">
+  <img src="astragram/assets/altstore/card-5.jpg" alt="" width="19%">
+</p>
+
 ## Установка
 
 Нужен iPhone с iOS 15 или новее и [AltStore](https://altstore.io).

@@ -153,24 +153,43 @@ def write_source(repo, workdir, versions, news):
     raw = 'https://raw.githubusercontent.com/{}/master'.format(repo)
     source_url = 'https://github.com/{}/releases/download/{}/source.json'.format(repo, SOURCE_TAG)
     icon_url = raw + '/astragram/assets/icon.png'
-    banner_url = raw + '/astragram/assets/banner.png'
+    art_url = raw + '/astragram/assets/altstore'
+    header_url = art_url + '/header.png'
+    news_image_url = art_url + '/news.png'
+    # The feature cards of the app page, 9:19.5 like an iPhone screenshot.
+    screenshots = ['{}/card-{}.jpg'.format(art_url, n) for n in range(1, 6)]
 
     # The news shows the latest build.
     if versions:
         latest = versions[0]
         identifier = 'build-{}'.format(latest['buildVersion'])
-        news = [item for item in news if item.get('identifier') != identifier]
+        news = [item for item in news if item.get('identifier') not in (identifier, 'welcome')]
+        # A caption is one sentence: the first line of what the build brought.
+        caption = (latest.get('localizedDescription') or '').split(chr(10))[0].lstrip('• ').strip()
         news.insert(0, {
             'title': 'AstraGram {} ({})'.format(latest['version'], latest['buildVersion']),
             'identifier': identifier,
-            'caption': latest.get('localizedDescription', ''),
+            'caption': caption,
             'date': latest['date'],
-            'tintColor': '#1E1B4B',
-            'imageURL': banner_url,
+            'tintColor': '#4C1D95',
             'notify': False,
             'appID': BUNDLE_ID,
         })
-        news = news[:MAX_NEWS]
+        news = news[:MAX_NEWS - 1]
+        for item in news:
+            item.pop('imageURL', None)
+            item['tintColor'] = '#4C1D95'
+        # The oldest item: what the app is and what the first launch asks for.
+        news.append({
+            'title': 'Добро пожаловать в AstraGram',
+            'identifier': 'welcome',
+            'caption': 'При первом запуске введите свои API ID и API Hash с my.telegram.org.',
+            'date': versions[-1]['date'],
+            'tintColor': '#1E1B4B',
+            'imageURL': news_image_url,
+            'notify': False,
+            'appID': BUNDLE_ID,
+        })
 
     source = {
         'name': 'AstraGram для iOS',
@@ -179,7 +198,7 @@ def write_source(repo, workdir, versions, news):
         'subtitle': 'Режим призрака, удалённые сообщения, плагины',
         'description': SOURCE_DESCRIPTION,
         'iconURL': icon_url,
-        'headerURL': banner_url,
+        'headerURL': header_url,
         'website': 'https://github.com/{}'.format(repo),
         'sourceURL': source_url,
         'tintColor': TINT_COLOR,
@@ -193,6 +212,7 @@ def write_source(repo, workdir, versions, news):
             'iconURL': icon_url,
             'tintColor': TINT_COLOR,
             'category': 'social',
+            'screenshots': screenshots,
             'versions': versions,
             'appPermissions': {'entitlements': [], 'privacy': {}},
         }],
