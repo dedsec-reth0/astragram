@@ -218,6 +218,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let editingEdgeEffectView: EdgeEffectView
     
     var musicBackground: UIView?
+    /// AyuGram "Liquid Glass+ (beta)": the capsule behind the music, which sits between the status and the buttons.
+    private var ayuMusicPillLayer: CALayer?
     var music: ComponentView<Empty>?
     var walletBalance: ComponentView<Empty>?
     private var walletBalanceCutoutIcon: (color: UIColor, image: UIImage)?
@@ -697,6 +699,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
         let musicHeight: CGFloat = hasBackground || self.isAvatarExpanded ? 24.0 : 16.0
         let bottomInset: CGFloat = currentSavedMusic != nil ? musicHeight : 0.0
+        // AyuGram "Liquid Glass+ (beta)": the music is a capsule under the status, above the buttons, as in the concept
+        // (not a strip under the buttons). The expanded photo keeps the regular layout.
+        let ayuMusicAbove = AyuGramSettings.current.liquidGlassBeta && currentSavedMusic != nil && !self.isAvatarExpanded
         let balanceInset: CGFloat = currentWalletBalance != nil ? 32.0 : 0.0
         
         let isLandscape = containerInset > 16.0
@@ -2295,7 +2300,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         let buttonWidth = (width - stripLeft - stripRight - buttonSideInset * 2.0 + buttonSpacing) / CGFloat(buttonKeys.count) - buttonSpacing
         let buttonSize = CGSize(width: buttonWidth, height: 58.0)
-        var buttonRightOrigin = CGPoint(x: width - stripRight - buttonSideInset, y: backgroundHeight - bottomInset - 16.0 - buttonSize.height)
+        var buttonRightOrigin = CGPoint(x: width - stripRight - buttonSideInset, y: backgroundHeight - (ayuMusicAbove ? 0.0 : bottomInset) - 16.0 - buttonSize.height)
         if !actionButtonKeys.isEmpty {
             buttonRightOrigin.y += actionButtonSize.height + 24.0
         }
@@ -2689,7 +2694,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
 
         if currentSavedMusic != nil {
             var musicTransition = transition
-            if hasBackground || self.isAvatarExpanded {
+            if (hasBackground || self.isAvatarExpanded) && !ayuMusicAbove {
                 if self.musicBackground == nil {
                     musicTransition = .immediate
                 }
@@ -2782,8 +2787,34 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     environment: {},
                     containerSize: CGSize(width: musicBandWidth, height: musicHeight)
                 )
-                let musicFrame = CGRect(origin: CGPoint(x: stripLeft, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0) + 1.0 - UIScreenPixel), size: musicSize)
+                var musicFrame = CGRect(origin: CGPoint(x: stripLeft, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0) + 1.0 - UIScreenPixel), size: musicSize)
+                if ayuMusicAbove {
+                    musicFrame.origin.y = (apparentBackgroundHeight - backgroundHeight) + buttonRightOrigin.y - floor((bottomInset + 16.0 + musicSize.height) / 2.0)
+                }
                 if let musicView = music.view {
+                    if ayuMusicAbove {
+                        let pillLayer: CALayer
+                        if let current = self.ayuMusicPillLayer {
+                            pillLayer = current
+                        } else {
+                            pillLayer = CALayer()
+                            self.ayuMusicPillLayer = pillLayer
+                        }
+                        if pillLayer.superlayer !== musicView.layer {
+                            musicView.layer.insertSublayer(pillLayer, at: 0)
+                        }
+                        let textWidth = min(max(1.0, musicBandWidth - 96.0), ceil(musicString.boundingRect(with: CGSize(width: 10000.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).width))
+                        let pillSize = CGSize(width: min(musicSize.width, textWidth + 58.0), height: 24.0)
+                        CATransaction.begin()
+                        CATransaction.setDisableActions(true)
+                        pillLayer.frame = CGRect(origin: CGPoint(x: floor((musicSize.width - pillSize.width) / 2.0), y: floor((musicSize.height - pillSize.height) / 2.0)), size: pillSize)
+                        pillLayer.cornerRadius = pillSize.height / 2.0
+                        pillLayer.backgroundColor = (isOverlay ? UIColor(white: 1.0, alpha: 0.16) : presentationData.theme.list.itemAccentColor.withAlphaComponent(0.1)).cgColor
+                        CATransaction.commit()
+                    } else if let pillLayer = self.ayuMusicPillLayer {
+                        self.ayuMusicPillLayer = nil
+                        pillLayer.removeFromSuperlayer()
+                    }
                     self.regularContentNode.accessibilityTrailingView = musicView
                     if musicView.superview == nil {
                         // A newly loaded strip item fades in at its final position.
