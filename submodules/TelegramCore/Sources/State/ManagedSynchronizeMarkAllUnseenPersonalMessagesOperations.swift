@@ -117,10 +117,7 @@ private enum GetUnseenIdsError {
 }
 
 private func synchronizeMarkAllUnseen(transaction: Transaction, postbox: Postbox, network: Network, stateManager: AccountStateManager, peerId: PeerId, operation: SynchronizeMarkAllUnseenPersonalMessagesOperation) -> Signal<Void, NoError> {
-    // AstraGram ghost mode: listened voice/video messages and opened media are not reported.
-    if AstraGramSettings.current.hideMessageContentsRead {
-        return .complete()
-    }
+    // AstraGram ghost mode: marking all mentions as read is asked for by the user and is sent (as in AyuGram).
     guard let inputPeer = transaction.getPeer(peerId).flatMap(apiInputPeer) else {
         return .complete()
     }

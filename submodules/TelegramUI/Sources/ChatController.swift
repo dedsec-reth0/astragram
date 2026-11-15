@@ -155,6 +155,58 @@ import AstraGramUI
 
 /// AstraGram ghost mode: how far ahead "Send via schedule" schedules a message, in seconds.
 let astraSendViaScheduleDelay: Int32 = 12
+
+/// AstraGram ghost mode: how far ahead "Send via schedule" schedules these messages, in seconds. As in AyuGram: 12 for
+/// text, 17 for a voice or video message, and for media that is uploaded the more the larger it is. The time must not
+/// have passed when the upload ends: a message scheduled less than 10 seconds ahead is sent at once, and sending it
+/// shows the account online.
+func astraScheduleDelay(for messages: [EnqueueMessage]) -> Int32 {
+    var uploadsMedia = false
+    var isVoice = false
+    var totalSize: Int64 = 0
+    for message in messages {
+        guard case let .message(_, _, _, mediaReference, _, _, _, _, _, _) = message, let media = mediaReference?.media else {
+            continue
+        }
+        if let file = media as? TelegramMediaFile {
+            // A sticker or a GIF that is already on the server is not uploaded.
+            if file.resource is CloudDocumentMediaResource {
+                continue
+            }
+            uploadsMedia = true
+            if file.isVoice || file.isInstantVideo {
+                isVoice = true
+            }
+            totalSize += file.size ?? 0
+        } else if media is TelegramMediaImage {
+            uploadsMedia = true
+        }
+    }
+    if !uploadsMedia {
+        return astraSendViaScheduleDelay
+    }
+    let megabytes = Double(totalSize) / 1024.0 / 1024.0
+    if isVoice && megabytes < 5.0 {
+        return 17
+    }
+    return astraSendViaScheduleDelay + Int32(max(6.0, ceil(megabytes * 0.7))) + 1
+}
+
+/// "через 12 секунд", "через 21 секунду", "через 23 секунды".
+private func astraSecondsText(_ value: Int32, isRussian: Bool) -> String {
+    if !isRussian {
+        return value == 1 ? "\(value) second" : "\(value) seconds"
+    }
+    let lastTwo = value % 100
+    let last = value % 10
+    if last == 1 && lastTwo != 11 {
+        return "\(value) секунду"
+    } else if last >= 2 && last <= 4 && !(lastTwo >= 12 && lastTwo <= 14) {
+        return "\(value) секунды"
+    } else {
+        return "\(value) секунд"
+    }
+}
 /// When the notice about a message sent via schedule was last shown: several messages sent at once get one.
 private var astraLastSendViaScheduleNotice: Double = 0.0
 
@@ -9268,7 +9320,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
     /// AstraGram ghost mode: a message sent via schedule does not appear in the chat for a few seconds, so what waits
     /// for it to appear (clearing the input field, closing the panels) runs now, and a notice says when it is sent.
-    func astraFinishSendViaSchedule() {
+    func astraFinishSendViaSchedule(delay: Int32) {
         if let action = self.layoutActionOnViewTransitionAction {
             self.layoutActionOnViewTransitionAction = nil
             // Or it would run again when the message does appear, and clear what has been typed since.
@@ -9281,7 +9333,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
         astraLastSendViaScheduleNotice = now
         let isRussian = self.presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
-        let text = isRussian ? "Сообщение отправится через \(astraSendViaScheduleDelay) секунд" : "The message will be sent in \(astraSendViaScheduleDelay) seconds"
+        let text = isRussian ? "Сообщение отправится через \(astraSecondsText(delay, isRussian: true))" : "The message will be sent in \(astraSecondsText(delay, isRussian: false))"
         self.present(UndoOverlayController(presentationData: self.presentationData, content: .info(title: nil, text: text, timeout: 3.0, customUndoText: nil), action: { _ in return false }), in: .current)
     }
 
@@ -9290,10 +9342,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         // not show the account online.
         var scheduleTime = scheduleTime
         if self.astraSendsViaSchedule(scheduleTime: scheduleTime, postpone: postpone) {
-            scheduleTime = Int32(Date().timeIntervalSince1970) + astraSendViaScheduleDelay
+            // By the server's clock: a device clock that is behind would put the time less than 10 seconds ahead.
+            let astraDelay = astraScheduleDelay(for: messages)
+            scheduleTime = Int32(self.context.account.network.globalTime) + astraDelay
             // After the send has set up what it waits for.
             Queue.mainQueue().after(0.15, { [weak self] in
-                self?.astraFinishSendViaSchedule()
+                self?.astraFinishSendViaSchedule(delay: astraDelay)
             })
         }
         var defaultThreadId: Int64?

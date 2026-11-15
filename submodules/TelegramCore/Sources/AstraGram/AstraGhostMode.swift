@@ -14,8 +14,72 @@ import SwiftSignalKit
 ///
 /// While read receipts are hidden the chat is still marked read locally; the server keeps it unread, and the read
 /// state validation keeps the local mark that is ahead of the server's.
+///
+/// Hiding the online status is done the way AyuGram does it. Not sending `updateStatus(offline: false)` is not
+/// enough: the server shows the account online by itself after a message is sent, a chat is read, a reaction is set.
+/// So everything that does this marks the account as online here (`markAsOnline`), and the presence manager
+/// (`ManagedAccountPresence.swift`) answers each mark with `account.updateStatus(offline: true)`.
 public enum AstraGhostMode {
     private static let readAllowances = Atomic<Set<PeerId>>(value: Set())
+
+    private static let onlinePipe = ValuePipe<Void>()
+
+    /// Parts of the names of the requests after which the server shows the account online.
+    private static let onlineRequestParts: [String] = [
+        "messages.send", "messages.forward", "messages.read", "channels.read", "messages.startBot",
+        "messages.setTyping", "messages.setEncryptedTyping", "messages.editMessage", "messages.deleteMessages",
+        "channels.deleteMessages", "messages.getBotCallbackAnswer", "stories.send", "stories.readStories",
+        "stories.incrementStoryViews"
+    ]
+
+    /// Whether the server shows the account online once the request named `name` is done.
+    static func requestMarksOnline(_ name: String) -> Bool {
+        let name = name.replacingOccurrences(of: "_", with: ".")
+        if name.contains("updateStatus") {
+            return false
+        }
+        for part in AstraGhostMode.onlineRequestParts {
+            if name.contains(part) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Something has just made the server show the account online. With the online status hidden, the presence
+    /// manager of every account answers with `account.updateStatus(offline: true)`.
+    public static func markAsOnline() {
+        if !AstraGramSettings.current.hideOnlineStatus {
+            return
+        }
+        AstraGhostMode.onlinePipe.putNext(Void())
+    }
+
+    static func markedAsOnline() -> Signal<Void, NoError> {
+        return AstraGhostMode.onlinePipe.signal()
+    }
+
+    /// Fires when the server reports the account itself as online, whatever caused it (this device or another).
+    static func ownPresenceOnline(postbox: Postbox, network: Network, accountPeerId: PeerId) -> Signal<Void, NoError> {
+        return postbox.peerView(id: accountPeerId)
+        |> map { view -> Int32 in
+            if let presence = view.peerPresences[accountPeerId] as? TelegramUserPresence, case let .present(until) = presence.status {
+                return until
+            }
+            return 0
+        }
+        |> distinctUntilChanged
+        |> filter { [weak network] until -> Bool in
+            guard let network = network else {
+                return false
+            }
+            // "Was online at" is stored the same way, with a time that has passed.
+            return until > Int32(network.globalTime) + 2
+        }
+        |> map { _ -> Void in
+            return Void()
+        }
+    }
 
     /// Whether a read receipt for `peerId` may be sent now. Consumes a one-time allowance granted by sending a
     /// message ("mark read after send").

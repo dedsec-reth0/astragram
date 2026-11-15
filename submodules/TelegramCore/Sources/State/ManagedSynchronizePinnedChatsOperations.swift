@@ -254,7 +254,8 @@ private func synchronizePinnedChats(transaction: Transaction, postbox: Postbox, 
                 }
                 let _ = transaction.addMessages(storeMessages, location: .UpperHistoryBlock)
                 
-                transaction.resetIncomingReadStates(readStates)
+                // AstraGram ghost mode: chats read while read receipts are hidden stay read.
+                transaction.resetIncomingReadStates(AstraGhostMode.keepingLocalReadMarks(transaction: transaction, readStates))
                 
                 for (peerId, pts) in channelStates {
                     if let _ = transaction.getPeerChatState(peerId) as? ChannelState {

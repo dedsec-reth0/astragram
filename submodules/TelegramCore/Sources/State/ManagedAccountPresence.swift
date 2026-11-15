@@ -17,8 +17,17 @@ private final class AccountPresenceManagerImpl {
     private var onlineTimer: SignalKitTimer?
     
     private var wasOnline: Bool = false
-    
-    init(queue: Queue, shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network) {
+
+    // AstraGram ghost mode: see `astraMarkAsOnline`.
+    private var astraMarkDisposable: Disposable?
+    private var astraOwnPresenceDisposable: Disposable?
+    private var astraSettingsDisposable: Disposable?
+    private let astraOfflineRequestDisposable = MetaDisposable()
+    private var astraOfflineTimer: SignalKitTimer?
+    private var astraLastImmediateOffline: Double = 0.0
+    private var astraLastOwnPresenceMark: Double = 0.0
+
+    init(queue: Queue, shouldKeepOnlinePresence: Signal<Bool, NoError>, astraOwnPresenceOnline: Signal<Void, NoError>, network: Network) {
         self.queue = queue
         self.network = network
         
@@ -46,6 +55,69 @@ private final class AccountPresenceManagerImpl {
                 self.updatePresence(value)
             }
         })
+
+        self.astraMarkDisposable = (AstraGhostMode.markedAsOnline()
+        |> deliverOn(self.queue)).start(next: { [weak self] _ in
+            self?.astraMarkAsOnline()
+        })
+        self.astraOwnPresenceDisposable = (astraOwnPresenceOnline
+        |> deliverOn(self.queue)).start(next: { [weak self] _ in
+            guard let self else {
+                return
+            }
+            // Never more often: an answer to the server's report must not be able to turn into a loop.
+            let now = CFAbsoluteTimeGetCurrent()
+            if now - self.astraLastOwnPresenceMark < 10.0 {
+                return
+            }
+            self.astraLastOwnPresenceMark = now
+            self.astraMarkAsOnline()
+        })
+        // At launch with the online status hidden, and whenever hiding it is turned on.
+        self.astraSettingsDisposable = (AstraGramSettings.signal
+        |> map { settings -> Bool in
+            return settings.hideOnlineStatus
+        }
+        |> distinctUntilChanged
+        |> deliverOn(self.queue)).start(next: { [weak self] hideOnline in
+            if hideOnline {
+                self?.astraMarkAsOnline()
+            }
+        })
+    }
+
+    /// AstraGram ghost mode, as AyuGram's worker does it: the server has just shown the account online (a message was
+    /// sent, a chat was read, another device came online), so it is told the account is offline: at once, and again
+    /// 3 seconds after the last such event, when everything the event caused has reached the server.
+    private func astraMarkAsOnline() {
+        guard AstraGramSettings.current.hideOnlineStatus else {
+            return
+        }
+        let now = CFAbsoluteTimeGetCurrent()
+        if now - self.astraLastImmediateOffline >= 1.5 {
+            self.astraLastImmediateOffline = now
+            self.astraSendOffline()
+        }
+        self.astraOfflineTimer?.invalidate()
+        let timer = SignalKitTimer(timeout: 3.0, repeat: false, completion: { [weak self] in
+            guard let self else {
+                return
+            }
+            self.astraOfflineTimer = nil
+            self.astraSendOffline()
+        }, queue: self.queue)
+        self.astraOfflineTimer = timer
+        timer.start()
+    }
+
+    private func astraSendOffline() {
+        guard AstraGramSettings.current.hideOnlineStatus else {
+            return
+        }
+        self.astraOfflineRequestDisposable.set((self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
+        |> `catch` { _ -> Signal<Api.Bool, NoError> in
+            return .single(.boolFalse)
+        }).start())
     }
     
     deinit {
@@ -53,6 +125,11 @@ private final class AccountPresenceManagerImpl {
         self.shouldKeepOnlinePresenceDisposable?.dispose()
         self.currentRequestDisposable.dispose()
         self.onlineTimer?.invalidate()
+        self.astraMarkDisposable?.dispose()
+        self.astraOwnPresenceDisposable?.dispose()
+        self.astraSettingsDisposable?.dispose()
+        self.astraOfflineRequestDisposable.dispose()
+        self.astraOfflineTimer?.invalidate()
     }
     
     private func updatePresence(_ isOnline: Bool) {
@@ -90,10 +167,10 @@ final class AccountPresenceManager {
     private let queue = Queue()
     private let impl: QueueLocalObject<AccountPresenceManagerImpl>
     
-    init(shouldKeepOnlinePresence: Signal<Bool, NoError>, network: Network) {
+    init(shouldKeepOnlinePresence: Signal<Bool, NoError>, astraOwnPresenceOnline: Signal<Void, NoError>, network: Network) {
         let queue = self.queue
         self.impl = QueueLocalObject(queue: self.queue, generate: {
-            return AccountPresenceManagerImpl(queue: queue, shouldKeepOnlinePresence: shouldKeepOnlinePresence, network: network)
+            return AccountPresenceManagerImpl(queue: queue, shouldKeepOnlinePresence: shouldKeepOnlinePresence, astraOwnPresenceOnline: astraOwnPresenceOnline, network: network)
         })
     }
     

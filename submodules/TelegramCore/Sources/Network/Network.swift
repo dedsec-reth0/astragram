@@ -1373,6 +1373,8 @@ public final class Network: NSObject {
     }
     
     func requestWithAdditionalInfo<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), info: NetworkRequestAdditionalInfo, tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<NetworkRequestResult<T>, MTRpcError> {
+        // AstraGram ghost mode: whether the server shows the account online once this request is done.
+        let astraMarksOnline = AstraGhostMode.requestMarksOnline(data.0.name)
         let requestService = self.requestService
         return Signal { [requestService] subscriber in
             let request = NetworkEngineRequest(
@@ -1402,6 +1404,9 @@ public final class Network: NSObject {
                     switch result {
                     case let .success(response):
                         if let result = (response.result as! BoxedMessage).body as? T {
+                            if astraMarksOnline {
+                                AstraGhostMode.markAsOnline()
+                            }
                             subscriber.putNext(.result(result))
                             subscriber.putCompletion()
                         }
@@ -1419,6 +1424,8 @@ public final class Network: NSObject {
     }
     
     func request<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<T, MTRpcError> {
+        // AstraGram ghost mode: whether the server shows the account online once this request is done.
+        let astraMarksOnline = AstraGhostMode.requestMarksOnline(data.0.name)
         let requestService = self.requestService
         return Signal { [requestService] subscriber in
             let request = NetworkEngineRequest(
@@ -1440,6 +1447,9 @@ public final class Network: NSObject {
                     switch result {
                     case let .success(response):
                         if let result = (response.result as! BoxedMessage).body as? T {
+                            if astraMarksOnline {
+                                AstraGhostMode.markAsOnline()
+                            }
                             subscriber.putNext(result)
                             subscriber.putCompletion()
                         }

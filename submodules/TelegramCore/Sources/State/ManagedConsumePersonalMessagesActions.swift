@@ -252,9 +252,18 @@ func managedReadReactionOrPollVoteActions(postbox: Postbox, network: Network, st
 }
 
 private func synchronizeConsumeMessageContents(transaction: Transaction, postbox: Postbox, network: Network, stateManager: AccountStateManager, id: MessageId) -> Signal<Void, NoError> {
-    // AstraGram ghost mode: listened voice/video messages and opened media are not reported.
+    // AstraGram ghost mode: listened voice/video messages and opened media are not reported. A seen mention or
+    // reaction is (as in AyuGram): otherwise the server keeps counting it, and its badge comes back on every update of
+    // the chat list. It is held back only while it is a voice or video message that has not been played.
     if AstraGramSettings.current.hideMessageContentsRead {
-        return .complete()
+        if let message = transaction.getMessage(id), message.attributes.contains(where: { attribute -> Bool in
+            if let attribute = attribute as? ConsumableContentMessageAttribute {
+                return !attribute.consumed
+            }
+            return false
+        }) {
+            return .complete()
+        }
     }
     if id.peerId.namespace == Namespaces.Peer.CloudUser || id.peerId.namespace == Namespaces.Peer.CloudGroup {
         return network.request(Api.functions.messages.readMessageContents(id: [id.id]))

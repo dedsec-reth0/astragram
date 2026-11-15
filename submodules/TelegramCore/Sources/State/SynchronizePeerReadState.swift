@@ -277,6 +277,8 @@ private func pushPeerReadState(network: Network, postbox: Postbox, stateManager:
         }
         return .single(readState)
     }
+    // AstraGram ghost mode: a read receipt that does go out ("mark read after...") shows the account online.
+    AstraGhostMode.markAsOnline()
     if peerId.namespace == Namespaces.Peer.SecretChat {
         // Decide whether a request is needed before looking the peer up: inputSecretChat goes
         // through loadedPeerWithId, which never emits when the peer row is missing and fails

@@ -80,8 +80,10 @@ extension ReplayContext {
             for i in 0 ..< updatedStates.count {
                 if updatedStates[i].0 == namespace {
                     switch updatedStates[i].1 {
-                        case let .idBased(currentMaxIncomingReadId, maxOutgoingReadId, maxKnownId, _, markedUnread):
-                            updatedStates[i].1 = .idBased(maxIncomingReadId: max(currentMaxIncomingReadId, maxIncomingReadId), maxOutgoingReadId: maxOutgoingReadId, maxKnownId: max(maxKnownId, maxIncomingReadId), count: count, markedUnread: markedUnread)
+                        case let .idBased(currentMaxIncomingReadId, maxOutgoingReadId, maxKnownId, currentCount, markedUnread):
+                            // AstraGram ghost mode: what was read here beyond what the server knows stays read.
+                            let astraCount = (AstraGramSettings.current.hideReadReceipts && currentMaxIncomingReadId > maxIncomingReadId) ? min(currentCount, count) : count
+                            updatedStates[i].1 = .idBased(maxIncomingReadId: max(currentMaxIncomingReadId, maxIncomingReadId), maxOutgoingReadId: maxOutgoingReadId, maxKnownId: max(maxKnownId, maxIncomingReadId), count: astraCount, markedUnread: markedUnread)
                             foundState = true
                         case .indexBased:
                             assertionFailure()
