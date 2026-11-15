@@ -48,9 +48,9 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
             }
             
             let timestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
-            // AyuGram: keep self-destructing media viewable, the self-destruct countdown is not started.
-            let ayuKeepsMedia = AyuSelfDestructingMedia.keepsMedia(of: message)
-            for i in 0 ..< updatedAttributes.count where !ayuKeepsMedia {
+            // AstraGram: keep self-destructing media viewable, the self-destruct countdown is not started.
+            let astraKeepsMedia = AstraSelfDestructingMedia.keepsMedia(of: message)
+            for i in 0 ..< updatedAttributes.count where !astraKeepsMedia {
                 if let attribute = updatedAttributes[i] as? AutoremoveTimeoutMessageAttribute {
                     if attribute.countdownBeginTime == nil || attribute.countdownBeginTime == 0 {
                         var timeout = attribute.timeout
@@ -201,9 +201,9 @@ func markMessageContentAsConsumedRemotely(transaction: Transaction, messageId: M
         let timestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
         let countdownBeginTime = consumeDate ?? timestamp
         
-        // AyuGram: keep self-destructing media viewable when it was opened on another device.
-        let ayuKeepsMedia = AyuSelfDestructingMedia.keepsMedia(of: message)
-        for i in 0 ..< updatedAttributes.count where !ayuKeepsMedia {
+        // AstraGram: keep self-destructing media viewable when it was opened on another device.
+        let astraKeepsMedia = AstraSelfDestructingMedia.keepsMedia(of: message)
+        for i in 0 ..< updatedAttributes.count where !astraKeepsMedia {
             if let attribute = updatedAttributes[i] as? AutoremoveTimeoutMessageAttribute {
                 if (attribute.countdownBeginTime == nil || attribute.countdownBeginTime == 0) && message.containsSecretMedia {
                     updatedAttributes[i] = AutoremoveTimeoutMessageAttribute(timeout: attribute.timeout, countdownBeginTime: countdownBeginTime)

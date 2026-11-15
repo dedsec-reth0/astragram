@@ -37,8 +37,8 @@ NSObject * _Nullable makeDisplacementMapFilter();
 NSObject * _Nullable makeColorMatrixFilter();
 
 void setLayerDisableScreenshots(CALayer * _Nonnull layer, bool disableScreenshots);
-void ayuSetScreenshotProtectionDisabled(bool disabled);
-void ayuSetLayerHiddenFromCapture(CALayer * _Nonnull layer, bool disableScreenshots);
+void astraSetScreenshotProtectionDisabled(bool disabled);
+void astraSetLayerHiddenFromCapture(CALayer * _Nonnull layer, bool disableScreenshots);
 bool getLayerDisableScreenshots(CALayer * _Nonnull layer);
 
 void setLayerContentsMaskMode(CALayer * _Nonnull layer, bool maskMode);

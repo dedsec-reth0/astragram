@@ -142,9 +142,9 @@ private func actionFromActivity(_ activity: PeerInputActivity?) -> Api.SendMessa
 }
 
 private func requestActivity(postbox: Postbox, network: Network, accountPeerId: PeerId, peerId: PeerId, threadId: Int64?, activity: PeerInputActivity?) -> Signal<Void, NoError> {
-    // AyuGram ghost mode: typing, recording, uploading and choosing a sticker are not reported. Speaking in a group
+    // AstraGram ghost mode: typing, recording, uploading and choosing a sticker are not reported. Speaking in a group
     // call is not an input activity of a chat and is still sent.
-    if AyuGramSettings.current.hideTyping {
+    if AstraGramSettings.current.hideTyping {
         if let activity = activity, case .speakingInGroupCall = activity {
         } else {
             return .complete()

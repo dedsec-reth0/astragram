@@ -536,8 +536,8 @@ public extension Message {
     }
     
     func isCopyProtected() -> Bool {
-        // AyuGram: "Remove copy restrictions".
-        if AyuGramSettings.current.removeCopyRestrictions {
+        // AstraGram: "Remove copy restrictions".
+        if AstraGramSettings.current.removeCopyRestrictions {
             return false
         }
         if self.flags.contains(.CopyProtected) {

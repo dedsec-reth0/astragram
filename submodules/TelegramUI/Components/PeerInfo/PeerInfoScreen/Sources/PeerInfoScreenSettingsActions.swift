@@ -18,7 +18,7 @@ import PasswordSetupUI
 import InstantPageCache
 import WalletContext
 import UndoUI
-import AyuGramUI
+import AstraGramUI
 
 extension PeerInfoScreenNode {
     func openSettings(section: PeerInfoSettingsSection) {
@@ -311,9 +311,9 @@ extension PeerInfoScreenNode {
                 return
             }
             push(self.context.sharedContext.makeWalletScreen(context: self.context))
-        case .ayuGram:
+        case .astraGram:
             let context = self.context
-            push(ayuGramSettingsController(context: context, makeLinked: { section in
+            push(astraGramSettingsController(context: context, makeLinked: { section in
                 switch section {
                 case .appearance:
                     return themeSettingsController(context: context)

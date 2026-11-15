@@ -2109,8 +2109,8 @@ func _internal_deleteStories(account: Account, peerId: PeerId, ids: [Int32]) -> 
 
 func _internal_markStoryAsSeen(account: Account, peerId: PeerId, id: Int32, asPinned: Bool) -> Signal<Never, NoError> {
     if asPinned {
-        // AyuGram ghost mode: the view of a pinned story is not counted.
-        if AyuGramSettings.current.hideStoryViews {
+        // AstraGram ghost mode: the view of a pinned story is not counted.
+        if AstraGramSettings.current.hideStoryViews {
             return .complete()
         }
         return account.postbox.transaction { transaction -> Api.InputPeer? in

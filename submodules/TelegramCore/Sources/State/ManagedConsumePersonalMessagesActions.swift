@@ -252,8 +252,8 @@ func managedReadReactionOrPollVoteActions(postbox: Postbox, network: Network, st
 }
 
 private func synchronizeConsumeMessageContents(transaction: Transaction, postbox: Postbox, network: Network, stateManager: AccountStateManager, id: MessageId) -> Signal<Void, NoError> {
-    // AyuGram ghost mode: listened voice/video messages and opened media are not reported.
-    if AyuGramSettings.current.hideMessageContentsRead {
+    // AstraGram ghost mode: listened voice/video messages and opened media are not reported.
+    if AstraGramSettings.current.hideMessageContentsRead {
         return .complete()
     }
     if id.peerId.namespace == Namespaces.Peer.CloudUser || id.peerId.namespace == Namespaces.Peer.CloudGroup {

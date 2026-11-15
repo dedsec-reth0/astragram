@@ -25,35 +25,35 @@ import UIKit
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
-        guard self.isPrimaryScene, !(self.appDelegate?.ayuIsWaitingForApiCredentials ?? false) else {
+        guard self.isPrimaryScene, !(self.appDelegate?.astraIsWaitingForApiCredentials ?? false) else {
             return
         }
         self.appDelegate?.handleDidBecomeActive()
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
-        guard self.isPrimaryScene, !(self.appDelegate?.ayuIsWaitingForApiCredentials ?? false) else {
+        guard self.isPrimaryScene, !(self.appDelegate?.astraIsWaitingForApiCredentials ?? false) else {
             return
         }
         self.appDelegate?.handleWillResignActive()
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
-        guard self.isPrimaryScene, !(self.appDelegate?.ayuIsWaitingForApiCredentials ?? false) else {
+        guard self.isPrimaryScene, !(self.appDelegate?.astraIsWaitingForApiCredentials ?? false) else {
             return
         }
         self.appDelegate?.handleDidEnterBackground()
     }
 
     func sceneWillEnterForeground(_ scene: UIScene) {
-        guard self.isPrimaryScene, !(self.appDelegate?.ayuIsWaitingForApiCredentials ?? false) else {
+        guard self.isPrimaryScene, !(self.appDelegate?.astraIsWaitingForApiCredentials ?? false) else {
             return
         }
         self.appDelegate?.handleWillEnterForeground()
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        guard self.isPrimaryScene, !(self.appDelegate?.ayuIsWaitingForApiCredentials ?? false) else {
+        guard self.isPrimaryScene, !(self.appDelegate?.astraIsWaitingForApiCredentials ?? false) else {
             return
         }
         guard let appDelegate = self.appDelegate else {
@@ -65,14 +65,14 @@ import UIKit
     }
 
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-        guard self.isPrimaryScene, !(self.appDelegate?.ayuIsWaitingForApiCredentials ?? false) else {
+        guard self.isPrimaryScene, !(self.appDelegate?.astraIsWaitingForApiCredentials ?? false) else {
             return
         }
         self.appDelegate?.handleUserActivity(userActivity)
     }
 
     func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
-        guard self.isPrimaryScene, !(self.appDelegate?.ayuIsWaitingForApiCredentials ?? false) else {
+        guard self.isPrimaryScene, !(self.appDelegate?.astraIsWaitingForApiCredentials ?? false) else {
             completionHandler(false)
             return
         }

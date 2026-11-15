@@ -1,7 +1,7 @@
-name: AyuGram UI tests
+name: AstraGram UI tests
 
-# Builds the app for the iOS simulator and runs Telegram/Tests/Sources/AyuGramTests.swift against Telegram's test
-# servers. The other side of the chat is ayugram/uitest/peer_controller.py. The report and screenshots are uploaded
+# Builds the app for the iOS simulator and runs Telegram/Tests/Sources/AstraGramTests.swift against Telegram's test
+# servers. The other side of the chat is astragram/uitest/peer_controller.py. The report and screenshots are uploaded
 # as the uitest-results artifact (test accounts only: nothing from your real account is involved).
 
 on:
@@ -81,14 +81,14 @@ jobs:
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         run: |
           mkdir -p "$SOURCE_DIR/build-input"
-          python3 ayugram/ci/make_configuration.py "$SOURCE_DIR/build-input/ayugram-configuration.json"
+          python3 astragram/ci/make_configuration.py "$SOURCE_DIR/build-input/astragram-configuration.json"
 
       - name: Prepare test
         run: |
           set -euo pipefail
           cd "$SOURCE_DIR"
-          python3 ayugram/ci/pick_simulator.py "$SOURCE_DIR"
-          python3 ayugram/ci/refresh_profiles.py "$SOURCE_DIR"
+          python3 astragram/ci/pick_simulator.py "$SOURCE_DIR"
+          python3 astragram/ci/refresh_profiles.py "$SOURCE_DIR"
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
           printf '\nbuild --local_resources=memory=HOST_RAM*.85\nbuild --jobs=%s\ntest --test_timeout=3600\n' "$(sysctl -n hw.ncpu)" >> .bazelrc
           python3 -m venv "$RUNNER_TEMP/venv"
@@ -99,7 +99,7 @@ jobs:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         run: |
-          nohup "$RUNNER_TEMP/venv/bin/python" -u ayugram/uitest/peer_controller.py "$OUT_DIR" > "$OUT_DIR/controller-stdout.txt" 2>&1 &
+          nohup "$RUNNER_TEMP/venv/bin/python" -u astragram/uitest/peer_controller.py "$OUT_DIR" > "$OUT_DIR/controller-stdout.txt" 2>&1 &
           sleep 5
           cat "$OUT_DIR/controller-stdout.txt"
 
@@ -108,13 +108,13 @@ jobs:
         run: |
           set -uo pipefail
           cd "$SOURCE_DIR"
-          python3 ayugram/ci/run_with_timeout.py 17100 -- python3 -u build-system/Make/Make.py \
+          python3 astragram/ci/run_with_timeout.py 17100 -- python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             --cacheDir="$CACHE_DIR" \
             test \
             --target=//Telegram:iOSAppUITestSuite \
-            --testFilter=AyuGramTests \
-            --configurationPath="build-input/ayugram-configuration.json" \
+            --testFilter=AstraGramTests \
+            --configurationPath="build-input/astragram-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning 2>&1 | tee build.log
           STATUS=${PIPESTATUS[0]}
           echo "exit status $STATUS"

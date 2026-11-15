@@ -186,7 +186,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var chatLocationContextHolder: Atomic<ChatLocationContextHolder?>
     let controllerInteraction: ChatControllerInteraction
     private weak var controller: ChatControllerImpl?
-    private var ayuMessageSendConfirmed = false
+    private var astraMessageSendConfirmed = false
     
     let navigationBar: NavigationBar?
     let statusBar: StatusBar?
@@ -5162,8 +5162,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         guard let textInputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode else {
             return
         }
-        // AyuGram: "Confirm sending messages".
-        if AyuGramSettings.current.confirmMessageSend && !self.ayuMessageSendConfirmed, let controller = self.controller {
+        // AstraGram: "Confirm sending messages".
+        if AstraGramSettings.current.confirmMessageSend && !self.astraMessageSendConfirmed, let controller = self.controller {
             let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
             let isRussian = presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
             controller.present(textAlertController(context: self.context, title: nil, text: isRussian ? "Отправить сообщение?" : "Send this message?", actions: [
@@ -5172,9 +5172,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     guard let self else {
                         return
                     }
-                    self.ayuMessageSendConfirmed = true
+                    self.astraMessageSendConfirmed = true
                     self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting, completion: completion)
-                    self.ayuMessageSendConfirmed = false
+                    self.astraMessageSendConfirmed = false
                 })
             ]), in: .window(.root))
             return

@@ -2255,10 +2255,10 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             if self.previewing {
                 self.storiesReady.set(.single(true))
             } else {
-                // AyuGram: "Hide stories above chats" empties the row (stories stay available in profiles).
-                let ayuStorySubscriptions = combineLatest(
+                // AstraGram: "Hide stories above chats" empties the row (stories stay available in profiles).
+                let astraStorySubscriptions = combineLatest(
                     self.context.engine.messages.storySubscriptions(isHidden: self.location == .chatList(groupId: .archive)),
-                    AyuGramSettings.signal |> map { $0.hideStoriesInChatList } |> distinctUntilChanged
+                    AstraGramSettings.signal |> map { $0.hideStoriesInChatList } |> distinctUntilChanged
                 )
                 |> map { subscriptions, hideStories -> EngineStorySubscriptions in
                     if hideStories {
@@ -2266,7 +2266,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     }
                     return subscriptions
                 }
-                self.storySubscriptionsDisposable = (ayuStorySubscriptions
+                self.storySubscriptionsDisposable = (astraStorySubscriptions
                 |> deliverOnMainQueue).startStrict(next: { [weak self] rawStorySubscriptions in
                     guard let self else {
                         return
@@ -4149,14 +4149,14 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 }
             }
             
-            // AyuGram: "Hide the All Chats folder" (only when there is another folder to show).
-            let ayuHideAllChats = AyuGramSettings.current.hideAllChatsFolder && filterItems.contains(where: { entry in
+            // AstraGram: "Hide the All Chats folder" (only when there is another folder to show).
+            let astraHideAllChats = AstraGramSettings.current.hideAllChatsFolder && filterItems.contains(where: { entry in
                 if case .filter = entry {
                     return true
                 }
                 return false
             })
-            if ayuHideAllChats {
+            if astraHideAllChats {
                 filterItems.removeAll(where: { entry in
                     if case .all = entry {
                         return true
@@ -4179,7 +4179,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 case let .filter(id, _, _, _):
                     firstItemEntryId = .filter(id)
             }
-            if ayuHideAllChats, let firstResolved = resolvedItems.first {
+            if astraHideAllChats, let firstResolved = resolvedItems.first {
                 firstItemEntryId = firstResolved.id
             }
             
@@ -4190,7 +4190,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 if let tabContainerData = strongSelf.tabContainerData {
                     var found = false
                     if let index = tabContainerData.0.firstIndex(where: { $0.id == selectedEntryId }) {
-                        // AyuGram: with "Hide the All Chats folder" the selected tab can be the first one (index 0).
+                        // AstraGram: with "Hide the All Chats folder" the selected tab can be the first one (index 0).
                         for i in (0 ..< max(0, index - 1)).reversed() {
                             if resolvedItems.contains(where: { $0.id == tabContainerData.0[i].id }) {
                                 selectedEntryId = tabContainerData.0[i].id
@@ -4205,7 +4205,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 } else {
                     selectedEntryId = .all
                 }
-                if ayuHideAllChats, selectedEntryId == .all, let firstResolved = resolvedItems.first {
+                if astraHideAllChats, selectedEntryId == .all, let firstResolved = resolvedItems.first {
                     selectedEntryId = firstResolved.id
                 }
             }
@@ -4217,7 +4217,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 switch item.0 {
                     case .allChats:
                         hasAllChats = true
-                        if ayuHideAllChats {
+                        if astraHideAllChats {
                             continue
                         }
                         if let isPremium = isPremium, !isPremium && availableFilters.count > 0 {
@@ -4229,7 +4229,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         availableFilters.append(.filter(item.0))
                 }
             }
-            if !hasAllChats && !ayuHideAllChats {
+            if !hasAllChats && !astraHideAllChats {
                 availableFilters.insert(.all, at: 0)
             }
             strongSelf.chatListDisplayNode.mainContainerNode.updateAvailableFilters(availableFilters, limit: filtersLimit)
@@ -6919,17 +6919,17 @@ private final class ChatListLocationContext {
         if let proxyButton = self.proxyButton {
             result.append(proxyButton)
         }
-        if let ayuGhostButton = self.ayuGhostButton {
-            result.append(ayuGhostButton)
+        if let astraGhostButton = self.astraGhostButton {
+            result.append(astraGhostButton)
         }
         return result
     }
 
-    // MARK: AyuGram ghost mode button
+    // MARK: AstraGram ghost mode button
 
-    private var ayuSettingsDisposable: Disposable?
+    private var astraSettingsDisposable: Disposable?
 
-    private static let ayuGhostImages: (enabled: UIImage, disabled: UIImage) = {
+    private static let astraGhostImages: (enabled: UIImage, disabled: UIImage) = {
         func make(alpha: CGFloat) -> UIImage {
             let size = CGSize(width: 26.0, height: 26.0)
             return UIGraphicsImageRenderer(size: size).image { _ in
@@ -6943,29 +6943,29 @@ private final class ChatListLocationContext {
     }()
 
     /// Turns the whole ghost mode on and off from the chat list header (bright: on, faded: off).
-    private var ayuGhostButton: NavigationBarComponent.Button? {
+    private var astraGhostButton: NavigationBarComponent.Button? {
         guard case .chatList(.root) = self.location, self.rightButton != nil else {
             return nil
         }
-        let enabled = AyuGramSettings.current.isGhostModeFullyEnabled
+        let enabled = AstraGramSettings.current.isGhostModeFullyEnabled
         let isRussian = self.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.lowercased().hasPrefix("ru")
         return NavigationBarComponent.Button(
-            id: "ayu-ghost",
-            content: .image(enabled ? ChatListLocationContext.ayuGhostImages.enabled : ChatListLocationContext.ayuGhostImages.disabled),
+            id: "astra-ghost",
+            content: .image(enabled ? ChatListLocationContext.astraGhostImages.enabled : ChatListLocationContext.astraGhostImages.disabled),
             action: { [weak self] _ in
-                self?.toggleAyuGhostMode()
+                self?.toggleAstraGhostMode()
             },
             accessibilityValue: enabled ? (isRussian ? "Включён" : "On") : (isRussian ? "Выключен" : "Off"),
             accessibilityLabel: isRussian ? "Режим призрака" : "Ghost Mode"
         )
     }
 
-    private func toggleAyuGhostMode() {
-        let enabled = !AyuGramSettings.current.isGhostModeFullyEnabled
-        AyuGramSettings.update { settings in
+    private func toggleAstraGhostMode() {
+        let enabled = !AstraGramSettings.current.isGhostModeFullyEnabled
+        AstraGramSettings.update { settings in
             settings.setGhostMode(enabled)
         }
-        if AyuGramSettings.current.hapticFeedback {
+        if AstraGramSettings.current.hapticFeedback {
             HapticFeedback().tap()
         }
         guard let parentController = self.parentController else {
@@ -7369,8 +7369,8 @@ private final class ChatListLocationContext {
             }
         })
 
-        // AyuGram: the ghost mode button follows changes made in the settings too.
-        self.ayuSettingsDisposable = (AyuGramSettings.signal
+        // AstraGram: the ghost mode button follows changes made in the settings too.
+        self.astraSettingsDisposable = (AstraGramSettings.signal
         |> map { $0.isGhostModeFullyEnabled }
         |> distinctUntilChanged
         |> deliverOnMainQueue).startStrict(next: { [weak self] _ in
@@ -7381,7 +7381,7 @@ private final class ChatListLocationContext {
     deinit {
         self.titleDisposable?.dispose()
         self.stateDisposable?.dispose()
-        self.ayuSettingsDisposable?.dispose()
+        self.astraSettingsDisposable?.dispose()
     }
     
     private func updateChatList(

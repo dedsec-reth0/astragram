@@ -199,7 +199,7 @@ enum PeerInfoSettingsSection {
     case stars
     case ton
     case wallet
-    case ayuGram
+    case astraGram
 }
 
 enum PeerInfoReportType {

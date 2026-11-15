@@ -759,38 +759,38 @@ private func opportunisticallyTransformOutgoingMedia(network: Network, postbox: 
 }
 
 public func enqueueMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {
-    // AyuGram plugins and templates may change the text of outgoing messages, or handle a command and drop the
-    // message. They see what the user sends, so they run before AyuForward: the copies it makes carry the text of
+    // AstraGram plugins and templates may change the text of outgoing messages, or handle a command and drop the
+    // message. They see what the user sends, so they run before AstraForward: the copies it makes carry the text of
     // other people's messages, which must not be taken for a command or a template.
-    let ayuTransformed = Signal<[EnqueueMessage], NoError> { subscriber in
-        subscriber.putNext(AyuPluginHooks.transformOutgoing(messages, peerId: peerId))
+    let astraTransformed = Signal<[EnqueueMessage], NoError> { subscriber in
+        subscriber.putNext(AstraPluginHooks.transformOutgoing(messages, peerId: peerId))
         subscriber.putCompletion()
         return EmptyDisposable
     }
-    return ayuTransformed
-    |> mapToSignal { ayuTransformedMessages -> Signal<[MessageId?], NoError> in
-        if ayuTransformedMessages.isEmpty {
+    return astraTransformed
+    |> mapToSignal { astraTransformedMessages -> Signal<[MessageId?], NoError> in
+        if astraTransformedMessages.isEmpty {
             return .single([])
         }
-        // AyuForward: forwards from chats that forbid forwarding are sent as copies.
-        return AyuForward.prepare(account: account, messages: ayuTransformedMessages)
-        |> mapToSignal { ayuPreparedMessages -> Signal<[MessageId?], NoError> in
-            return ayuEnqueuePreparedMessages(account: account, peerId: peerId, messages: ayuPreparedMessages)
+        // AstraForward: forwards from chats that forbid forwarding are sent as copies.
+        return AstraForward.prepare(account: account, messages: astraTransformedMessages)
+        |> mapToSignal { astraPreparedMessages -> Signal<[MessageId?], NoError> in
+            return astraEnqueuePreparedMessages(account: account, peerId: peerId, messages: astraPreparedMessages)
         }
     }
 }
 
-private func ayuEnqueuePreparedMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {
-    let ayuMessages = messages
-    if ayuMessages.isEmpty {
+private func astraEnqueuePreparedMessages(account: Account, peerId: PeerId, messages: [EnqueueMessage]) -> Signal<[MessageId?], NoError> {
+    let astraMessages = messages
+    if astraMessages.isEmpty {
         return .single([])
     }
-    AyuGhostMode.didSendMessage(account: account, peerId: peerId)
+    AstraGhostMode.didSendMessage(account: account, peerId: peerId)
     let signal: Signal<[(Bool, EnqueueMessage)], NoError>
     if let transformOutgoingMessageMedia = account.transformOutgoingMessageMedia {
-        signal = opportunisticallyTransformOutgoingMedia(network: account.network, postbox: account.postbox, transformOutgoingMessageMedia: transformOutgoingMessageMedia, messages: ayuMessages, userInteractive: true)
+        signal = opportunisticallyTransformOutgoingMedia(network: account.network, postbox: account.postbox, transformOutgoingMessageMedia: transformOutgoingMessageMedia, messages: astraMessages, userInteractive: true)
     } else {
-        signal = .single(ayuMessages.map { (false, $0) })
+        signal = .single(astraMessages.map { (false, $0) })
     }
     return signal
     |> mapToSignal { messages -> Signal<[MessageId?], NoError> in

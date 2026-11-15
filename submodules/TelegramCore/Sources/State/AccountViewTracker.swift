@@ -981,8 +981,8 @@ public final class AccountViewTracker {
                     
                     if let account = self.account {
                         let signal = (account.postbox.transaction { transaction -> Signal<Void, NoError> in
-                            // AyuGram ghost mode: viewed live locations are not reported.
-                            if AyuGramSettings.current.hideMessageContentsRead {
+                            // AstraGram ghost mode: viewed live locations are not reported.
+                            if AstraGramSettings.current.hideMessageContentsRead {
                                 return .complete()
                             }
                             if let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) {

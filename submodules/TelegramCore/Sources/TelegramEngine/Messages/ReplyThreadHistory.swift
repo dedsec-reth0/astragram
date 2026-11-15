@@ -373,8 +373,8 @@ private class ReplyThreadHistoryContextImpl {
 
             strongSelf.unreadCountValue = unreadCountValue
 
-            // AyuGram ghost mode: the thread is read locally only.
-            if !AyuGhostMode.mayPushReadState(peerId: messageIndex.id.peerId) {
+            // AstraGram ghost mode: the thread is read locally only.
+            if !AstraGhostMode.mayPushReadState(peerId: messageIndex.id.peerId) {
                 return
             }
 

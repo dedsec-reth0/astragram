@@ -5672,8 +5672,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
                     }
                     
-                    // AyuGram Liquid Glass+ (beta): pinned rows stay inside the card, without a full-width background.
-                    if AyuLiquidGlass.isEnabled && isPinned && !item.selected {
+                    // AstraGram Liquid Glass+ (beta): pinned rows stay inside the card, without a full-width background.
+                    if AstraLiquidGlass.isEnabled && isPinned && !item.selected {
                         backgroundColor = .clear
                     }
                     if animated {
@@ -5698,8 +5698,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             highlightedBackgroundFrame = highlightedBackgroundFrame.insetBy(dx: 8.0, dy: 0.0)
                         }
                         strongSelf.revealOptionsHighlightedBackgroundRestingCornerRadius = 24.0
-                    } else if AyuLook.springPresses {
-                        // AyuGram look: the pressed row is a rounded plate here too.
+                    } else if AstraLook.springPresses {
+                        // AstraGram look: the pressed row is a rounded plate here too.
                         highlightedBackgroundFrame = highlightedBackgroundFrame.insetBy(dx: 8.0, dy: 0.0)
                         strongSelf.revealOptionsHighlightedBackgroundRestingCornerRadius = 24.0
                     } else {

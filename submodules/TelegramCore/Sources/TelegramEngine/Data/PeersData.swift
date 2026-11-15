@@ -2391,8 +2391,8 @@ public extension TelegramEngine.EngineData.Item {
                 guard let peer = peerViewMainPeer(view) else {
                     return false
                 }
-                // AyuGram: "Remove copy restrictions".
-                if AyuGramSettings.current.removeCopyRestrictions {
+                // AstraGram: "Remove copy restrictions".
+                if AstraGramSettings.current.removeCopyRestrictions {
                     return false
                 }
                 if let cachedPeerData = view.cachedData as? CachedUserData {

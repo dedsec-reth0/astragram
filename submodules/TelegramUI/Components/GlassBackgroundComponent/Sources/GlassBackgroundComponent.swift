@@ -720,8 +720,8 @@ public class GlassBackgroundView: UIView {
     }
 
     func update(size: CGSize, shape: Shape, isDark: Bool, tintColor rawTintColor: TintColor, isInteractive: Bool = false, isVisible: Bool = true, transition: ComponentTransition) {
-        // AyuGram: the glass material chosen in the settings.
-        let tintColor = GlassBackgroundView.ayuMaterialTint(rawTintColor, isDark: isDark)
+        // AstraGram: the glass material chosen in the settings.
+        let tintColor = GlassBackgroundView.astraMaterialTint(rawTintColor, isDark: isDark)
         
         if let glassHighlightRecognizer = self.glassHighlightRecognizer {
             glassHighlightRecognizer.isEnabled = isInteractive
@@ -2125,10 +2125,10 @@ extension GlassBackgroundContainerView {
 }
 
 extension GlassBackgroundView {
-    /// AyuGram look: the tint a panel gets under the chosen glass material. Clear turns plain panels into clear
+    /// AstraGram look: the tint a panel gets under the chosen glass material. Clear turns plain panels into clear
     /// glass, matte fills them almost solid; tints with a color of their own stay as they are.
-    static func ayuMaterialTint(_ tintColor: TintColor, isDark: Bool) -> TintColor {
-        switch AyuLook.glassMaterial {
+    static func astraMaterialTint(_ tintColor: TintColor, isDark: Bool) -> TintColor {
+        switch AstraLook.glassMaterial {
         case 1:
             switch tintColor.kind {
             case .panel, .untinted:

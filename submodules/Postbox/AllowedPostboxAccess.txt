@@ -17,9 +17,9 @@ Telegram/SiriIntents/IntentMessages.swift
 submodules/AccountContext/Sources/UniversalVideoNode.swift
 submodules/AccountUtils/Sources/AccountUtils.swift
 submodules/ActionSheetPeerItem/Sources/ActionSheetPeerItem.swift
+submodules/AstraGramUI/Sources/AstraMessageTools.swift
 submodules/AvatarNode/Sources/PeerAvatar.swift
 submodules/AvatarVideoNode/Sources/AvatarVideoNode.swift
-submodules/AyuGramUI/Sources/AyuMessageTools.swift
 submodules/BrowserUI/Sources/BrowserWebContent.swift
 submodules/ChatImportUI/Sources/ChatImportActivityScreen.swift
 submodules/ChatListSearchRecentPeersNode/Sources/ChatListSearchRecentPeersNode.swift

@@ -218,8 +218,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let editingEdgeEffectView: EdgeEffectView
     
     var musicBackground: UIView?
-    /// AyuGram "Liquid Glass+ (beta)": the capsule behind the music, which sits between the status and the buttons.
-    private var ayuMusicPillLayer: CALayer?
+    /// AstraGram "Liquid Glass+ (beta)": the capsule behind the music, which sits between the status and the buttons.
+    private var astraMusicPillLayer: CALayer?
     var music: ComponentView<Empty>?
     var walletBalance: ComponentView<Empty>?
     private var walletBalanceCutoutIcon: (color: UIColor, image: UIImage)?
@@ -699,10 +699,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
         let musicHeight: CGFloat = hasBackground || self.isAvatarExpanded ? 24.0 : 16.0
         let bottomInset: CGFloat = currentSavedMusic != nil ? musicHeight : 0.0
-        // AyuGram "Profile Music as a Capsule": the music is a capsule under the status, above the buttons, as in the
+        // AstraGram "Profile Music as a Capsule": the music is a capsule under the status, above the buttons, as in the
         // concept (not a strip under the buttons). The expanded photo keeps the regular layout, and so does a profile
         // without buttons (your own): there is no room between the status and the buttons there.
-        let ayuMusicAbove = AyuGramSettings.current.profileMusicCapsule && currentSavedMusic != nil && !self.isAvatarExpanded && !buttonKeys.isEmpty
+        let astraMusicAbove = AstraGramSettings.current.profileMusicCapsule && currentSavedMusic != nil && !self.isAvatarExpanded && !buttonKeys.isEmpty
         let balanceInset: CGFloat = currentWalletBalance != nil ? 32.0 : 0.0
         
         let isLandscape = containerInset > 16.0
@@ -2301,7 +2301,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         let buttonWidth = (width - stripLeft - stripRight - buttonSideInset * 2.0 + buttonSpacing) / CGFloat(buttonKeys.count) - buttonSpacing
         let buttonSize = CGSize(width: buttonWidth, height: 58.0)
-        var buttonRightOrigin = CGPoint(x: width - stripRight - buttonSideInset, y: backgroundHeight - (ayuMusicAbove ? 0.0 : bottomInset) - 16.0 - buttonSize.height)
+        var buttonRightOrigin = CGPoint(x: width - stripRight - buttonSideInset, y: backgroundHeight - (astraMusicAbove ? 0.0 : bottomInset) - 16.0 - buttonSize.height)
         if !actionButtonKeys.isEmpty {
             buttonRightOrigin.y += actionButtonSize.height + 24.0
         }
@@ -2695,7 +2695,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
 
         if currentSavedMusic != nil {
             var musicTransition = transition
-            if (hasBackground || self.isAvatarExpanded) && !ayuMusicAbove {
+            if (hasBackground || self.isAvatarExpanded) && !astraMusicAbove {
                 if self.musicBackground == nil {
                     musicTransition = .immediate
                 }
@@ -2789,19 +2789,19 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     containerSize: CGSize(width: musicBandWidth, height: musicHeight)
                 )
                 var musicFrame = CGRect(origin: CGPoint(x: stripLeft, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0) + 1.0 - UIScreenPixel), size: musicSize)
-                if ayuMusicAbove {
+                if astraMusicAbove {
                     // Round buttons overflow their frame upwards, so the capsule moves up to stay in the middle of the gap.
-                    let ayuRoundButtonsOffset: CGFloat = AyuGramSettings.current.roundProfileButtons ? 5.0 : 0.0
-                    musicFrame.origin.y = (apparentBackgroundHeight - backgroundHeight) + buttonRightOrigin.y - floor((bottomInset + 16.0 + musicSize.height) / 2.0) - ayuRoundButtonsOffset
+                    let astraRoundButtonsOffset: CGFloat = AstraGramSettings.current.roundProfileButtons ? 5.0 : 0.0
+                    musicFrame.origin.y = (apparentBackgroundHeight - backgroundHeight) + buttonRightOrigin.y - floor((bottomInset + 16.0 + musicSize.height) / 2.0) - astraRoundButtonsOffset
                 }
                 if let musicView = music.view {
-                    if ayuMusicAbove {
+                    if astraMusicAbove {
                         let pillLayer: CALayer
-                        if let current = self.ayuMusicPillLayer {
+                        if let current = self.astraMusicPillLayer {
                             pillLayer = current
                         } else {
                             pillLayer = CALayer()
-                            self.ayuMusicPillLayer = pillLayer
+                            self.astraMusicPillLayer = pillLayer
                         }
                         if pillLayer.superlayer !== musicView.layer {
                             musicView.layer.insertSublayer(pillLayer, at: 0)
@@ -2814,8 +2814,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         pillLayer.cornerRadius = pillSize.height / 2.0
                         pillLayer.backgroundColor = (isOverlay ? UIColor(white: 1.0, alpha: 0.16) : presentationData.theme.list.itemAccentColor.withAlphaComponent(0.1)).cgColor
                         CATransaction.commit()
-                    } else if let pillLayer = self.ayuMusicPillLayer {
-                        self.ayuMusicPillLayer = nil
+                    } else if let pillLayer = self.astraMusicPillLayer {
+                        self.astraMusicPillLayer = nil
                         pillLayer.removeFromSuperlayer()
                     }
                     self.regularContentNode.accessibilityTrailingView = musicView

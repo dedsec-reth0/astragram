@@ -906,7 +906,7 @@ open class ChatMessageItemView: ListViewItemNode, ChatMessageItemNodeProtocol {
                 case let .url(url):
                     item.controllerInteraction.longTap(.url(url), ChatControllerInteraction.LongTapParams(message: item.message))
                 case let .callback(_, data):
-                    // AyuGram: a long press on an inline button copies its callback data.
+                    // AstraGram: a long press on an inline button copies its callback data.
                     let bytes = Data(bytes: data.memory, count: data.length)
                     let text = String(data: bytes, encoding: .utf8) ?? bytes.map { String(format: "%02x", $0) }.joined()
                     UIPasteboard.general.string = text

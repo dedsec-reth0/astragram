@@ -110,13 +110,13 @@ func managedSynchronizeConsumeMessageContentOperations(postbox: Postbox, network
 }
 
 private func synchronizeConsumeMessageContents(transaction: Transaction, network: Network, stateManager: AccountStateManager, peerId: PeerId, operation: SynchronizeConsumeMessageContentsOperation) -> Signal<Void, NoError> {
-    // AyuGram ghost mode: listened voice/video messages and opened media are not reported. Opened self-destructing
-    // and view-once media still are: AyuGram keeps it on this device, and the sender sees it as viewed as usual.
+    // AstraGram ghost mode: listened voice/video messages and opened media are not reported. Opened self-destructing
+    // and view-once media still are: AstraGram keeps it on this device, and the sender sees it as viewed as usual.
     var operation = operation
-    if AyuGramSettings.current.hideMessageContentsRead {
+    if AstraGramSettings.current.hideMessageContentsRead {
         let reportedIds = operation.messageIds.filter { id in
             if let message = transaction.getMessage(id) {
-                return AyuSelfDestructingMedia.isSelfDestructing(message)
+                return AstraSelfDestructingMedia.isSelfDestructing(message)
             }
             return false
         }

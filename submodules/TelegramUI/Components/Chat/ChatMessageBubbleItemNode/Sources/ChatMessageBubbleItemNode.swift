@@ -2771,8 +2771,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 authorNameColor = nameColors?.main
             } else if let effectiveAuthor = effectiveAuthor {
                 authorNameString = EnginePeer(effectiveAuthor).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
-                // AyuGram: a badge for people writing to a group on behalf of a channel.
-                if AyuGramSettings.current.channelBadge, let authorChannel = effectiveAuthor as? TelegramChannel, case .broadcast = authorChannel.info, effectiveAuthor.id != item.message.id.peerId, let authorNameValue = authorNameString {
+                // AstraGram: a badge for people writing to a group on behalf of a channel.
+                if AstraGramSettings.current.channelBadge, let authorChannel = effectiveAuthor as? TelegramChannel, case .broadcast = authorChannel.info, effectiveAuthor.id != item.message.id.peerId, let authorNameValue = authorNameString {
                     authorNameString = "📢 " + authorNameValue
                 }
                 // Not when the author is the chat itself (an anonymous admin), which the chat header already badges, as

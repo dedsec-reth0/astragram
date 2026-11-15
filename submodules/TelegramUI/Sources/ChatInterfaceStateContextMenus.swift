@@ -41,7 +41,7 @@ import AdsInfoScreen
 import AdsReportScreen
 import WalletContext
 import WalletSendScreen
-import AyuGramUI
+import AstraGramUI
  
 private struct MessageContextMenuData {
     let starStatus: Bool?
@@ -829,8 +829,8 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
     }
     
-    // AyuGram: a message kept as deleted no longer exists on the server, so it cannot be replied to or pinned.
-    if messages.contains(where: { $0.ayuDeletedAt != nil }) {
+    // AstraGram: a message kept as deleted no longer exists on the server, so it cannot be replied to or pinned.
+    if messages.contains(where: { $0.astraDeletedAt != nil }) {
         canReply = false
         canPin = false
     }
@@ -918,7 +918,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     |> map { limitsAndAppConfig, stickerSaveStatus, resourceStatus, messageActions, updatingMessageMedia, infoSummaryData, isMessageRead, messageViewsPrivacyTips, availableReactions, sharedData, notificationSoundList, accountPeer -> (MessageContextMenuData, [EngineMessage.Id: ChatUpdatingMessageMedia], InfoSummaryData, AppConfiguration, Bool, Int32, AvailableReactions?, TranslationSettings, LoggingSettings, NotificationSoundList?, EnginePeer?) in
         let (limitsConfiguration, appConfig) = limitsAndAppConfig
         var canEdit = false
-        if !isAction && messages[0].ayuDeletedAt == nil {
+        if !isAction && messages[0].astraDeletedAt == nil {
             let message = messages[0]
             canEdit = canEditMessage(context: context, limitsConfiguration: limitsConfiguration, message: message)
         }
@@ -1363,21 +1363,21 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
         
-        // AyuGram: the saved earlier versions of an edited message.
+        // AstraGram: the saved earlier versions of an edited message.
         if message.attributes.contains(where: { $0 is EditedMessageAttribute }) {
-            actions.append(.action(ContextMenuActionItem(text: AyuStrings(chatPresentationInterfaceState.strings).editHistory, icon: { theme in
+            actions.append(.action(ContextMenuActionItem(text: AstraStrings(chatPresentationInterfaceState.strings).editHistory, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
                 f(.dismissWithoutContent)
-                controllerInteraction.navigationController()?.pushViewController(ayuEditHistoryController(context: context, message: EngineMessage(message)))
+                controllerInteraction.navigationController()?.pushViewController(astraEditHistoryController(context: context, message: EngineMessage(message)))
             })))
         }
 
-        // AyuGram: the AyuGram submenu (details, repeat, copy without formatting, read until here, hide).
+        // AstraGram: the AstraGram submenu (details, repeat, copy without formatting, read until here, hide).
         if message.id.namespace == Namespaces.Message.Cloud {
-            let ayuStrings = AyuStrings(chatPresentationInterfaceState.strings)
-            let ayuMessage = message
-            actions.append(.action(ContextMenuActionItem(text: ayuStrings.messageMenu, icon: { theme in
+            let astraStrings = AstraStrings(chatPresentationInterfaceState.strings)
+            let astraMessage = message
+            actions.append(.action(ContextMenuActionItem(text: astraStrings.messageMenu, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Customize"), color: theme.actionSheet.primaryTextColor)
             }, action: { c, _ in
                 var subItems: [ContextMenuItem] = []
@@ -1387,13 +1387,13 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     c?.popItems()
                 })))
                 subItems.append(.separator)
-                subItems.append(.action(ContextMenuActionItem(text: ayuStrings.messageDetails, icon: { theme in
+                subItems.append(.action(ContextMenuActionItem(text: astraStrings.messageDetails, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.actionSheet.primaryTextColor)
                 }, action: { c, _ in
                     c?.dismiss(completion: {
                         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-                        let text = ayuMessageDetailsText(message: ayuMessage, strings: presentationData.strings)
-                        controllerInteraction.presentController(textAlertController(context: context, title: ayuStrings.messageDetails, text: text, actions: [
+                        let text = astraMessageDetailsText(message: astraMessage, strings: presentationData.strings)
+                        controllerInteraction.presentController(textAlertController(context: context, title: astraStrings.messageDetails, text: text, actions: [
                             TextAlertAction(type: .genericAction, title: presentationData.strings.Conversation_ContextMenuCopy, action: {
                                 UIPasteboard.general.string = text
                             }),
@@ -1401,51 +1401,51 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         ], actionLayout: .horizontal), nil)
                     })
                 })))
-                if !ayuMessage.text.isEmpty && ayuMessage.media.isEmpty {
-                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.repeatMessage, icon: { theme in
+                if !astraMessage.text.isEmpty && astraMessage.media.isEmpty {
+                    subItems.append(.action(ContextMenuActionItem(text: astraStrings.repeatMessage, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Resend"), color: theme.actionSheet.primaryTextColor)
                     }, action: { _, f in
                         f(.default)
-                        controllerInteraction.sendMessage(ayuMessage.text, nil)
+                        controllerInteraction.sendMessage(astraMessage.text, nil)
                     })))
                 }
-                if !ayuMessage.text.isEmpty {
-                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.copyPlain, icon: { theme in
+                if !astraMessage.text.isEmpty {
+                    subItems.append(.action(ContextMenuActionItem(text: astraStrings.copyPlain, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor)
                     }, action: { _, f in
-                        UIPasteboard.general.string = ayuMessage.text
+                        UIPasteboard.general.string = astraMessage.text
                         f(.default)
-                        controllerInteraction.displayUndo(.copy(text: ayuStrings.copied))
+                        controllerInteraction.displayUndo(.copy(text: astraStrings.copied))
                     })))
                 }
-                if ayuMessage.flags.contains(.Incoming) {
-                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.readUntil, icon: { theme in
+                if astraMessage.flags.contains(.Incoming) {
+                    subItems.append(.action(ContextMenuActionItem(text: astraStrings.readUntil, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Read"), color: theme.actionSheet.primaryTextColor)
                     }, action: { _, f in
                         f(.default)
-                        let _ = AyuMessageActions.readUntil(account: context.account, index: ayuMessage.index).startStandalone()
-                        controllerInteraction.displayUndo(.info(title: nil, text: ayuStrings.readUntilDone, timeout: 2.0, customUndoText: nil))
+                        let _ = AstraMessageActions.readUntil(account: context.account, index: astraMessage.index).startStandalone()
+                        controllerInteraction.displayUndo(.info(title: nil, text: astraStrings.readUntilDone, timeout: 2.0, customUndoText: nil))
                     })))
                 }
-                if ayuMessage.flags.contains(.Incoming) && ayuMessage.containsSecretMedia && AyuGramSettings.current.keepSelfDestructingMedia {
-                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.burnNow, textColor: .destructive, icon: { theme in
+                if astraMessage.flags.contains(.Incoming) && astraMessage.containsSecretMedia && AstraGramSettings.current.keepSelfDestructingMedia {
+                    subItems.append(.action(ContextMenuActionItem(text: astraStrings.burnNow, textColor: .destructive, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Timer"), color: theme.actionSheet.destructiveActionTextColor)
                     }, action: { _, f in
                         f(.default)
-                        let _ = AyuMessageActions.expireSelfDestructingMedia(account: context.account, id: ayuMessage.id).startStandalone()
-                        controllerInteraction.displayUndo(.info(title: nil, text: ayuStrings.burnDone, timeout: 2.0, customUndoText: nil))
+                        let _ = AstraMessageActions.expireSelfDestructingMedia(account: context.account, id: astraMessage.id).startStandalone()
+                        controllerInteraction.displayUndo(.info(title: nil, text: astraStrings.burnDone, timeout: 2.0, customUndoText: nil))
                     })))
                 }
-                if let ayuMessageNode = messageNode {
-                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.messageShot, icon: { theme in
+                if let astraMessageNode = messageNode {
+                    subItems.append(.action(ContextMenuActionItem(text: astraStrings.messageShot, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Image"), color: theme.actionSheet.primaryTextColor)
-                    }, action: { [weak ayuMessageNode] c, _ in
+                    }, action: { [weak astraMessageNode] c, _ in
                         c?.dismiss(completion: {
                             Queue.mainQueue().after(0.3, {
-                                guard let ayuMessageNode, let window = ayuMessageNode.view.window else {
+                                guard let astraMessageNode, let window = astraMessageNode.view.window else {
                                     return
                                 }
-                                let view = ayuMessageNode.view
+                                let view = astraMessageNode.view
                                 let backgroundColor = chatPresentationInterfaceState.theme.list.plainBackgroundColor
                                 let image = UIGraphicsImageRenderer(bounds: view.bounds).image { rendererContext in
                                     backgroundColor.setFill()
@@ -1463,88 +1463,88 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         })
                     })))
                 }
-                let ayuIsBookmarked = AyuBookmarks.contains(ayuMessage.id)
-                subItems.append(.action(ContextMenuActionItem(text: ayuIsBookmarked ? ayuStrings.bookmarkRemove : ayuStrings.bookmarkAdd, icon: { theme in
+                let astraIsBookmarked = AstraBookmarks.contains(astraMessage.id)
+                subItems.append(.action(ContextMenuActionItem(text: astraIsBookmarked ? astraStrings.bookmarkRemove : astraStrings.bookmarkAdd, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Fave"), color: theme.actionSheet.primaryTextColor)
                 }, action: { _, f in
                     f(.default)
-                    if ayuIsBookmarked {
-                        AyuBookmarks.remove(id: ayuMessage.id)
+                    if astraIsBookmarked {
+                        AstraBookmarks.remove(id: astraMessage.id)
                     } else {
                         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-                        let chatTitle = ayuMessage.peers[ayuMessage.id.peerId].flatMap { EnginePeer($0).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) } ?? ""
-                        AyuBookmarks.add(id: ayuMessage.id, chatTitle: chatTitle, text: ayuMessage.text, date: ayuMessage.timestamp)
-                        controllerInteraction.displayUndo(.info(title: nil, text: ayuStrings.bookmarkAdded, timeout: 2.0, customUndoText: nil))
+                        let chatTitle = astraMessage.peers[astraMessage.id.peerId].flatMap { EnginePeer($0).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) } ?? ""
+                        AstraBookmarks.add(id: astraMessage.id, chatTitle: chatTitle, text: astraMessage.text, date: astraMessage.timestamp)
+                        controllerInteraction.displayUndo(.info(title: nil, text: astraStrings.bookmarkAdded, timeout: 2.0, customUndoText: nil))
                     }
                 })))
-                if let ayuImage = ayuMessage.media.first(where: { $0 is TelegramMediaImage }) as? TelegramMediaImage, let ayuLargest = largestImageRepresentation(ayuImage.representations) {
-                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.ocr, icon: { theme in
+                if let astraImage = astraMessage.media.first(where: { $0 is TelegramMediaImage }) as? TelegramMediaImage, let astraLargest = largestImageRepresentation(astraImage.representations) {
+                    subItems.append(.action(ContextMenuActionItem(text: astraStrings.ocr, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor)
                     }, action: { c, _ in
                         c?.dismiss(completion: {
-                            let resultController = AyuTextResultController(title: ayuStrings.ocr, isRussian: ayuStrings.isRussian, load: { completion in
-                                let _ = (ayuDownloadResource(context: context, message: ayuMessage, media: ayuImage, resource: ayuLargest.resource)
+                            let resultController = AstraTextResultController(title: astraStrings.ocr, isRussian: astraStrings.isRussian, load: { completion in
+                                let _ = (astraDownloadResource(context: context, message: astraMessage, media: astraImage, resource: astraLargest.resource)
                                 |> deliverOnMainQueue).start(next: { path in
                                     guard let path = path, let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
-                                        completion(.failure(AyuTextError("—")))
+                                        completion(.failure(AstraTextError("—")))
                                         return
                                     }
-                                    AyuOCR.recognize(imageData: data, completion: completion)
+                                    AstraOCR.recognize(imageData: data, completion: completion)
                                 })
                             })
-                            ayuPresentNative(resultController.wrapped(), in: controllerInteraction.navigationController()?.view.window)
+                            astraPresentNative(resultController.wrapped(), in: controllerInteraction.navigationController()?.view.window)
                         })
                     })))
                 }
-                subItems.append(.action(ContextMenuActionItem(text: ayuStrings.exportChat, icon: { theme in
+                subItems.append(.action(ContextMenuActionItem(text: astraStrings.exportChat, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Statistics"), color: theme.actionSheet.primaryTextColor)
                 }, action: { c, _ in
                     c?.dismiss(completion: {
                         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-                        let resultController = AyuTextResultController(title: ayuStrings.exportChat, isRussian: ayuStrings.isRussian, load: { completion in
-                            let _ = (AyuMessageActions.recentMessages(account: context.account, peerId: ayuMessage.id.peerId, limit: 3000)
+                        let resultController = AstraTextResultController(title: astraStrings.exportChat, isRussian: astraStrings.isRussian, load: { completion in
+                            let _ = (AstraMessageActions.recentMessages(account: context.account, peerId: astraMessage.id.peerId, limit: 3000)
                             |> deliverOnMainQueue).start(next: { messages in
-                                let statistics = ayuChatStatistics(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
-                                let transcript = ayuChatTranscript(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
+                                let statistics = astraChatStatistics(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
+                                let transcript = astraChatTranscript(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
                                 completion(.success(statistics + "\n\n────────\n\n" + transcript))
                             })
                         })
-                        ayuPresentNative(resultController.wrapped(), in: controllerInteraction.navigationController()?.view.window)
+                        astraPresentNative(resultController.wrapped(), in: controllerInteraction.navigationController()?.view.window)
                     })
                 })))
-                subItems.append(.action(ContextMenuActionItem(text: ayuStrings.hideMessage, icon: { theme in
+                subItems.append(.action(ContextMenuActionItem(text: astraStrings.hideMessage, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/EyeLocked"), color: theme.actionSheet.primaryTextColor)
                 }, action: { _, f in
                     f(.default)
-                    let _ = AyuMessageActions.hideLocally(account: context.account, id: ayuMessage.id).startStandalone()
-                    controllerInteraction.displayUndo(.info(title: nil, text: ayuStrings.hiddenDone, timeout: 2.0, customUndoText: nil))
+                    let _ = AstraMessageActions.hideLocally(account: context.account, id: astraMessage.id).startStandalone()
+                    controllerInteraction.displayUndo(.info(title: nil, text: astraStrings.hiddenDone, timeout: 2.0, customUndoText: nil))
                 })))
 
                 c?.pushItems(items: .single(ContextController.Items(content: .list(subItems))))
             })))
         }
 
-        // AyuGram: AI actions (an OpenAI-compatible API with the user's own key).
+        // AstraGram: AI actions (an OpenAI-compatible API with the user's own key).
         if message.id.namespace == Namespaces.Message.Cloud {
-            let ayuStrings = AyuStrings(chatPresentationInterfaceState.strings)
-            let ayuMessage = message
-            let ayuLanguageNameValue = ayuLanguageName(chatPresentationInterfaceState.strings)
-            actions.append(.action(ContextMenuActionItem(text: ayuStrings.aiMenu, icon: { theme in
+            let astraStrings = AstraStrings(chatPresentationInterfaceState.strings)
+            let astraMessage = message
+            let astraLanguageNameValue = astraLanguageName(chatPresentationInterfaceState.strings)
+            actions.append(.action(ContextMenuActionItem(text: astraStrings.aiMenu, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Translate"), color: theme.actionSheet.primaryTextColor)
             }, action: { c, _ in
                 let presentAI: (String, @escaping (@escaping (Result<String, Error>) -> Void) -> Void) -> Void = { title, load in
                     c?.dismiss(completion: {
-                        let resultController = AyuTextResultController(title: title, isRussian: ayuStrings.isRussian, load: load)
-                        ayuPresentNative(resultController.wrapped(), in: controllerInteraction.navigationController()?.view.window)
+                        let resultController = AstraTextResultController(title: title, isRussian: astraStrings.isRussian, load: load)
+                        astraPresentNative(resultController.wrapped(), in: controllerInteraction.navigationController()?.view.window)
                     })
                 }
-                let complete: (AyuAIAction, String, @escaping (Result<String, Error>) -> Void) -> Void = { action, text, completion in
-                    AyuAI.complete(system: action.prompt(languageName: ayuLanguageNameValue), user: text, completion: { result in
+                let complete: (AstraAIAction, String, @escaping (Result<String, Error>) -> Void) -> Void = { action, text, completion in
+                    AstraAI.complete(system: action.prompt(languageName: astraLanguageNameValue), user: text, completion: { result in
                         switch result {
                         case let .success(answer):
                             completion(.success(answer))
                         case let .failure(error):
-                            completion(.failure(AyuTextError(AyuAI.describe(error, isRussian: ayuStrings.isRussian))))
+                            completion(.failure(AstraTextError(AstraAI.describe(error, isRussian: astraStrings.isRussian))))
                         }
                     })
                 }
@@ -1555,58 +1555,58 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     c?.popItems()
                 })))
                 subItems.append(.separator)
-                if !ayuMessage.text.isEmpty {
-                    let textActions: [(AyuAIAction, String)] = [
-                        (.translate, ayuStrings.aiTranslate),
-                        (.summarize, ayuStrings.aiSummarize),
-                        (.explain, ayuStrings.aiExplain),
-                        (.reply, ayuStrings.aiReply),
-                        (.improve, ayuStrings.aiImprove),
-                        (.formal, ayuStrings.aiFormal),
-                        (.friendly, ayuStrings.aiFriendly)
+                if !astraMessage.text.isEmpty {
+                    let textActions: [(AstraAIAction, String)] = [
+                        (.translate, astraStrings.aiTranslate),
+                        (.summarize, astraStrings.aiSummarize),
+                        (.explain, astraStrings.aiExplain),
+                        (.reply, astraStrings.aiReply),
+                        (.improve, astraStrings.aiImprove),
+                        (.formal, astraStrings.aiFormal),
+                        (.friendly, astraStrings.aiFriendly)
                     ]
                     for (action, title) in textActions {
                         subItems.append(.action(ContextMenuActionItem(text: title, icon: { _ in
                             return nil
                         }, action: { _, _ in
                             presentAI(title, { completion in
-                                complete(action, ayuMessage.text, completion)
+                                complete(action, astraMessage.text, completion)
                             })
                         })))
                     }
                 }
-                if let ayuVoice = ayuMessage.media.first(where: { media in
+                if let astraVoice = astraMessage.media.first(where: { media in
                     if let file = media as? TelegramMediaFile {
                         return file.isVoice || file.isInstantVideo
                     }
                     return false
                 }) as? TelegramMediaFile {
-                    subItems.append(.action(ContextMenuActionItem(text: ayuStrings.aiTranscribe, icon: { _ in
+                    subItems.append(.action(ContextMenuActionItem(text: astraStrings.aiTranscribe, icon: { _ in
                         return nil
                     }, action: { _, _ in
-                        presentAI(ayuStrings.aiTranscribe, { completion in
-                            let _ = (ayuDownloadResource(context: context, message: ayuMessage, media: ayuVoice, resource: ayuVoice.resource)
+                        presentAI(astraStrings.aiTranscribe, { completion in
+                            let _ = (astraDownloadResource(context: context, message: astraMessage, media: astraVoice, resource: astraVoice.resource)
                             |> deliverOnMainQueue).start(next: { path in
                                 guard let path = path else {
-                                    completion(.failure(AyuTextError("—")))
+                                    completion(.failure(AstraTextError("—")))
                                     return
                                 }
-                                let isVideo = ayuVoice.isInstantVideo
-                                AyuAI.transcribe(fileUrl: URL(fileURLWithPath: path), fileName: isVideo ? "message.mp4" : "voice.ogg", mimeType: isVideo ? "video/mp4" : "audio/ogg", completion: { result in
+                                let isVideo = astraVoice.isInstantVideo
+                                AstraAI.transcribe(fileUrl: URL(fileURLWithPath: path), fileName: isVideo ? "message.mp4" : "voice.ogg", mimeType: isVideo ? "video/mp4" : "audio/ogg", completion: { result in
                                     switch result {
                                     case let .success(text):
                                         completion(.success(text))
                                     case let .failure(error):
-                                        completion(.failure(AyuTextError(AyuAI.describe(error, isRussian: ayuStrings.isRussian))))
+                                        completion(.failure(AstraTextError(AstraAI.describe(error, isRussian: astraStrings.isRussian))))
                                     }
                                 })
                             })
                         })
                     })))
                 }
-                let chatActions: [(AyuAIAction, String)] = [
-                    (.chatSummary, ayuStrings.aiChatSummary),
-                    (.actionPoints, ayuStrings.aiActionPoints)
+                let chatActions: [(AstraAIAction, String)] = [
+                    (.chatSummary, astraStrings.aiChatSummary),
+                    (.actionPoints, astraStrings.aiActionPoints)
                 ]
                 for (action, title) in chatActions {
                     subItems.append(.action(ContextMenuActionItem(text: title, icon: { _ in
@@ -1614,9 +1614,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     }, action: { _, _ in
                         presentAI(title, { completion in
                             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-                            let _ = (AyuMessageActions.recentMessages(account: context.account, peerId: ayuMessage.id.peerId, limit: 100)
+                            let _ = (AstraMessageActions.recentMessages(account: context.account, peerId: astraMessage.id.peerId, limit: 100)
                             |> deliverOnMainQueue).start(next: { messages in
-                                let transcript = ayuChatTranscript(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
+                                let transcript = astraChatTranscript(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
                                 complete(action, transcript, completion)
                             })
                         })
@@ -2895,7 +2895,7 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
         }
         
         func isPeerCopyProtected(_ peerId: EnginePeer.Id) -> Bool? {
-            if AyuGramSettings.current.removeCopyRestrictions {
+            if AstraGramSettings.current.removeCopyRestrictions {
                 return nil
             }
             let copyProtection = copyProtectionMap[peerId]

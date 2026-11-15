@@ -33,10 +33,10 @@ private func managedRecentMedia(postbox: Postbox, network: Network, collectionId
                     }
 
                     return postbox.transaction { transaction -> Void in
-                        // AyuGram: the server keeps 20 recent stickers; locally up to 100 are kept.
-                        if collectionId == Namespaces.OrderedItemList.CloudRecentStickers && ayuRecentStickersLimit > items.count {
+                        // AstraGram: the server keeps 20 recent stickers; locally up to 100 are kept.
+                        if collectionId == Namespaces.OrderedItemList.CloudRecentStickers && astraRecentStickersLimit > items.count {
                             for item in transaction.getOrderedListItems(collectionId: collectionId) {
-                                if items.count >= ayuRecentStickersLimit {
+                                if items.count >= astraRecentStickersLimit {
                                     break
                                 }
                                 let id = item.id.makeData()

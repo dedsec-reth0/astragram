@@ -11,7 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/UrlWhitelist",
-        "//submodules/AyuGramUI",
+        "//submodules/AstraGramUI",
         "//submodules/TelegramUI/Components/NavigationBarNode",
         "//submodules/TelegramUI/Components/NavigationBarComponent",
         "//submodules/TelegramUI/Components/NavigationExpansionTransition",

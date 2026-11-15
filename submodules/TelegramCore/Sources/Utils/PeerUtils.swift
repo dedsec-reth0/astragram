@@ -245,8 +245,8 @@ public extension Peer {
     var isPremium: Bool {
         switch self {
         case let user as TelegramUser:
-            // AyuGram: "Local Premium" shows your own accounts as Premium on this device.
-            if AyuLocalPremium.applies(to: user.id) {
+            // AstraGram: "Local Premium" shows your own accounts as Premium on this device.
+            if AstraLocalPremium.applies(to: user.id) {
                 return true
             }
             return user.flags.contains(.isPremium)
@@ -274,8 +274,8 @@ public extension Peer {
     }
     
     var isCopyProtectionEnabled: Bool {
-        // AyuGram: "Remove copy restrictions".
-        if AyuGramSettings.current.removeCopyRestrictions {
+        // AstraGram: "Remove copy restrictions".
+        if AstraGramSettings.current.removeCopyRestrictions {
             return false
         }
         switch self {

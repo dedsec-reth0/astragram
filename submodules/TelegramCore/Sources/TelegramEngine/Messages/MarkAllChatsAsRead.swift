@@ -6,8 +6,8 @@ import MtProtoKit
 
 
 func _internal_markAllChatsAsRead(postbox: Postbox, network: Network, stateManager: AccountStateManager) -> Signal<Void, NoError> {
-    // AyuGram ghost mode: no read receipts for the chats marked as unread.
-    if AyuGramSettings.current.hideReadReceipts {
+    // AstraGram ghost mode: no read receipts for the chats marked as unread.
+    if AstraGramSettings.current.hideReadReceipts {
         return .complete()
     }
     return network.request(Api.functions.messages.getDialogUnreadMarks(flags: 0, parentPeer: nil))

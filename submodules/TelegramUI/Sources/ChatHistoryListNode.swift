@@ -2206,7 +2206,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                             }
                         }
                     } else if case let .cachedPeerData(_, cachedData) = entry, let cachedUserData = cachedData as? CachedUserData {
-                        if !isCopyProtectionEnabled && !AyuGramSettings.current.removeCopyRestrictions {
+                        if !isCopyProtectionEnabled && !AstraGramSettings.current.removeCopyRestrictions {
                             isCopyProtectionEnabled = cachedUserData.flags.contains(.copyProtectionEnabled) || cachedUserData.flags.contains(.myCopyProtectionEnabled)
                         }
                     }

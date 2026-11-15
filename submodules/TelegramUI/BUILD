@@ -446,7 +446,7 @@ swift_library(
         "//submodules/MetalEngine",
         "//submodules/TelegramUI/Components/DustEffect",
         "//submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen",
-        "//submodules/AyuGramUI",
+        "//submodules/AstraGramUI",
         "//submodules/TelegramUI/Components/Chat/ChatMessageSelectionInputPanelNode",
         "//submodules/TelegramUI/Components/Chat/ChatQrCodeScreen",
         "//submodules/TelegramUI/Components/QrStudioScreen",

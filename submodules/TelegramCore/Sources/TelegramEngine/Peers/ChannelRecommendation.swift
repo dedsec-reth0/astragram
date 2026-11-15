@@ -237,22 +237,22 @@ func _internal_recommendedAppPeerIds(account: Account) -> Signal<[EnginePeer.Id]
 }
 
 func _internal_recommendedChannels(account: Account, peerId: EnginePeer.Id?) -> Signal<RecommendedChannels?, NoError> {
-    // AyuGram: "Hide similar channels" hides the recommendations shown for a channel.
+    // AstraGram: "Hide similar channels" hides the recommendations shown for a channel.
     if peerId != nil {
-        return AyuGramSettings.signal
+        return AstraGramSettings.signal
         |> map { $0.hideSimilarChannels }
         |> distinctUntilChanged
         |> mapToSignal { hide -> Signal<RecommendedChannels?, NoError> in
             if hide {
                 return .single(nil)
             }
-            return _internal_ayuRecommendedChannels(account: account, peerId: peerId)
+            return _internal_astraRecommendedChannels(account: account, peerId: peerId)
         }
     }
-    return _internal_ayuRecommendedChannels(account: account, peerId: peerId)
+    return _internal_astraRecommendedChannels(account: account, peerId: peerId)
 }
 
-private func _internal_ayuRecommendedChannels(account: Account, peerId: EnginePeer.Id?) -> Signal<RecommendedChannels?, NoError> {
+private func _internal_astraRecommendedChannels(account: Account, peerId: EnginePeer.Id?) -> Signal<RecommendedChannels?, NoError> {
     let key = PostboxViewKey.cachedItem(entryId(peerId: peerId))
     return account.postbox.combinedView(keys: [key])
     |> mapToSignal { views -> Signal<RecommendedChannels?, NoError> in

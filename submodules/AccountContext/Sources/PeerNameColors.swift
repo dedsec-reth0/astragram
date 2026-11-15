@@ -113,8 +113,8 @@ public class PeerNameColors: Equatable {
     public let profileColorsGroupMinRequiredBoostLevel: [Int32: Int32]
     
     public func get(_ color: PeerNameColor, dark: Bool = false) -> Colors {
-        // AyuGram "Monochrome": names, replies and quotes are gray instead of the color a person picked.
-        if AyuGramSettings.current.monochrome {
+        // AstraGram "Monochrome": names, replies and quotes are gray instead of the color a person picked.
+        if AstraGramSettings.current.monochrome {
             return Colors(main: dark ? UIColor(rgb: 0xc8c8c8) : UIColor(rgb: 0x737373))
         }
         if dark, let colors = self.darkColors[color.rawValue] {
@@ -127,7 +127,7 @@ public class PeerNameColors: Equatable {
     }
     
     public func getChatFolderTag(_ color: PeerNameColor, dark: Bool = false) -> Colors {
-        if AyuGramSettings.current.monochrome {
+        if AstraGramSettings.current.monochrome {
             return Colors(main: dark ? UIColor(rgb: 0xc8c8c8) : UIColor(rgb: 0x737373))
         }
         if dark, let colors = self.darkColors[color.rawValue] {

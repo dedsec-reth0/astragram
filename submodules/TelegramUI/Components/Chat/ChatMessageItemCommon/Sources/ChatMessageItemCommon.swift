@@ -10,8 +10,8 @@ public struct ChatMessageItemWidthFill {
     public var freeMaximumFillFactor: CGFloat
     
     public func widthFor(_ width: CGFloat) -> CGFloat {
-        // AyuGram: "Wide messages" lets bubbles use more of the screen width.
-        if AyuGramSettings.current.wideMessages {
+        // AstraGram: "Wide messages" lets bubbles use more of the screen width.
+        if AstraGramSettings.current.wideMessages {
             if width <= self.compactWidthBoundary {
                 return max(1.0, width - floor(self.compactInset * 0.4))
             } else {

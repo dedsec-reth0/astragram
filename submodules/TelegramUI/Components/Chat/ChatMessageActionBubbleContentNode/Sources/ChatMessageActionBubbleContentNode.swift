@@ -262,11 +262,11 @@ public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
                     updatedAttributedString = mutableString
                 }
                 
-                // AyuGram: "Show service message time".
-                if AyuGramSettings.current.showServiceMessageTime, let currentString = updatedAttributedString, currentString.length > 0 {
+                // AstraGram: "Show service message time".
+                if AstraGramSettings.current.showServiceMessageTime, let currentString = updatedAttributedString, currentString.length > 0 {
                     let mutableString = NSMutableAttributedString(attributedString: currentString)
                     let attributes = currentString.attributes(at: currentString.length - 1, effectiveRange: nil)
-                    let timeText = stringForMessageTimestamp(timestamp: item.message.timestamp, dateTimeFormat: item.presentationData.dateTimeFormat, withSeconds: AyuGramSettings.current.showMessageSeconds)
+                    let timeText = stringForMessageTimestamp(timestamp: item.message.timestamp, dateTimeFormat: item.presentationData.dateTimeFormat, withSeconds: AstraGramSettings.current.showMessageSeconds)
                     mutableString.append(NSAttributedString(string: " · " + timeText, attributes: attributes.filter { $0.key == .font || $0.key == .foregroundColor }))
                     updatedAttributedString = mutableString
                 }

@@ -307,24 +307,24 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
         transition.updateFrame(node: self.contentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height * 0.5 * (1.0 - fraction)), size: size))
         transition.updateAlpha(node: self.contentNode, alpha: fraction)
         
-        // AyuGram "Round Profile Buttons": a round glass button with its label under it, as in the concept, instead of
+        // AstraGram "Round Profile Buttons": a round glass button with its label under it, as in the concept, instead of
         // a rounded rectangle with the label inside. The circle with its label is taller than the button's frame, so
         // it is centered over it and overflows above and below, where the header leaves free space.
-        let ayuRound = AyuGramSettings.current.roundProfileButtons
-        let ayuCircleSize: CGFloat = min(60.0, size.width)
-        let ayuTop: CGFloat = floor((size.height - (ayuCircleSize + 4.0 + titleSize.height)) / 2.0)
+        let astraRound = AstraGramSettings.current.roundProfileButtons
+        let astraCircleSize: CGFloat = min(60.0, size.width)
+        let astraTop: CGFloat = floor((size.height - (astraCircleSize + 4.0 + titleSize.height)) / 2.0)
         let backgroundFrame: CGRect
         let backgroundCornerRadius: CGFloat
         let iconOriginY: CGFloat
         let textOriginY: CGFloat
-        if ayuRound {
-            let backgroundOffset: CGFloat = ayuCircleSize * (1.0 - fraction)
-            let backgroundHeight = max(0.0, ayuCircleSize - backgroundOffset)
-            let backgroundWidth = min(ayuCircleSize, max(backgroundHeight, ayuCircleSize * fraction))
-            backgroundFrame = CGRect(origin: CGPoint(x: floor((size.width - backgroundWidth) / 2.0), y: ayuTop + backgroundOffset), size: CGSize(width: backgroundWidth, height: backgroundHeight))
+        if astraRound {
+            let backgroundOffset: CGFloat = astraCircleSize * (1.0 - fraction)
+            let backgroundHeight = max(0.0, astraCircleSize - backgroundOffset)
+            let backgroundWidth = min(astraCircleSize, max(backgroundHeight, astraCircleSize * fraction))
+            backgroundFrame = CGRect(origin: CGPoint(x: floor((size.width - backgroundWidth) / 2.0), y: astraTop + backgroundOffset), size: CGSize(width: backgroundWidth, height: backgroundHeight))
             backgroundCornerRadius = min(backgroundFrame.width, backgroundFrame.height) * 0.5
-            iconOriginY = ayuTop + floor((ayuCircleSize - iconSize.height) / 2.0)
-            textOriginY = ayuTop + ayuCircleSize + 4.0
+            iconOriginY = astraTop + floor((astraCircleSize - iconSize.height) / 2.0)
+            textOriginY = astraTop + astraCircleSize + 4.0
         } else {
             let backgroundY: CGFloat = size.height * (1.0 - fraction)
             backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: backgroundY), size: CGSize(width: size.width, height: max(0.0, size.height - backgroundY)))

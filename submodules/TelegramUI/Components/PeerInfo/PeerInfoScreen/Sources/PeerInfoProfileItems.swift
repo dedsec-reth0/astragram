@@ -16,7 +16,7 @@ import WebUI
 import AvatarNode
 import PeerNameColorItem
 import BoostLevelIconComponent
-import AyuGramUI
+import AstraGramUI
 
 private let enabledPublicBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag]
 private let enabledPrivateBioEntities: EnabledEntityTypes = [.internalUrl, .mention, .hashtag]
@@ -954,8 +954,8 @@ func infoItems(
         }
     }
     
-    // AyuGram: the numeric ID (in the Bot API form), tap to copy.
-    if AyuGramSettings.current.showPeerId, let peer = data.peer, !isMyProfile {
+    // AstraGram: the numeric ID (in the Bot API form), tap to copy.
+    if AstraGramSettings.current.showPeerId, let peer = data.peer, !isMyProfile {
         let rawId = peer.id.id._internalGetInt64Value()
         let apiId: Int64
         if peer.id.namespace == Namespaces.Peer.CloudChannel {
@@ -966,15 +966,15 @@ func infoItems(
             apiId = rawId
         }
         let idText = "\(apiId)"
-        items[.peerInfo]!.append(PeerInfoScreenLabeledValueItem(id: "ayugram.peerId", label: "ID", text: idText, textColor: .primary, action: { _, _ in
+        items[.peerInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.peerId", label: "ID", text: idText, textColor: .primary, action: { _, _ in
             UIPasteboard.general.string = idText
-            AyuHaptics.success()
+            AstraHaptics.success()
         }, requestLayout: { animated in
             interaction.requestLayout(animated)
         }))
-        // AyuGram: the approximate registration date, derived from the user ID.
-        if AyuGramSettings.current.showRegistrationDate, peer.id.namespace == Namespaces.Peer.CloudUser, let registrationText = ayuApproximateRegistrationDate(userId: rawId) {
-            items[.peerInfo]!.append(PeerInfoScreenLabeledValueItem(id: "ayugram.registration", label: AyuStrings(presentationData.strings).registrationDate, text: registrationText, textColor: .primary, action: nil, requestLayout: { animated in
+        // AstraGram: the approximate registration date, derived from the user ID.
+        if AstraGramSettings.current.showRegistrationDate, peer.id.namespace == Namespaces.Peer.CloudUser, let registrationText = astraApproximateRegistrationDate(userId: rawId) {
+            items[.peerInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.registration", label: AstraStrings(presentationData.strings).registrationDate, text: registrationText, textColor: .primary, action: nil, requestLayout: { animated in
                 interaction.requestLayout(animated)
             }))
         }

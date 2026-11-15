@@ -274,10 +274,10 @@ extension ReplayContext {
     }
     
     func applyDeleteMessagesWithGlobalIds(_ ids: [Int32]) {
-        // AyuGram anti-delete: messages kept in the chat (marked deleted) are left out of the deletion. The global id
+        // AstraGram anti-delete: messages kept in the chat (marked deleted) are left out of the deletion. The global id
         // of a private-chat or basic-group message is its MessageId.id.
         let storedIds = transaction.messageIdsForGlobalIds(ids)
-        let remainingIds = AyuAntiDelete.interceptReceivedDeletion(transaction: transaction, mediaBox: mediaBox, ids: storedIds)
+        let remainingIds = AstraAntiDelete.interceptReceivedDeletion(transaction: transaction, mediaBox: mediaBox, ids: storedIds)
         let keptGlobalIds = Set(storedIds.map { $0.id }).subtracting(remainingIds.map { $0.id })
         let ids = keptGlobalIds.isEmpty ? ids : ids.filter { !keptGlobalIds.contains($0) }
 
@@ -292,8 +292,8 @@ extension ReplayContext {
     }
     
     func applyDeleteMessages(_ ids: [MessageId]) {
-        // AyuGram anti-delete: see applyDeleteMessagesWithGlobalIds.
-        let ids = AyuAntiDelete.interceptReceivedDeletion(transaction: transaction, mediaBox: mediaBox, ids: ids)
+        // AstraGram anti-delete: see applyDeleteMessagesWithGlobalIds.
+        let ids = AstraAntiDelete.interceptReceivedDeletion(transaction: transaction, mediaBox: mediaBox, ids: ids)
         _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, manualAddMessageThreadStatsDifference: { id, add, remove in
             self.addMessageThreadStatsDifference(threadKey: id, remove: remove, addedMessagePeer: nil, addedMessageId: nil, isOutgoing: false)
         })
@@ -304,9 +304,9 @@ extension ReplayContext {
         if let message = transaction.getMessage(id) {
             updatePeerChatInclusionWithMinTimestamp(transaction: transaction, id: id.peerId, minTimestamp: message.timestamp, forceRootGroupIfNotExists: false)
         }
-        // AyuGram anti-delete: the history cleared by an admin is saved (at most the newest 1000 messages of the range).
+        // AstraGram anti-delete: the history cleared by an admin is saved (at most the newest 1000 messages of the range).
         if id.namespace == Namespaces.Message.Cloud && id.id >= 1 {
-            AyuAntiDelete.saveBeforeDeletion(transaction: transaction, mediaBox: mediaBox, ids: transaction.messageIdsInRange(peerId: id.peerId, namespace: id.namespace, range: 1 ... id.id, limit: 1000, fromUpperBound: true))
+            AstraAntiDelete.saveBeforeDeletion(transaction: transaction, mediaBox: mediaBox, ids: transaction.messageIdsInRange(peerId: id.peerId, namespace: id.namespace, range: 1 ... id.id, limit: 1000, fromUpperBound: true))
         }
         var resourceIds: [MediaResourceId] = []
         transaction.deleteMessagesInRange(peerId: id.peerId, namespace: id.namespace, minId: 1, maxId: id.id, forEachMedia: { media in
@@ -319,8 +319,8 @@ extension ReplayContext {
     
     func applyEditMessage(_ id: MessageId, _ message: StoreMessage) {
         var generatedEvent: (reactionAuthor: Peer, reaction: MessageReaction.Reaction, message: Message, timestamp: Int32)?
-        // AyuGram edit history: keep the version this edit replaces.
-        AyuAntiDelete.recordEdit(transaction: transaction, mediaBox: mediaBox, id: id, updated: message)
+        // AstraGram edit history: keep the version this edit replaces.
+        AstraAntiDelete.recordEdit(transaction: transaction, mediaBox: mediaBox, id: id, updated: message)
         transaction.updateMessage(id, update: { previousMessage in
             let peers: [PeerId:Peer] = previousMessage.peers.reduce([:], { current, value in
                 var current = current

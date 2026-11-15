@@ -181,8 +181,8 @@ func chatHistoryEntriesForView(
         if pendingRemovedMessages.contains(message.id) {
             continue
         }
-        // AyuGram message filters.
-        if AyuGramSettings.shouldHideMessage(message) {
+        // AstraGram message filters.
+        if AstraGramSettings.shouldHideMessage(message) {
             continue
         }
         

@@ -531,7 +531,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
         
         super.init()
         
-        self.backgroundColor = AyuLiquidGlass.chatListBackgroundColor(presentationData.theme)
+        self.backgroundColor = AstraLiquidGlass.chatListBackgroundColor(presentationData.theme)
         
         let itemNode = ChatListContainerItemNode(context: self.context, controller: self.controller, location: self.location, filter: nil, chatListMode: chatListMode, previewing: self.previewing, isInlineMode: self.isInlineMode, controlsHistoryPreload: self.controlsHistoryPreload, presentationData: presentationData, animationCache: self.animationCache, animationRenderer: self.animationRenderer, becameEmpty: { [weak self] filter in
             self?.filterBecameEmpty(filter)
@@ -843,9 +843,9 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
         
         if let validLayout = self.validLayout {
             if let _ = validLayout.inlineNavigationLocation {
-                self.backgroundColor = AyuLiquidGlass.isEnabled ? .clear : self.presentationData.theme.chatList.backgroundColor.mixedWith(self.presentationData.theme.chatList.pinnedItemBackgroundColor, alpha: validLayout.inlineNavigationTransitionFraction)
+                self.backgroundColor = AstraLiquidGlass.isEnabled ? .clear : self.presentationData.theme.chatList.backgroundColor.mixedWith(self.presentationData.theme.chatList.pinnedItemBackgroundColor, alpha: validLayout.inlineNavigationTransitionFraction)
             } else {
-                self.backgroundColor = AyuLiquidGlass.chatListBackgroundColor(self.presentationData.theme)
+                self.backgroundColor = AstraLiquidGlass.chatListBackgroundColor(self.presentationData.theme)
             }
         }
         
@@ -1078,9 +1078,9 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
         self.isUserInteractionEnabled = !isReorderingFilters
         
         if let _ = inlineNavigationLocation {
-            transition.updateBackgroundColor(node: self, color: AyuLiquidGlass.isEnabled ? .clear : self.presentationData.theme.chatList.backgroundColor.mixedWith(self.presentationData.theme.chatList.pinnedItemBackgroundColor, alpha: inlineNavigationTransitionFraction))
+            transition.updateBackgroundColor(node: self, color: AstraLiquidGlass.isEnabled ? .clear : self.presentationData.theme.chatList.backgroundColor.mixedWith(self.presentationData.theme.chatList.pinnedItemBackgroundColor, alpha: inlineNavigationTransitionFraction))
         } else {
-            transition.updateBackgroundColor(node: self, color: AyuLiquidGlass.chatListBackgroundColor(self.presentationData.theme))
+            transition.updateBackgroundColor(node: self, color: AstraLiquidGlass.chatListBackgroundColor(self.presentationData.theme))
         }
         
         self.panRecognizer?.isEnabled = !isEditing
@@ -1224,7 +1224,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     private var currentOverscrollItemExpansionTimestamp: Double?
     
     private var containerLayout: (layout: ContainerViewLayout, navigationBarHeight: CGFloat, visualNavigationHeight: CGFloat, cleanNavigationBarHeight: CGFloat, storiesInset: CGFloat)?
-    private var ayuLiquidGlassBackgroundView: AyuLiquidGlassBackgroundView?
+    private var astraLiquidGlassBackgroundView: AstraLiquidGlassBackgroundView?
     
     var contentScrollingEnded: ((ListView) -> Bool)?
     
@@ -1458,8 +1458,8 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         self.presentationData = presentationData
         
         self.backgroundColor = self.presentationData.theme.chatList.backgroundColor
-        if let ayuBackgroundView = self.ayuLiquidGlassBackgroundView, let containerLayout = self.containerLayout {
-            ayuBackgroundView.update(theme: presentationData.theme, size: containerLayout.layout.size, cardTop: containerLayout.navigationBarHeight)
+        if let astraBackgroundView = self.astraLiquidGlassBackgroundView, let containerLayout = self.containerLayout {
+            astraBackgroundView.update(theme: presentationData.theme, size: containerLayout.layout.size, cardTop: containerLayout.navigationBarHeight)
         }
         
         self.mainContainerNode.updatePresentationData(presentationData)
@@ -1620,7 +1620,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                         case let .filter(idValue, text, unread):
                             id = AnyHashable(idValue)
                             title = HorizontalTabsComponent.Tab.Title(text: text.text, entities: text.entities, enableAnimations: text.enableAnimations)
-                            if unread.value != 0 && !AyuGramSettings.current.hideFolderCounters {
+                            if unread.value != 0 && !AstraGramSettings.current.hideFolderCounters {
                                 badge = HorizontalTabsComponent.Tab.Badge(
                                     title: "\(unread.value)",
                                     isAccent: unread.hasUnmuted
@@ -2054,17 +2054,17 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         self.controller?.presentationContext.containerLayoutUpdated(childrenLayout, transition: transition)
         
         transition.updateFrame(node: self.mainContainerNode, frame: CGRect(origin: CGPoint(), size: layout.size))
-        // AyuGram Liquid Glass+ (beta): the gradient and the card behind the chat list.
-        if AyuLiquidGlass.isEnabled {
-            let ayuBackgroundView: AyuLiquidGlassBackgroundView
-            if let current = self.ayuLiquidGlassBackgroundView {
-                ayuBackgroundView = current
+        // AstraGram Liquid Glass+ (beta): the gradient and the card behind the chat list.
+        if AstraLiquidGlass.isEnabled {
+            let astraBackgroundView: AstraLiquidGlassBackgroundView
+            if let current = self.astraLiquidGlassBackgroundView {
+                astraBackgroundView = current
             } else {
-                ayuBackgroundView = AyuLiquidGlassBackgroundView(frame: CGRect())
-                self.ayuLiquidGlassBackgroundView = ayuBackgroundView
-                self.view.insertSubview(ayuBackgroundView, at: 0)
+                astraBackgroundView = AstraLiquidGlassBackgroundView(frame: CGRect())
+                self.astraLiquidGlassBackgroundView = astraBackgroundView
+                self.view.insertSubview(astraBackgroundView, at: 0)
             }
-            ayuBackgroundView.update(theme: self.presentationData.theme, size: layout.size, cardTop: navigationBarHeight)
+            astraBackgroundView.update(theme: self.presentationData.theme, size: layout.size, cardTop: navigationBarHeight)
         }
         var mainNavigationBarHeight = navigationBarHeight
         var cleanMainNavigationBarHeight = cleanNavigationBarHeight

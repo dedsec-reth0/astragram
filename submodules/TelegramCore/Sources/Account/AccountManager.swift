@@ -241,7 +241,9 @@ private var declaredEncodables: Void = {
     declareEncodable(FactCheckMessageAttribute.self, f: { FactCheckMessageAttribute(decoder: $0) })
     declareEncodable(TelegramMediaPaidContent.self, f: { TelegramMediaPaidContent(decoder: $0) })
     declareEncodable(ReportDeliveryMessageAttribute.self, f: { ReportDeliveryMessageAttribute(decoder: $0) })
-    declareEncodable(AyuDeletedMessageAttribute.self, f: { AyuDeletedMessageAttribute(decoder: $0) })
+    declareEncodable(AstraDeletedMessageAttribute.self, f: { AstraDeletedMessageAttribute(decoder: $0) })
+    // Messages marked as deleted before the app was renamed carry the attribute under its old type name.
+    declareEncodable(typeHash: persistentHash32("AyuDeletedMessageAttribute"), { AstraDeletedMessageAttribute(decoder: $0) })
     declareEncodable(PaidStarsMessageAttribute.self, f: { PaidStarsMessageAttribute(decoder: $0) })
     declareEncodable(TelegramMediaTodo.self, f: { TelegramMediaTodo(decoder: $0) })
     declareEncodable(TelegramMediaTodo.Item.self, f: { TelegramMediaTodo.Item(decoder: $0) })

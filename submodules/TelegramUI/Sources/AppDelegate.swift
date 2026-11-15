@@ -33,7 +33,7 @@ import DebugSettingsUI
 import CrashReporting
 import BackgroundTasks
 import UIKitRuntimeUtils
-import AyuGramUI
+import AstraGramUI
 import StoreKit
 import PhoneNumberFormat
 import AuthorizationUI
@@ -346,30 +346,30 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     
     private var recaptchaClientsBySiteKey: [String: Promise<RecaptchaClient>] = [:]
         
-    // AyuGram: the first-launch screen for the user's own API ID and hash.
-    private var ayuApiSetupWindow: UIWindow?
-    private var ayuBackgroundNotifier: AyuBackgroundNotifier?
-    private var ayuConnectedScene: (UIWindowScene, UIScene.ConnectionOptions)?
-    // AyuGram: the cleanup background task was registered by the first-launch screen's pass through launch.
-    private var ayuDidRegisterCleanupTask = false
+    // AstraGram: the first-launch screen for the user's own API ID and hash.
+    private var astraApiSetupWindow: UIWindow?
+    private var astraBackgroundNotifier: AstraBackgroundNotifier?
+    private var astraConnectedScene: (UIWindowScene, UIScene.ConnectionOptions)?
+    // AstraGram: the cleanup background task was registered by the first-launch screen's pass through launch.
+    private var astraDidRegisterCleanupTask = false
 
-    var ayuIsWaitingForApiCredentials: Bool {
-        return self.ayuApiSetupWindow != nil
+    var astraIsWaitingForApiCredentials: Bool {
+        return self.astraApiSetupWindow != nil
     }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        // AyuGram: nothing starts until the user has entered their API ID and hash.
-        if !BuildConfig.ayuHasApiCredentials(baseAppBundleId: Bundle.main.bundleIdentifier!) && !CommandLine.arguments.contains("--ui-test") {
+        // AstraGram: nothing starts until the user has entered their API ID and hash.
+        if !BuildConfig.astraHasApiCredentials(baseAppBundleId: Bundle.main.bundleIdentifier!) && !CommandLine.arguments.contains("--ui-test") {
             let window = UIWindow(frame: UIScreen.main.bounds)
-            window.rootViewController = AyuApiCredentialsController(baseAppBundleId: Bundle.main.bundleIdentifier!, isInitialSetup: true, completion: { [weak self] in
+            window.rootViewController = AstraApiCredentialsController(baseAppBundleId: Bundle.main.bundleIdentifier!, isInitialSetup: true, completion: { [weak self] in
                 // Only once: the launch below must not run twice.
-                guard let self, self.ayuApiSetupWindow != nil else {
+                guard let self, self.astraApiSetupWindow != nil else {
                     return
                 }
-                self.ayuApiSetupWindow?.isHidden = true
-                self.ayuApiSetupWindow = nil
+                self.astraApiSetupWindow?.isHidden = true
+                self.astraApiSetupWindow = nil
                 let _ = self.application(application, didFinishLaunchingWithOptions: launchOptions)
-                if let connectedScene = self.ayuConnectedScene {
+                if let connectedScene = self.astraConnectedScene {
                     self.attach(scene: connectedScene.0, connectionOptions: connectedScene.1)
                     if application.applicationState == .active {
                         self.handleDidBecomeActive()
@@ -379,16 +379,16 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             // Background task launch handlers can only be registered until the app has finished launching (later
             // BGTaskScheduler raises an exception), and the real launch runs after this method has returned, from
             // the completion above: they are registered now.
-            if self.ayuBackgroundNotifier == nil {
-                self.ayuBackgroundNotifier = AyuBackgroundNotifier(application: application, sharedContext: self.sharedContextPromise.get(), baseAppBundleId: Bundle.main.bundleIdentifier!)
+            if self.astraBackgroundNotifier == nil {
+                self.astraBackgroundNotifier = AstraBackgroundNotifier(application: application, sharedContext: self.sharedContextPromise.get(), baseAppBundleId: Bundle.main.bundleIdentifier!)
             }
-            if #available(iOS 13.0, *), !self.ayuDidRegisterCleanupTask {
+            if #available(iOS 13.0, *), !self.astraDidRegisterCleanupTask {
                 let _ = BGTaskScheduler.shared.register(forTaskWithIdentifier: "\(Bundle.main.bundleIdentifier!).cleanup", using: DispatchQueue.main, launchHandler: { task in
                     task.setTaskCompleted(success: true)
                 })
-                self.ayuDidRegisterCleanupTask = true
+                self.astraDidRegisterCleanupTask = true
             }
-            self.ayuApiSetupWindow = window
+            self.astraApiSetupWindow = window
             self.window = window
             return true
         }
@@ -494,20 +494,20 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         
         hostView.containerView.layer.addSublayer(MetalEngine.shared.rootLayer)
 
-        // AyuGram: "Allow screenshots" switches the app's capture protection off; streamer mode hides the whole window
+        // AstraGram: "Allow screenshots" switches the app's capture protection off; streamer mode hides the whole window
         // from screenshots, screen recording and screen sharing.
-        ayuSetScreenshotProtectionDisabled(AyuGramSettings.current.allowScreenshots)
-        // AyuGram plugins (JavaScript).
-        AyuPluginManager.shared.start()
-        // AyuGram: online updates (installed through SideStore).
-        let ayuUpdateWindow = window
+        astraSetScreenshotProtectionDisabled(AstraGramSettings.current.allowScreenshots)
+        // AstraGram plugins (JavaScript).
+        AstraPluginManager.shared.start()
+        // AstraGram: online updates (installed through SideStore).
+        let astraUpdateWindow = window
         Queue.mainQueue().after(10.0, {
-            AyuUpdateChecker.checkOnLaunch(window: ayuUpdateWindow)
+            AstraUpdateChecker.checkOnLaunch(window: astraUpdateWindow)
         })
-        // AyuGram look: the glass material and the springy presses, for the modules below the settings.
-        AyuLook.glassMaterial = AyuGramSettings.current.glassMaterial
-        AyuLook.springPresses = AyuGramSettings.current.springPresses
-        let _ = (AyuGramSettings.signal
+        // AstraGram look: the glass material and the springy presses, for the modules below the settings.
+        AstraLook.glassMaterial = AstraGramSettings.current.glassMaterial
+        AstraLook.springPresses = AstraGramSettings.current.springPresses
+        let _ = (AstraGramSettings.signal
         |> map { settings -> (Int, Bool) in
             return (settings.glassMaterial, settings.springPresses)
         }
@@ -515,11 +515,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             return lhs == rhs
         })
         |> deliverOnMainQueue).start(next: { glassMaterial, springPresses in
-            AyuLook.glassMaterial = glassMaterial
-            AyuLook.springPresses = springPresses
+            AstraLook.glassMaterial = glassMaterial
+            AstraLook.springPresses = springPresses
         })
-        let ayuWindowLayer = window.layer
-        let _ = (AyuGramSettings.signal
+        let astraWindowLayer = window.layer
+        let _ = (AstraGramSettings.signal
         |> map { settings -> (Bool, Bool) in
             return (settings.allowScreenshots, settings.streamerMode)
         }
@@ -527,8 +527,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             return lhs == rhs
         })
         |> deliverOnMainQueue).start(next: { allowScreenshots, streamerMode in
-            ayuSetScreenshotProtectionDisabled(allowScreenshots)
-            ayuSetLayerHiddenFromCapture(ayuWindowLayer, streamerMode)
+            astraSetScreenshotProtectionDisabled(allowScreenshots)
+            astraSetLayerHiddenFromCapture(astraWindowLayer, streamerMode)
         })
         // On the first start after an update, compile the pipelines that would otherwise stall their first use.
         if MetalEngine.shared.pipelineCache.isFresh {
@@ -796,10 +796,10 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         
         let isUITest = CommandLine.arguments.contains("--ui-test")
 
-        // AyuGram's UI tests pass the settings to test as base64-encoded JSON.
-        if isUITest, let index = CommandLine.arguments.firstIndex(of: "--ayu-settings"), index + 1 < CommandLine.arguments.count, let data = Data(base64Encoded: CommandLine.arguments[index + 1]) {
-            let applied = AyuGramSettings.replace(withJSON: data)
-            NSLog("[AyuTest] settings applied: \(applied)")
+        // AstraGram's UI tests pass the settings to test as base64-encoded JSON.
+        if isUITest, let index = CommandLine.arguments.firstIndex(of: "--astra-settings"), index + 1 < CommandLine.arguments.count, let data = Data(base64Encoded: CommandLine.arguments[index + 1]) {
+            let applied = AstraGramSettings.replace(withJSON: data)
+            NSLog("[AstraTest] settings applied: \(applied)")
         }
 
         let rootPath: String
@@ -1369,11 +1369,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             return .single(sharedApplicationContext)
         })
 
-        // AyuGram: notifications without push (local notifications and background app refresh).
-        if self.ayuBackgroundNotifier == nil {
-            self.ayuBackgroundNotifier = AyuBackgroundNotifier(application: application, sharedContext: self.sharedContextPromise.get(), baseAppBundleId: baseAppBundleId)
+        // AstraGram: notifications without push (local notifications and background app refresh).
+        if self.astraBackgroundNotifier == nil {
+            self.astraBackgroundNotifier = AstraBackgroundNotifier(application: application, sharedContext: self.sharedContextPromise.get(), baseAppBundleId: baseAppBundleId)
         }
-        // AyuGram: the "who sees me online" list of ghost mode is gone (ghost mode hides the online status from
+        // AstraGram: the "who sees me online" list of ghost mode is gone (ghost mode hides the online status from
         // everyone again); the Last Seen privacy it had changed is put back once.
         let _ = (self.sharedContextPromise.get()
         |> mapToSignal { sharedApplicationContext -> Signal<AccountContext?, NoError> in
@@ -1384,24 +1384,24 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         |> take(1)
         |> deliverOnMainQueue).start(next: { context in
             if let context {
-                AyuGhostOnlineExceptions.restore(context: context)
+                AstraGhostOnlineExceptions.restore(context: context)
             }
         })
 
-        // AyuGram: DEDSEC silence is applied to every logged-in account when it is switched (from the settings or the
+        // AstraGram: DEDSEC silence is applied to every logged-in account when it is switched (from the settings or the
         // home screen menu).
-        let ayuPreviousDedsecSilence = Atomic<Bool?>(value: nil)
+        let astraPreviousDedsecSilence = Atomic<Bool?>(value: nil)
         let _ = (combineLatest(self.sharedContextPromise.get()
         |> mapToSignal { sharedApplicationContext -> Signal<(primary: AccountContext?, accounts: [(AccountRecordId, AccountContext, Int32)], currentAuth: UnauthorizedAccount?), NoError> in
             return sharedApplicationContext.sharedContext.activeAccountContexts
-        }, AyuGramSettings.signal |> map { $0.dedsecSilence } |> distinctUntilChanged)
+        }, AstraGramSettings.signal |> map { $0.dedsecSilence } |> distinctUntilChanged)
         |> deliverOnMainQueue).start(next: { accountContexts, silent in
-            let previous = ayuPreviousDedsecSilence.swap(silent)
+            let previous = astraPreviousDedsecSilence.swap(silent)
             guard let previous, previous != silent else {
                 return
             }
             for (_, context, _) in accountContexts.accounts {
-                let _ = AyuDedsecSilence.apply(account: context.account, silent: silent).start()
+                let _ = AstraDedsecSilence.apply(account: context.account, silent: silent).start()
             }
         })
             
@@ -1686,12 +1686,12 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         self.resetBadge()
         
         if #available(iOS 9.1, *) {
-            self.quickActionsDisposable.set((combineLatest(self.context.get(), AyuGramSettings.signal
+            self.quickActionsDisposable.set((combineLatest(self.context.get(), AstraGramSettings.signal
             |> map { settings -> [Bool] in
                 return [settings.isGhostModeFullyEnabled, settings.dedsecSilence]
             }
             |> distinctUntilChanged)
-            |> mapToSignal { context, ayuState -> Signal<[ApplicationShortcutItem], NoError> in
+            |> mapToSignal { context, astraState -> Signal<[ApplicationShortcutItem], NoError> in
                 if let context = context {
                     let presentationData = context.context.sharedContext.currentPresentationData.with { $0 }
                     
@@ -1708,7 +1708,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                         }
                     } |> mapToSignal { otherAccountName -> Signal<[ApplicationShortcutItem], NoError> in
                         let presentationData = context.context.sharedContext.currentPresentationData.with { $0 }
-                        return .single(applicationShortcutItems(strings: presentationData.strings, otherAccountName: otherAccountName, ghostModeEnabled: ayuState[0], dedsecSilence: ayuState[1]))
+                        return .single(applicationShortcutItems(strings: presentationData.strings, otherAccountName: otherAccountName, ghostModeEnabled: astraState[0], dedsecSilence: astraState[1]))
                     }
                 } else {
                     return .single([])
@@ -1762,8 +1762,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         if #available(iOS 13.0, *) {
             let cleanupTaskId = "\(baseAppBundleId).cleanup"
             
-            // AyuGram: already registered when this launch follows the first-launch API credentials screen.
-            if !self.ayuDidRegisterCleanupTask {
+            // AstraGram: already registered when this launch follows the first-launch API credentials screen.
+            if !self.astraDidRegisterCleanupTask {
             BGTaskScheduler.shared.register(forTaskWithIdentifier: cleanupTaskId, using: DispatchQueue.main) { task in
                 Logger.shared.log("App \(self.episodeId)", "Executing cleanup task")
                 
@@ -1918,8 +1918,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     }
 
     func attach(scene: UIWindowScene, connectionOptions: UIScene.ConnectionOptions) {
-        self.ayuConnectedScene = (scene, connectionOptions)
-        if let setupWindow = self.ayuApiSetupWindow {
+        self.astraConnectedScene = (scene, connectionOptions)
+        if let setupWindow = self.astraApiSetupWindow {
             setupWindow.windowScene = scene
             setupWindow.makeKeyAndVisible()
             return
@@ -3034,7 +3034,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         return true
     }
     
-    private func ayuShowToast(context: AccountContext, text: String) {
+    private func astraShowToast(context: AccountContext, text: String) {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         Queue.mainQueue().after(0.6, {
             context.sharedContext.presentGlobalController(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: 3.0, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), nil)
@@ -3066,15 +3066,15 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                                     context.switchAccount()
                                 case .appIcon:
                                     context.openAppIcon()
-                                case .ayuGhostMode:
-                                    let enabled = !AyuGramSettings.current.isGhostModeFullyEnabled
-                                    AyuGramSettings.update { $0.setGhostMode(enabled) }
-                                    self.ayuShowToast(context: context.context, text: enabled ? "👻 " + AyuStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings).ghostToastOn : AyuStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings).ghostToastOff)
-                                case .ayuDedsecSilence:
-                                    let silent = !AyuGramSettings.current.dedsecSilence
-                                    AyuGramSettings.update { $0.dedsecSilence = silent }
-                                    let ayuStrings = AyuStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings)
-                                    self.ayuShowToast(context: context.context, text: silent ? ayuStrings.dedsecToastOn : ayuStrings.dedsecToastOff)
+                                case .astraGhostMode:
+                                    let enabled = !AstraGramSettings.current.isGhostModeFullyEnabled
+                                    AstraGramSettings.update { $0.setGhostMode(enabled) }
+                                    self.astraShowToast(context: context.context, text: enabled ? "👻 " + AstraStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings).ghostToastOn : AstraStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings).ghostToastOff)
+                                case .astraDedsecSilence:
+                                    let silent = !AstraGramSettings.current.dedsecSilence
+                                    AstraGramSettings.update { $0.dedsecSilence = silent }
+                                    let astraStrings = AstraStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings)
+                                    self.astraShowToast(context: context.context, text: silent ? astraStrings.dedsecToastOn : astraStrings.dedsecToastOff)
                             }
                         }
                     }

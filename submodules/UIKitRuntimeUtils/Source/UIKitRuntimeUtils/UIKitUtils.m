@@ -296,18 +296,18 @@ NSObject * _Nullable makeColorMatrixFilter() {
 
 static const void *layerDisableScreenshotsKey = &layerDisableScreenshotsKey;
 
-// AyuGram: "Allow screenshots" turns the app's capture protection off; streamer mode applies it to the whole window.
-static bool ayuScreenshotProtectionDisabled = false;
+// AstraGram: "Allow screenshots" turns the app's capture protection off; streamer mode applies it to the whole window.
+static bool astraScreenshotProtectionDisabled = false;
 
-void ayuSetScreenshotProtectionDisabled(bool disabled) {
-    ayuScreenshotProtectionDisabled = disabled;
+void astraSetScreenshotProtectionDisabled(bool disabled) {
+    astraScreenshotProtectionDisabled = disabled;
 }
 
 void setLayerDisableScreenshots(CALayer * _Nonnull layer, bool disableScreenshots) {
-    ayuSetLayerHiddenFromCapture(layer, disableScreenshots && !ayuScreenshotProtectionDisabled);
+    astraSetLayerHiddenFromCapture(layer, disableScreenshots && !astraScreenshotProtectionDisabled);
 }
 
-void ayuSetLayerHiddenFromCapture(CALayer * _Nonnull layer, bool disableScreenshots) {
+void astraSetLayerHiddenFromCapture(CALayer * _Nonnull layer, bool disableScreenshots) {
     static UITextField *textField = nil;
     static UIView *secureView = nil;
     static dispatch_once_t onceToken;

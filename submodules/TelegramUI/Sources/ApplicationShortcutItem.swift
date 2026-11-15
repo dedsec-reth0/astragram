@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 import TelegramPresentationData
 import DeviceAccess
-import AyuGramUI
+import AstraGramUI
 
 enum ApplicationShortcutItemType: String {
     case search
@@ -11,8 +11,8 @@ enum ApplicationShortcutItemType: String {
     case savedMessages
     case account
     case appIcon
-    case ayuGhostMode
-    case ayuDedsecSilence
+    case astraGhostMode
+    case astraDedsecSilence
 }
 
 struct ApplicationShortcutItem: Equatable {
@@ -38,21 +38,21 @@ extension ApplicationShortcutItem {
                 icon = UIApplicationShortcutIcon(templateImageName: "Shortcuts/Account")
             case .appIcon:
                 icon = UIApplicationShortcutIcon(templateImageName: "Shortcuts/AppIcon")
-            case .ayuGhostMode:
+            case .astraGhostMode:
                 icon = UIApplicationShortcutIcon(systemImageName: "eye.slash")
-            case .ayuDedsecSilence:
+            case .astraDedsecSilence:
                 icon = UIApplicationShortcutIcon(systemImageName: "bell.slash")
         }
         return UIApplicationShortcutItem(type: self.type.rawValue, localizedTitle: self.title, localizedSubtitle: self.subtitle, icon: icon, userInfo: nil)
     }
 }
 
-/// AyuGram: the home screen menu (iOS shows four items): ghost mode and DEDSEC silence switches first.
+/// AstraGram: the home screen menu (iOS shows four items): ghost mode and DEDSEC silence switches first.
 func applicationShortcutItems(strings: PresentationStrings, otherAccountName: String?, ghostModeEnabled: Bool, dedsecSilence: Bool) -> [ApplicationShortcutItem] {
-    let ayuStrings = AyuStrings(strings)
+    let astraStrings = AstraStrings(strings)
     var items: [ApplicationShortcutItem] = [
-        ApplicationShortcutItem(type: .ayuGhostMode, title: ghostModeEnabled ? ayuStrings.shortcutGhostOff : ayuStrings.shortcutGhostOn, subtitle: ghostModeEnabled ? "👻 " + ayuStrings.shortcutStateOn : ayuStrings.shortcutStateOff),
-        ApplicationShortcutItem(type: .ayuDedsecSilence, title: dedsecSilence ? ayuStrings.shortcutDedsecOff : ayuStrings.shortcutDedsecOn, subtitle: dedsecSilence ? ayuStrings.shortcutDedsecSubtitleOn : ayuStrings.shortcutDedsecSubtitleOff),
+        ApplicationShortcutItem(type: .astraGhostMode, title: ghostModeEnabled ? astraStrings.shortcutGhostOff : astraStrings.shortcutGhostOn, subtitle: ghostModeEnabled ? "👻 " + astraStrings.shortcutStateOn : astraStrings.shortcutStateOff),
+        ApplicationShortcutItem(type: .astraDedsecSilence, title: dedsecSilence ? astraStrings.shortcutDedsecOff : astraStrings.shortcutDedsecOn, subtitle: dedsecSilence ? astraStrings.shortcutDedsecSubtitleOn : astraStrings.shortcutDedsecSubtitleOff),
         ApplicationShortcutItem(type: .search, title: strings.Common_Search, subtitle: nil)
     ]
     if let otherAccountName = otherAccountName {

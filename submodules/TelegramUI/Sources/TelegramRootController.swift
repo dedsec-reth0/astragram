@@ -82,9 +82,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     
     /// The Contacts screen `openContacts()` pushed; `getContactsController()` returns it while it is open.
     private weak var contactsController: ContactsController?
-    private var ayuContactsTabController: ContactsController?
-    private var ayuTabsDisposable: Disposable?
-    private var ayuShowNewsTab = false
+    private var astraContactsTabController: ContactsController?
+    private var astraTabsDisposable: Disposable?
+    private var astraShowNewsTab = false
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
@@ -153,7 +153,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     
     deinit {
         self.permissionsDisposable?.dispose()
-        self.ayuTabsDisposable?.dispose()
+        self.astraTabsDisposable?.dispose()
         self.presentationDataDisposable?.dispose()
         self.applicationInFocusDisposable?.dispose()
         self.storyUploadEventsDisposable?.dispose()
@@ -219,7 +219,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         
         var controllers: [ViewController] = []
         
-        // AyuGram: the Contacts and the Calls tabs follow their own switches (AyuGram settings, "Look"), so the tab bar
+        // AstraGram: the Contacts and the Calls tabs follow their own switches (AstraGram settings, "Look"), so the tab bar
         // can be Contacts / Calls / Chats / Settings. Both are created even when hidden: `updateRootControllers`
         // shows and hides them.
         let contactsTabController = ContactsController(context: self.context)
@@ -227,13 +227,13 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         contactsTabController.tabBarItem.title = self.presentationData.strings.Contacts_Title
         contactsTabController.tabBarItem.image = contactsIcon
         contactsTabController.tabBarItem.selectedImage = contactsIcon
-        self.ayuContactsTabController = contactsTabController
-        self.ayuShowNewsTab = showNewsTab
-        let ayuSettings = AyuGramSettings.current
-        if ayuSettings.contactsTab {
+        self.astraContactsTabController = contactsTabController
+        self.astraShowNewsTab = showNewsTab
+        let astraSettings = AstraGramSettings.current
+        if astraSettings.contactsTab {
             controllers.append(contactsTabController)
         }
-        if ayuSettings.callsTab {
+        if astraSettings.callsTab {
             controllers.append(callListController)
         }
         if showNewsTab {
@@ -270,17 +270,17 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.rootTabController = tabBarController
         self.pushViewController(tabBarController, animated: false)
 
-        // AyuGram: the tab bar follows the Contacts and the Calls switches at once.
-        if self.ayuTabsDisposable == nil {
+        // AstraGram: the tab bar follows the Contacts and the Calls switches at once.
+        if self.astraTabsDisposable == nil {
             let accountManager = self.context.sharedContext.accountManager
             var isFirst = true
-            self.ayuTabsDisposable = (AyuGramSettings.signal
+            self.astraTabsDisposable = (AstraGramSettings.signal
             |> map { settings -> Int32 in
                 return (settings.contactsTab ? 1 : 0) | (settings.callsTab ? 2 : 0)
             }
             |> distinctUntilChanged
             |> deliverOnMainQueue).start(next: { [weak self] value in
-                // Telegram's own "Show Calls Tab" switch mirrors the AyuGram one.
+                // Telegram's own "Show Calls Tab" switch mirrors the AstraGram one.
                 let showCallsTab = (value & 2) != 0
                 let _ = updateCallListSettingsInteractively(accountManager: accountManager, { settings in
                     var settings = settings
@@ -294,7 +294,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
                 guard let self else {
                     return
                 }
-                self.updateRootControllers(showCallsTab: showCallsTab, showNewsTab: self.ayuShowNewsTab)
+                self.updateRootControllers(showCallsTab: showCallsTab, showNewsTab: self.astraShowNewsTab)
             })
         }
     }
@@ -304,12 +304,12 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             return
         }
         var controllers: [ViewController] = []
-        self.ayuShowNewsTab = showNewsTab
-        let ayuSettings = AyuGramSettings.current
-        if ayuSettings.contactsTab, let ayuContactsTabController = self.ayuContactsTabController {
-            controllers.append(ayuContactsTabController)
+        self.astraShowNewsTab = showNewsTab
+        let astraSettings = AstraGramSettings.current
+        if astraSettings.contactsTab, let astraContactsTabController = self.astraContactsTabController {
+            controllers.append(astraContactsTabController)
         }
-        if ayuSettings.callsTab, let callListController = self.callListController {
+        if astraSettings.callsTab, let callListController = self.callListController {
             controllers.append(callListController)
         }
         if showNewsTab, let newsController = self.newsController {

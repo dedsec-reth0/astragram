@@ -151,10 +151,10 @@ import ChatAgeRestrictionAlertController
 import TextProcessingScreen
 import ChatMediaEditorScreen
 import OpenUserGeneratedUrl
-import AyuGramUI
+import AstraGramUI
 
 /// Set while a sticker or GIF the user confirmed is being sent, so that the confirmation is not asked again.
-private var ayuStickerSendConfirmed = false
+private var astraStickerSendConfirmed = false
 
 public final class ChatControllerOverlayPresentationData {
     public let expandData: (ASDisplayNode?, () -> Void)
@@ -2478,18 +2478,18 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 return false
             }
 
-            // AyuGram: ask before sending a sticker.
-            if AyuGramSettings.current.confirmStickerSend && !ayuStickerSendConfirmed {
-                let ayuStrings = AyuStrings(strongSelf.presentationData.strings)
-                strongSelf.present(textAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, title: nil, text: ayuStrings.confirmStickerQuestion, actions: [
+            // AstraGram: ask before sending a sticker.
+            if AstraGramSettings.current.confirmStickerSend && !astraStickerSendConfirmed {
+                let astraStrings = AstraStrings(strongSelf.presentationData.strings)
+                strongSelf.present(textAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, title: nil, text: astraStrings.confirmStickerQuestion, actions: [
                     TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_Cancel, action: {}),
-                    TextAlertAction(type: .defaultAction, title: ayuStrings.send, action: { [weak strongSelf] in
+                    TextAlertAction(type: .defaultAction, title: astraStrings.send, action: { [weak strongSelf] in
                         guard let strongSelf, let controllerInteraction = strongSelf.controllerInteraction else {
                             return
                         }
-                        ayuStickerSendConfirmed = true
+                        astraStickerSendConfirmed = true
                         let _ = controllerInteraction.sendSticker(fileReference, silentPosting, schedule, query, clearInput, nil, nil, nil, bubbleUpEmojiOrStickersets)
-                        ayuStickerSendConfirmed = false
+                        astraStickerSendConfirmed = false
                     })
                 ]), in: .window(.root))
                 return false
@@ -2770,18 +2770,18 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
         }, sendGif: { [weak self] fileReference, sourceView, sourceRect, silentPosting, schedule in
             if let strongSelf = self {
-                // AyuGram: ask before sending a GIF.
-                if AyuGramSettings.current.confirmStickerSend && !ayuStickerSendConfirmed {
-                    let ayuStrings = AyuStrings(strongSelf.presentationData.strings)
-                    strongSelf.present(textAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, title: nil, text: ayuStrings.confirmGifQuestion, actions: [
+                // AstraGram: ask before sending a GIF.
+                if AstraGramSettings.current.confirmStickerSend && !astraStickerSendConfirmed {
+                    let astraStrings = AstraStrings(strongSelf.presentationData.strings)
+                    strongSelf.present(textAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, title: nil, text: astraStrings.confirmGifQuestion, actions: [
                         TextAlertAction(type: .genericAction, title: strongSelf.presentationData.strings.Common_Cancel, action: {}),
-                        TextAlertAction(type: .defaultAction, title: ayuStrings.send, action: { [weak strongSelf] in
+                        TextAlertAction(type: .defaultAction, title: astraStrings.send, action: { [weak strongSelf] in
                             guard let strongSelf, let controllerInteraction = strongSelf.controllerInteraction else {
                                 return
                             }
-                            ayuStickerSendConfirmed = true
+                            astraStickerSendConfirmed = true
                             let _ = controllerInteraction.sendGif(fileReference, sourceView, sourceRect, silentPosting, schedule)
-                            ayuStickerSendConfirmed = false
+                            astraStickerSendConfirmed = false
                         })
                     ]), in: .window(.root))
                     return false
@@ -9251,10 +9251,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
         
     func transformEnqueueMessages(_ messages: [EnqueueMessage], silentPosting: Bool, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false) -> [EnqueueMessage] {
-        // AyuGram ghost mode: "Send via schedule" sends a message as scheduled a few seconds ahead, so sending it does
+        // AstraGram ghost mode: "Send via schedule" sends a message as scheduled a few seconds ahead, so sending it does
         // not show the account online.
         var scheduleTime = scheduleTime
-        if scheduleTime == nil, !postpone, AyuGramSettings.current.sendViaSchedule, AyuGramSettings.current.hideOnlineStatus, case let .peer(peerId) = self.chatLocation, peerId.namespace != Namespaces.Peer.SecretChat, peerId != self.context.account.peerId {
+        if scheduleTime == nil, !postpone, AstraGramSettings.current.sendViaSchedule, AstraGramSettings.current.hideOnlineStatus, case let .peer(peerId) = self.chatLocation, peerId.namespace != Namespaces.Peer.SecretChat, peerId != self.context.account.peerId {
             var isScheduledChat = false
             if case .scheduledMessages = self.presentationInterfaceState.subject {
                 isScheduledChat = true

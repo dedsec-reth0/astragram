@@ -22,11 +22,11 @@ private final class AccountPresenceManagerImpl {
         self.queue = queue
         self.network = network
         
-        // AyuGram ghost mode: with "hide online status" on, the account is always reported offline (turning it on
+        // AstraGram ghost mode: with "hide online status" on, the account is always reported offline (turning it on
         // while online sends `updateStatus(offline: true)` at once).
         let effectiveShouldKeepOnlinePresence = combineLatest(
             shouldKeepOnlinePresence,
-            AyuGramSettings.signal
+            AstraGramSettings.signal
             |> map { settings -> Bool in
                 return settings.hideOnlineStatus
             }

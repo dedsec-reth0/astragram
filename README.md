@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="ayugram/assets/hero.webp" alt="AstraGram для iOS" width="100%">
+  <img src="astragram/assets/hero.webp" alt="AstraGram для iOS" width="100%">
 </p>
 
 <h1 align="center">AstraGram для iOS</h1>
@@ -10,9 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/dedsec-reth0/ayugram/releases/latest"><img alt="Версия" src="https://img.shields.io/github/v/release/dedsec-reth0/ayugram?style=flat-square&label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=7C3AED&labelColor=1E1B4B"></a>
-  <a href="https://github.com/dedsec-reth0/ayugram/actions/workflows/build.yml"><img alt="Сборка" src="https://img.shields.io/github/actions/workflow/status/dedsec-reth0/ayugram/build.yml?branch=master&style=flat-square&label=%D1%81%D0%B1%D0%BE%D1%80%D0%BA%D0%B0&labelColor=1E1B4B"></a>
-  <a href="https://github.com/dedsec-reth0/ayugram/releases"><img alt="Загрузки" src="https://img.shields.io/github/downloads/dedsec-reth0/ayugram/total?style=flat-square&label=%D0%B7%D0%B0%D0%B3%D1%80%D1%83%D0%B7%D0%BA%D0%B8&color=7C3AED&labelColor=1E1B4B"></a>
+  <a href="https://github.com/dedsec-reth0/astragram/releases/latest"><img alt="Версия" src="https://img.shields.io/github/v/release/dedsec-reth0/astragram?style=flat-square&label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=7C3AED&labelColor=1E1B4B"></a>
+  <a href="https://github.com/dedsec-reth0/astragram/actions/workflows/build.yml"><img alt="Сборка" src="https://img.shields.io/github/actions/workflow/status/dedsec-reth0/astragram/build.yml?branch=master&style=flat-square&label=%D1%81%D0%B1%D0%BE%D1%80%D0%BA%D0%B0&labelColor=1E1B4B"></a>
+  <a href="https://github.com/dedsec-reth0/astragram/releases"><img alt="Загрузки" src="https://img.shields.io/github/downloads/dedsec-reth0/astragram/total?style=flat-square&label=%D0%B7%D0%B0%D0%B3%D1%80%D1%83%D0%B7%D0%BA%D0%B8&color=7C3AED&labelColor=1E1B4B"></a>
   <img alt="iOS 15+" src="https://img.shields.io/badge/iOS-15%2B-7C3AED?style=flat-square&labelColor=1E1B4B">
 </p>
 
@@ -29,8 +29,7 @@
 
 > [!NOTE]
 > Проект в разработке. Сборки выходят часто и проверяются автоматически (сборка, целостность IPA), но не на всех
-> устройствах и версиях iOS. Это неофициальный клиент: он не связан ни с Telegram, ни с авторами AyuGram для
-> Android и компьютеров.
+> устройствах и версиях iOS. Это неофициальный клиент: он не связан с Telegram.
 
 ## Установка
 
@@ -40,13 +39,13 @@
 2. Вставьте адрес источника:
 
    ```
-   https://github.com/dedsec-reth0/ayugram/releases/download/sidestore-source/source.json
+   https://github.com/dedsec-reth0/astragram/releases/download/sidestore-source/source.json
    ```
 
 3. Откройте **AstraGram** в списке и нажмите **Free**. AltStore подпишет приложение вашим Apple ID.
 4. Обновления приходят туда же: когда выходит новая сборка, в AltStore появляется кнопка **Update**.
 
-Можно поставить и вручную: скачайте IPA со страницы [последнего релиза](https://github.com/dedsec-reth0/ayugram/releases/latest)
+Можно поставить и вручную: скачайте IPA со страницы [последнего релиза](https://github.com/dedsec-reth0/astragram/releases/latest)
 и откройте его в AltStore через **My Apps** → **+**.
 
 | Файл | Для кого | App ID |
@@ -61,7 +60,7 @@
 
 Поставить любую сборку можно и вручную:
 
-1. Откройте [список релизов](https://github.com/dedsec-reth0/ayugram/releases) и выберите нужную сборку.
+1. Откройте [список релизов](https://github.com/dedsec-reth0/astragram/releases) и выберите нужную сборку.
 2. Скачайте её IPA.
 3. В AltStore: **My Apps** → **+** → выберите файл. При обновлении данные и вход сохраняются; откат на прежнюю сборку на устройстве не проверялся.
 
@@ -133,7 +132,7 @@
 **AI и плагины**
 
 - AI через любой OpenAI-совместимый API со своим ключом: перевод, пересказ чата, ответ, расшифровка голосовых, текст с фото
-- плагины на JavaScript: [как писать](ayugram/plugins/README.md), [примеры](ayugram/plugins/examples)
+- плагины на JavaScript: [как писать](astragram/plugins/README.md), [примеры](astragram/plugins/examples)
 
 </td>
 <td valign="top">
@@ -167,7 +166,7 @@
 Сборка идёт на GitHub Actions: каждый push в `master` запускает [Build AstraGram](.github/workflows/build.yml), а по
 окончании релиз и источник AltStore обновляются сами.
 
-- [ayugram/INSTALL.md](ayugram/INSTALL.md) — как устроена сборка и публикация;
+- [astragram/INSTALL.md](astragram/INSTALL.md) — как устроена сборка и публикация;
 - [docs/telegram-ios-build.md](docs/telegram-ios-build.md) — исходная инструкция Telegram по сборке в Xcode.
 
 ## Лицензия

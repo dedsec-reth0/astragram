@@ -52,7 +52,7 @@ open class HighlightTrackingButtonNode: ASButtonNode {
         if !self.internalHighlighted {
             self.internalHighlighted = true
             self.highligthedChanged(true)
-            AyuLook.press(self.layer, down: true)
+            AstraLook.press(self.layer, down: true)
         }
         
         return super.beginTracking(with: touch, with: event)
@@ -62,7 +62,7 @@ open class HighlightTrackingButtonNode: ASButtonNode {
         if self.internalHighlighted {
             self.internalHighlighted = false
             self.highligthedChanged(false)
-            AyuLook.press(self.layer, down: false)
+            AstraLook.press(self.layer, down: false)
         }
         
         super.endTracking(with: touch, with: event)
@@ -72,7 +72,7 @@ open class HighlightTrackingButtonNode: ASButtonNode {
         if self.internalHighlighted {
             self.internalHighlighted = false
             self.highligthedChanged(false)
-            AyuLook.press(self.layer, down: false)
+            AstraLook.press(self.layer, down: false)
         }
         
         super.cancelTracking(with: event)
@@ -84,7 +84,7 @@ open class HighlightTrackingButtonNode: ASButtonNode {
         if self.internalHighlighted {
             self.internalHighlighted = false
             self.highligthedChanged(false)
-            AyuLook.press(self.layer, down: false)
+            AstraLook.press(self.layer, down: false)
         }
     }
 }

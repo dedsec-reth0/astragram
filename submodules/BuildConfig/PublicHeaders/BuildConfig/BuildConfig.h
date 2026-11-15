@@ -11,10 +11,10 @@
 
 - (instancetype _Nonnull)initWithBaseAppBundleId:(NSString * _Nonnull)baseAppBundleId;
 
-/// AyuGram: whether the user has entered their API ID and hash.
-+ (bool)ayuHasApiCredentialsWithBaseAppBundleId:(NSString * _Nonnull)baseAppBundleId NS_SWIFT_NAME(ayuHasApiCredentials(baseAppBundleId:));
-/// AyuGram: stores the API ID and hash the user entered. Returns false when they are not valid.
-+ (bool)ayuStoreApiId:(int32_t)apiId apiHash:(NSString * _Nonnull)apiHash baseAppBundleId:(NSString * _Nonnull)baseAppBundleId NS_SWIFT_NAME(ayuStoreApiCredentials(apiId:apiHash:baseAppBundleId:));
+/// AstraGram: whether the user has entered their API ID and hash.
++ (bool)astraHasApiCredentialsWithBaseAppBundleId:(NSString * _Nonnull)baseAppBundleId NS_SWIFT_NAME(astraHasApiCredentials(baseAppBundleId:));
+/// AstraGram: stores the API ID and hash the user entered. Returns false when they are not valid.
++ (bool)astraStoreApiId:(int32_t)apiId apiHash:(NSString * _Nonnull)apiHash baseAppBundleId:(NSString * _Nonnull)baseAppBundleId NS_SWIFT_NAME(astraStoreApiCredentials(apiId:apiHash:baseAppBundleId:));
 
 @property (nonatomic, readonly) int32_t apiId;
 @property (nonatomic, strong, readonly) NSString * _Nonnull apiHash;

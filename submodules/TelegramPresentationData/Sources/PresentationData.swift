@@ -395,10 +395,10 @@ public func currentPresentationDataAndSettings(accountManager: AccountManager<Te
         
         let contactSettings: ContactSynchronizationSettings = internalData.contactSynchronizationSettings?.get(ContactSynchronizationSettings.self) ?? ContactSynchronizationSettings.defaultSettings
         
-        // AyuGram "Monochrome" replaces the chosen theme.
-        if AyuGramSettings.current.monochrome {
+        // AstraGram "Monochrome" replaces the chosen theme.
+        if AstraGramSettings.current.monochrome {
             let autoNightModeTriggered = automaticThemeShouldSwitchNow(AutomaticThemeSwitchParameters(settings: themeSettings.automaticThemeSwitchSetting), systemUserInterfaceStyle: systemUserInterfaceStyle)
-            let presentationData = ayuMonochromePresentationData(mediaBox: accountManager.mediaBox, themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered, localizationSettings: localizationSettings, nameDisplayOrder: contactSettings.nameDisplayOrder)
+            let presentationData = astraMonochromePresentationData(mediaBox: accountManager.mediaBox, themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered, localizationSettings: localizationSettings, nameDisplayOrder: contactSettings.nameDisplayOrder)
             return InitialPresentationDataAndSettings(presentationData: presentationData, automaticMediaDownloadSettings: automaticMediaDownloadSettings, autodownloadSettings: autodownloadSettings, callListSettings: callListSettings, inAppNotificationSettings: inAppNotificationSettings, mediaInputSettings: mediaInputSettings, mediaDisplaySettings: mediaDisplaySettings, stickerSettings: stickerSettings, chatSettings: chatSettings, experimentalUISettings: experimentalUISettings)
         }
         
@@ -748,8 +748,8 @@ public func chatServiceBackgroundColor(wallpaper: TelegramWallpaper, mediaBox: M
 }
 
 public func updatedPresentationData(accountManager: AccountManager<TelegramAccountManagerTypes>, applicationInForeground: Signal<Bool, NoError>, systemUserInterfaceStyle: Signal<WindowUserInterfaceStyle, NoError>) -> Signal<PresentationData, NoError> {
-    return combineLatest(accountManager.sharedData(keys: [SharedDataKeys.localizationSettings, ApplicationSpecificSharedDataKeys.presentationThemeSettings, ApplicationSpecificSharedDataKeys.contactSynchronizationSettings]), systemUserInterfaceStyle, AyuGramSettings.signal |> map { $0.monochrome } |> distinctUntilChanged)
-    |> mapToSignal { sharedData, systemUserInterfaceStyle, ayuMonochrome -> Signal<PresentationData, NoError> in
+    return combineLatest(accountManager.sharedData(keys: [SharedDataKeys.localizationSettings, ApplicationSpecificSharedDataKeys.presentationThemeSettings, ApplicationSpecificSharedDataKeys.contactSynchronizationSettings]), systemUserInterfaceStyle, AstraGramSettings.signal |> map { $0.monochrome } |> distinctUntilChanged)
+    |> mapToSignal { sharedData, systemUserInterfaceStyle, astraMonochrome -> Signal<PresentationData, NoError> in
         let themeSettings: PresentationThemeSettings
         if let current = sharedData.entries[ApplicationSpecificSharedDataKeys.presentationThemeSettings]?.get(PresentationThemeSettings.self) {
             themeSettings = current
@@ -759,8 +759,8 @@ public func updatedPresentationData(accountManager: AccountManager<TelegramAccou
         
         let contactSettings: ContactSynchronizationSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.contactSynchronizationSettings]?.get(ContactSynchronizationSettings.self) ?? ContactSynchronizationSettings.defaultSettings
         
-        // AyuGram "Monochrome" replaces the chosen theme.
-        if ayuMonochrome {
+        // AstraGram "Monochrome" replaces the chosen theme.
+        if astraMonochrome {
             return applicationInForeground
             |> mapToSignal { inForeground -> Signal<PresentationData, NoError> in
                 if inForeground {
@@ -768,7 +768,7 @@ public func updatedPresentationData(accountManager: AccountManager<TelegramAccou
                     |> distinctUntilChanged
                     |> map { autoNightModeTriggered in
                         let localizationSettings = sharedData.entries[SharedDataKeys.localizationSettings]?.get(LocalizationSettings.self)
-                        return ayuMonochromePresentationData(mediaBox: accountManager.mediaBox, themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered, localizationSettings: localizationSettings, nameDisplayOrder: contactSettings.nameDisplayOrder)
+                        return astraMonochromePresentationData(mediaBox: accountManager.mediaBox, themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered, localizationSettings: localizationSettings, nameDisplayOrder: contactSettings.nameDisplayOrder)
                     }
                 } else {
                     return .complete()
@@ -923,12 +923,12 @@ private func bubblelessPresentationData(mediaBox: MediaBox, themeSettings: Prese
     return PresentationData(strings: stringsValue, theme: theme, autoNightModeTriggered: autoNightModeTriggered, chatWallpaper: bubblelessChatWallpaper(theme: theme), chatFontSize: chatFontSize, chatBubbleCorners: chatBubbleCorners, listsFontSize: listsFontSize, dateTimeFormat: dateTimeFormat, nameDisplayOrder: nameDisplayOrder, nameSortOrder: nameSortOrder, reduceMotion: themeSettings.reduceMotion, largeEmoji: themeSettings.largeEmoji)
 }
 
-// AyuGram "Monochrome": the presentation data with the monochrome theme on its plain black or white page, whatever
+// AstraGram "Monochrome": the presentation data with the monochrome theme on its plain black or white page, whatever
 // theme is chosen. Strings, formats, font sizes and corners as usual.
-private func ayuMonochromePresentationData(mediaBox: MediaBox, themeSettings: PresentationThemeSettings, autoNightModeTriggered: Bool, localizationSettings: LocalizationSettings?, nameDisplayOrder: PresentationPersonNameOrder) -> PresentationData {
-    let dark = ayuMonochromeIsDark(themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered)
+private func astraMonochromePresentationData(mediaBox: MediaBox, themeSettings: PresentationThemeSettings, autoNightModeTriggered: Bool, localizationSettings: LocalizationSettings?, nameDisplayOrder: PresentationPersonNameOrder) -> PresentationData {
+    let dark = astraMonochromeIsDark(themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered)
     let bubbleMode = themeSettings.chatBubbleSettings.bubbleMode
-    let theme = makeAyuMonochromePresentationTheme(dark: dark, bubbleMode: bubbleMode)
+    let theme = makeAstraMonochromePresentationTheme(dark: dark, bubbleMode: bubbleMode)
     
     let dateTimeFormat = currentDateTimeFormat()
     let stringsValue: PresentationStrings

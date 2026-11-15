@@ -212,8 +212,8 @@ private func validatePeerReadState(network: Network, postbox: Postbox, stateMana
                         case let .idBased(localMaxIncomingReadId, _, _, _, _):
                             if case let .idBased(updatedMaxIncomingReadId, _, _, updatedCount, updatedMarkedUnread) = readState {
                                 if localReadMarkIsAheadOfServer(localMaxIncomingReadId: localMaxIncomingReadId, serverMaxIncomingReadId: updatedMaxIncomingReadId, serverCount: updatedCount, serverMarkedUnread: updatedMarkedUnread) {
-                                    if AyuGramSettings.current.hideReadReceipts {
-                                        // AyuGram ghost mode: the server stays behind because read receipts are not
+                                    if AstraGramSettings.current.hideReadReceipts {
+                                        // AstraGram ghost mode: the server stays behind because read receipts are not
                                         // sent. Keep the local mark and confirm, instead of retrying forever.
                                         transaction.confirmSynchronizedIncomingReadState(peerId)
                                         return nil
@@ -258,9 +258,9 @@ private func validatePeerReadState(network: Network, postbox: Postbox, stateMana
 }
 
 private func pushPeerReadState(network: Network, postbox: Postbox, stateManager: AccountStateManager, peerId: PeerId, readState: PeerReadState) -> Signal<PeerReadState, PeerReadStateValidationError> {
-    // AyuGram ghost mode: the read state stays local; the operation is confirmed as if it had been pushed.
+    // AstraGram ghost mode: the read state stays local; the operation is confirmed as if it had been pushed.
     // "Mark as unread" is not a read receipt and is still synchronized.
-    if !AyuGhostMode.mayPushReadState(peerId: peerId) {
+    if !AstraGhostMode.mayPushReadState(peerId: peerId) {
         if peerId.namespace != Namespaces.Peer.SecretChat, case let .idBased(_, _, _, _, markedUnread) = readState, markedUnread {
             return inputPeer(postbox: postbox, peerId: peerId)
             |> mapToSignal { inputPeer -> Signal<PeerReadState, PeerReadStateValidationError> in

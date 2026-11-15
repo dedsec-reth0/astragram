@@ -4,12 +4,12 @@ import Display
 import AppBundle
 import TelegramCore
 
-/// AyuGram Monochrome: the settings icons are drawn once, so they follow the switch after the app restarts.
-private let ayuMonochromeSettingsIcons: Bool = AyuGramSettings.current.monochrome
+/// AstraGram Monochrome: the settings icons are drawn once, so they follow the switch after the app restarts.
+private let astraMonochromeSettingsIcons: Bool = AstraGramSettings.current.monochrome
 
-/// AyuGram Monochrome: an icon drawn in color, with its colors taken away.
-private func ayuMonochromeSettingsIcon(_ image: UIImage?) -> UIImage? {
-    guard ayuMonochromeSettingsIcons, let image, let cgImage = image.cgImage else {
+/// AstraGram Monochrome: an icon drawn in color, with its colors taken away.
+private func astraMonochromeSettingsIcon(_ image: UIImage?) -> UIImage? {
+    guard astraMonochromeSettingsIcons, let image, let cgImage = image.cgImage else {
         return image
     }
     let result = generateImage(image.size, contextGenerator: { size, context in
@@ -30,7 +30,7 @@ private let gradientImage = UIImage(bundleImageName: "Item List/Icons/Gradient")
 private let backdropImage = UIImage(bundleImageName: "Item List/Icons/Backdrop")
 public func renderSettingsIcon(name: String, scaleFactor: CGFloat = 1.0, backgroundColors rawBackgroundColors: [UIColor]? = nil) -> UIImage? {
     var backgroundColors = rawBackgroundColors
-    if ayuMonochromeSettingsIcons, let rawBackgroundColors {
+    if astraMonochromeSettingsIcons, let rawBackgroundColors {
         backgroundColors = rawBackgroundColors.map { _ in UIColor(rgb: 0x2e2e2e) }
     }
     return generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
@@ -96,7 +96,7 @@ public func renderSettingsIcon(name: String, scaleFactor: CGFloat = 1.0, backgro
 }
 
 public func renderAttachAppIcon(iconImage: UIImage?) -> UIImage? {
-    return ayuMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
+    return astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)
         context.clear(bounds)
                 
@@ -186,7 +186,7 @@ public struct PresentationResourcesSettings {
     public static let archivedSticker = renderSettingsIcon(name: "Item List/Icons/ArchivedSticker", backgroundColors: [colorGreen])
     public static let trendingSticker = renderSettingsIcon(name: "Item List/Icons/TrendingSticker", backgroundColors: [colorOrange])
     public static let effects = renderSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorLightBlue])
-    public static let ayuGram = renderSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorViolet])
+    public static let astraGram = renderSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorViolet])
     public static let photosBlue = renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorBlue])
     public static let clock = renderSettingsIcon(name: "Item List/Icons/Clock", backgroundColors: [colorPurple])
     public static let photosLightBlue = renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorLightBlue])
@@ -200,7 +200,7 @@ public struct PresentationResourcesSettings {
     public static let timer = renderSettingsIcon(name: "Item List/Icons/Timer", backgroundColors: [colorPurple])
     public static let email = renderSettingsIcon(name: "Item List/Icons/Email", backgroundColors: [colorViolet])
         
-    public static let premium = ayuMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
+    public static let premium = astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)
         context.clear(bounds)
                 
@@ -250,7 +250,7 @@ public struct PresentationResourcesSettings {
     
     public static let money = UIImage(bundleImageName: "Settings/Gram")
  
-    public static let stars = ayuMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
+    public static let stars = astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)
         context.clear(bounds)
         
@@ -293,7 +293,7 @@ public struct PresentationResourcesSettings {
         context.restoreGState()
     }))
     
-    public static let premiumGift = ayuMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
+    public static let premiumGift = astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)
         context.clear(bounds)
         

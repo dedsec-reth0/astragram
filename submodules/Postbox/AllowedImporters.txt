@@ -16,12 +16,12 @@ Telegram/SiriIntents/IntentMessages.swift
 Telegram/SiriIntents/SiriSendMessageTarget.swift
 submodules/AccountContext/Sources/FetchMediaUtils.swift
 submodules/AccountContext/Sources/UniversalVideoNode.swift
+submodules/AstraGramUI/Sources/AstraBookmarks.swift
+submodules/AstraGramUI/Sources/AstraMessageDetails.swift
+submodules/AstraGramUI/Sources/AstraMessageTools.swift
+submodules/AstraGramUI/Sources/AstraPluginManager.swift
 submodules/AvatarNode/Sources/AvatarNode.swift
 submodules/AvatarNode/Sources/PeerAvatar.swift
-submodules/AyuGramUI/Sources/AyuBookmarks.swift
-submodules/AyuGramUI/Sources/AyuMessageDetails.swift
-submodules/AyuGramUI/Sources/AyuMessageTools.swift
-submodules/AyuGramUI/Sources/AyuPluginManager.swift
 submodules/ChatListUI/Sources/ChatListController.swift
 submodules/ChatListUI/Sources/ChatListSearchListPaneNode.swift
 submodules/ChatListUI/Sources/Node/ChatListNodeLocation.swift
@@ -79,7 +79,7 @@ submodules/TelegramUI/Components/StickerPickerScreen/Sources/StickerPickerScreen
 submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/StoryChatContent.swift
 submodules/TelegramUI/Components/TelegramAccountAuxiliaryMethods/Sources/TelegramAccountAuxiliaryMethods.swift
 submodules/TelegramUI/Sources/AppDelegate.swift
-submodules/TelegramUI/Sources/AyuBackgroundNotifier.swift
+submodules/TelegramUI/Sources/AstraBackgroundNotifier.swift
 submodules/TelegramUI/Sources/ChatController.swift
 submodules/TelegramUI/Sources/ChatControllerContentData.swift
 submodules/TelegramUI/Sources/ChatControllerNode.swift

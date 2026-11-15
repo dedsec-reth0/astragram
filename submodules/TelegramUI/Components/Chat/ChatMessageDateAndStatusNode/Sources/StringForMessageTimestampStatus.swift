@@ -163,7 +163,7 @@ public func stringForMessageTimestampStatus(
         timestamp = orignalDate
     }
     
-    var dateText = stringForMessageTimestamp(timestamp: timestamp, dateTimeFormat: dateTimeFormat, withSeconds: AyuGramSettings.current.showMessageSeconds)
+    var dateText = stringForMessageTimestamp(timestamp: timestamp, dateTimeFormat: dateTimeFormat, withSeconds: AstraGramSettings.current.showMessageSeconds)
     if timestamp == scheduleWhenOnlineTimestamp {
         dateText = "         "
     }
@@ -258,9 +258,9 @@ public func stringForMessageTimestampStatus(
         }
     }
     
-    // AyuGram anti-delete: a message the server deleted but AyuGram kept is marked next to its time.
-    if message.ayuDeletedAt != nil {
-        let mark = AyuGramSettings.current.deletedMark.trimmingCharacters(in: .whitespacesAndNewlines)
+    // AstraGram anti-delete: a message the server deleted but AstraGram kept is marked next to its time.
+    if message.astraDeletedAt != nil {
+        let mark = AstraGramSettings.current.deletedMark.trimmingCharacters(in: .whitespacesAndNewlines)
         dateText = mark.isEmpty ? dateText : "\(mark) \(dateText)"
     }
 

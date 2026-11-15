@@ -23,7 +23,7 @@ public enum UpdateMessageReaction {
 
 public func updateMessageReactionsInteractively(account: Account, messageIds: [MessageId], reactions: [UpdateMessageReaction], isLarge: Bool, storeAsRecentlyUsed: Bool, add: Bool = false) -> Signal<Never, NoError> {
     if let peerId = messageIds.first?.peerId, !reactions.isEmpty {
-        AyuGhostMode.didInteract(account: account, peerId: peerId)
+        AstraGhostMode.didInteract(account: account, peerId: peerId)
     }
     return account.postbox.transaction { transaction -> Void in
         guard let chatPeerId = messageIds.first?.peerId else {

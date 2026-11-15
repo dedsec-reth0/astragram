@@ -91,8 +91,8 @@ public final class SharedWakeupManager {
     private var managedPausedInBackgroundPlayer: Disposable?
     private var keepIdleDisposable: Disposable?
     private var silenceAudioRenderer: MediaPlayerAudioRenderer?
-    // AyuGram: stays connected in the background (there are no push notifications for a sideloaded app).
-    private let ayuKeepAlive = AyuBackgroundKeepAlive()
+    // AstraGram: stays connected in the background (there are no push notifications for a sideloaded app).
+    private let astraKeepAlive = AstraBackgroundKeepAlive()
     
     private var accountsAndTasks: [(Account, Bool, AccountTasks)] = []
     
@@ -145,8 +145,8 @@ public final class SharedWakeupManager {
             self.enableBackgroundTasks = isEnabled
         })
         
-        // AyuGram: the keep-alive audio was interrupted or resumed.
-        self.ayuKeepAlive.activeUpdated = { [weak self] in
+        // AstraGram: the keep-alive audio was interrupted or resumed.
+        self.astraKeepAlive.activeUpdated = { [weak self] in
             self?.checkTasks()
         }
 
@@ -1104,8 +1104,8 @@ public final class SharedWakeupManager {
             }
         }
         
-        let ayuSettings = AyuGramSettings.current
-        self.ayuKeepAlive.setActive(ayuSettings.backgroundNotifications && ayuSettings.keepAliveInBackground && !self.inForeground && !self.hasActiveAudioSession && !hasActiveCalls && !self.accountsAndTasks.isEmpty)
+        let astraSettings = AstraGramSettings.current
+        self.astraKeepAlive.setActive(astraSettings.backgroundNotifications && astraSettings.keepAliveInBackground && !self.inForeground && !self.hasActiveAudioSession && !hasActiveCalls && !self.accountsAndTasks.isEmpty)
 
         self.updateAccounts(hasTasks: hasTasksForBackgroundExtension, endTaskAfterTransactionsComplete: endTaskAfterTransactionsComplete)
         
@@ -1145,13 +1145,13 @@ public final class SharedWakeupManager {
     private func updateAccounts(hasTasks: Bool, endTaskAfterTransactionsComplete: UIBackgroundTaskIdentifier?) {
         let hasBackgroundLocationTask = self.accountsAndTasks.contains(where: { $0.2.backgroundLocation })
         
-        if self.inForeground || self.hasActiveAudioSession || self.isInBackgroundExtension || self.backgroundProcessingTaskId != nil || self.backgroundStoryProcessingTaskId != nil || hasBackgroundLocationTask || (hasTasks && self.currentExternalCompletion != nil) || self.activeExplicitExtensionTimer != nil || self.silenceAudioRenderer != nil || self.ayuKeepAlive.isActive {
+        if self.inForeground || self.hasActiveAudioSession || self.isInBackgroundExtension || self.backgroundProcessingTaskId != nil || self.backgroundStoryProcessingTaskId != nil || hasBackgroundLocationTask || (hasTasks && self.currentExternalCompletion != nil) || self.activeExplicitExtensionTimer != nil || self.silenceAudioRenderer != nil || self.astraKeepAlive.isActive {
             Logger.shared.log("Wakeup", "enableBeginTransactions: true (active)")
             
             for (account, primary, tasks) in self.accountsAndTasks {
                 account.postbox.setCanBeginTransactions(true)
                 
-                if (self.inForeground && primary) || !tasks.isEmpty || (self.activeExplicitExtensionTimer != nil && primary) || self.ayuKeepAlive.isActive {
+                if (self.inForeground && primary) || !tasks.isEmpty || (self.activeExplicitExtensionTimer != nil && primary) || self.astraKeepAlive.isActive {
                     account.shouldBeServiceTaskMaster.set(.single(.always))
                 } else {
                     account.shouldBeServiceTaskMaster.set(.single(.never))
