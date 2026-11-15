@@ -1,7 +1,7 @@
 // @id          ayu-tools
 // @name        AyuTools
 // @version     1.0
-// @author      AyuGram for iOS
+// @author      AstraGram for iOS
 // @description Команды: .rev текст, .upper текст, .calc 2+2*2, .count — счётчик отправленных через плагин сообщений
 
 plugin.commands.rev = function (args) {

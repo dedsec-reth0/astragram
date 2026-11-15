@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="ayugram/assets/banner.png" alt="AyuGram для iOS" width="100%">
+  <img src="ayugram/assets/hero.webp" alt="AstraGram для iOS" width="100%">
 </p>
 
-<h1 align="center">AyuGram для iOS</h1>
+<h1 align="center">AstraGram для iOS</h1>
 
 <p align="center">
   Telegram для iPhone с режимом призрака, сохранением удалённых сообщений и плагинами.<br>
@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/dedsec-reth0/ayugram/releases/latest"><img alt="Версия" src="https://img.shields.io/github/v/release/dedsec-reth0/ayugram?style=flat-square&label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=181818&labelColor=292929"></a>
-  <a href="https://github.com/dedsec-reth0/ayugram/actions/workflows/build.yml"><img alt="Сборка" src="https://img.shields.io/github/actions/workflow/status/dedsec-reth0/ayugram/build.yml?branch=master&style=flat-square&label=%D1%81%D0%B1%D0%BE%D1%80%D0%BA%D0%B0&labelColor=292929"></a>
-  <a href="https://github.com/dedsec-reth0/ayugram/releases"><img alt="Загрузки" src="https://img.shields.io/github/downloads/dedsec-reth0/ayugram/total?style=flat-square&label=%D0%B7%D0%B0%D0%B3%D1%80%D1%83%D0%B7%D0%BA%D0%B8&color=181818&labelColor=292929"></a>
-  <img alt="iOS 15+" src="https://img.shields.io/badge/iOS-15%2B-181818?style=flat-square&labelColor=292929">
+  <a href="https://github.com/dedsec-reth0/ayugram/releases/latest"><img alt="Версия" src="https://img.shields.io/github/v/release/dedsec-reth0/ayugram?style=flat-square&label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=7C3AED&labelColor=1E1B4B"></a>
+  <a href="https://github.com/dedsec-reth0/ayugram/actions/workflows/build.yml"><img alt="Сборка" src="https://img.shields.io/github/actions/workflow/status/dedsec-reth0/ayugram/build.yml?branch=master&style=flat-square&label=%D1%81%D0%B1%D0%BE%D1%80%D0%BA%D0%B0&labelColor=1E1B4B"></a>
+  <a href="https://github.com/dedsec-reth0/ayugram/releases"><img alt="Загрузки" src="https://img.shields.io/github/downloads/dedsec-reth0/ayugram/total?style=flat-square&label=%D0%B7%D0%B0%D0%B3%D1%80%D1%83%D0%B7%D0%BA%D0%B8&color=7C3AED&labelColor=1E1B4B"></a>
+  <img alt="iOS 15+" src="https://img.shields.io/badge/iOS-15%2B-7C3AED?style=flat-square&labelColor=1E1B4B">
 </p>
 
 <p align="center">
@@ -42,7 +42,7 @@
    https://github.com/dedsec-reth0/ayugram/releases/download/sidestore-source/source.json
    ```
 
-3. Откройте **AyuGram** в списке и нажмите **Free**. AltStore подпишет приложение вашим Apple ID.
+3. Откройте **AstraGram** в списке и нажмите **Free**. AltStore подпишет приложение вашим Apple ID.
 4. Обновления приходят туда же: когда выходит новая сборка, в AltStore появляется кнопка **Update**.
 
 Можно поставить и вручную: скачайте IPA со страницы [последнего релиза](https://github.com/dedsec-reth0/ayugram/releases/latest)
@@ -50,8 +50,8 @@
 
 | Файл | Для кого | App ID |
 | --- | --- | --- |
-| `AyuGram-<версия>-<сборка>.ipa` | Бесплатный Apple ID. Без расширений (виджеты, «Поделиться»). | 1 |
-| `AyuGram-<версия>-<сборка>-full.ipa` | Платный аккаунт разработчика. Со всеми расширениями. | 7 |
+| `AstraGram-<версия>-<сборка>.ipa` | Бесплатный Apple ID. Без расширений (виджеты, «Поделиться»). | 1 |
+| `AstraGram-<версия>-<сборка>-full.ipa` | Платный аккаунт разработчика. Со всеми расширениями. | 7 |
 
 ## Первый запуск
 
@@ -59,9 +59,9 @@
 
 1. Откройте [my.telegram.org](https://my.telegram.org), войдите по номеру и выберите **API development tools**.
 2. Создайте приложение и скопируйте **api_id** и **api_hash**.
-3. Введите их в AyuGram при первом запуске. Потом их можно сменить: **Настройки → AyuGram → API ID и Hash**.
+3. Введите их в AstraGram при первом запуске. Потом их можно сменить: **Настройки → AstraGram → API ID и Hash**.
 
-Все функции AyuGram лежат в **Настройки → AyuGram**. Каждая включается отдельно.
+Все функции AstraGram лежат в **Настройки → AstraGram**. Каждая включается отдельно.
 
 ## Возможности
 
@@ -142,15 +142,15 @@
 
 - **Подпись на 7 дней.** С бесплатным Apple ID приложение нужно обновлять в AltStore раз в неделю (**Refresh All**).
 - **Push-уведомления.** Серверы Telegram шлют push только приложениям с известным им сертификатом, поэтому при
-  закрытом приложении уведомления не приходят. Частично помогает **Настройки → AyuGram → Уведомления без push**.
-- **Перезапуск.** iOS не даёт приложению открыть себя заново: кнопка перезапуска закрывает AyuGram и оставляет
+  закрытом приложении уведомления не приходят. Частично помогает **Настройки → AstraGram → Уведомления без push**.
+- **Перезапуск.** iOS не даёт приложению открыть себя заново: кнопка перезапуска закрывает AstraGram и оставляет
   уведомление, по которому он открывается.
 - **Режим призрака не всесилен.** Собеседник не видит прочтения, пока вы сами его не отправите, но сервер Telegram
   знает о вашем подключении.
 
 ## Сборка из исходников
 
-Сборка идёт на GitHub Actions: каждый push в `master` запускает [Build AyuGram](.github/workflows/build.yml), а по
+Сборка идёт на GitHub Actions: каждый push в `master` запускает [Build AstraGram](.github/workflows/build.yml), а по
 окончании релиз и источник AltStore обновляются сами.
 
 - [ayugram/INSTALL.md](ayugram/INSTALL.md) — как устроена сборка и публикация;

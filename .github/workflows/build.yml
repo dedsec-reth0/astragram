@@ -1,4 +1,4 @@
-name: Build AyuGram
+name: Build AstraGram
 
 # The full Telegram-iOS build takes longer than one GitHub job may run. The Bazel disk cache is saved after
 # every attempt, and an attempt that runs out of time starts the next one itself, which continues from the cache.
@@ -181,7 +181,7 @@ jobs:
         if: steps.build.outcome == 'success' && env.CONFIGURATION == 'release_arm64'
         uses: actions/upload-artifact@v4
         with:
-          name: AyuGram-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
+          name: AstraGram-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
           path: out/AyuGram.ipa
           if-no-files-found: error
           retention-days: 30

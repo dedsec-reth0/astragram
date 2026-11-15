@@ -29,11 +29,11 @@ SOURCE_TAG = 'sidestore-source'
 BUNDLE_ID = 'ph.telegra.Telegraph'
 MAX_VERSIONS = 10
 MAX_NEWS = 5
-TINT_COLOR = '#2AABEE'
+TINT_COLOR = '#7C4DFF'
 WHATSNEW_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'WHATSNEW.md')
 
 APP_SUBTITLE = 'Telegram с режимом призрака и удалёнными сообщениями'
-APP_DESCRIPTION = '''Telegram для iPhone с функциями AyuGram. Всё включается отдельно в Настройки → AyuGram.
+APP_DESCRIPTION = '''Telegram для iPhone с режимом призрака и сохранением удалённых сообщений. Всё включается отдельно в Настройки → AstraGram.
 
 РЕЖИМ ПРИЗРАКА
 Не отправлять «в сети», прочтение и «печатает», не отмечать просмотр историй и прослушивание голосовых.
@@ -48,13 +48,13 @@ AI И ПЛАГИНЫ
 AI через любой OpenAI-совместимый API со своим ключом и плагины на JavaScript.
 
 ВИД
-Монохромное оформление, материал стекла, пружинящие нажатия, вкладки по выбору.
+Материал стекла, пружинящие нажатия, монохромное оформление, вкладки по выбору.
 
 ПЕРВЫЙ ЗАПУСК
 Введите свои API ID и API Hash с my.telegram.org: в сборке ключей нет.
 
 Неофициальный клиент. Push-уведомления при закрытом приложении не приходят.'''
-SOURCE_DESCRIPTION = '''Сборки AyuGram для iOS: Telegram с режимом призрака, сохранением удалённых сообщений и плагинами.
+SOURCE_DESCRIPTION = '''Сборки AstraGram для iOS: Telegram с режимом призрака, сохранением удалённых сообщений и плагинами.
 
 Каждая сборка выходит здесь сразу после GitHub Actions. В ней нет ключей Telegram API: при первом запуске введите свои с my.telegram.org.'''
 
@@ -107,7 +107,7 @@ def load_source(repo, workdir):
 def write_source(repo, workdir, versions, news):
     raw = 'https://raw.githubusercontent.com/{}/master'.format(repo)
     source_url = 'https://github.com/{}/releases/download/{}/source.json'.format(repo, SOURCE_TAG)
-    icon_url = raw + '/Telegram/Telegram-iOS/AppIcons.xcassets/BlueIcon.appiconset/Icon1@180x180.png'
+    icon_url = raw + '/ayugram/assets/icon.png'
     banner_url = raw + '/ayugram/assets/banner.png'
 
     # The news shows the latest build.
@@ -116,11 +116,11 @@ def write_source(repo, workdir, versions, news):
         identifier = 'build-{}'.format(latest['buildVersion'])
         news = [item for item in news if item.get('identifier') != identifier]
         news.insert(0, {
-            'title': 'AyuGram {} ({})'.format(latest['version'], latest['buildVersion']),
+            'title': 'AstraGram {} ({})'.format(latest['version'], latest['buildVersion']),
             'identifier': identifier,
             'caption': latest.get('localizedDescription', ''),
             'date': latest['date'],
-            'tintColor': '#181818',
+            'tintColor': '#1E1B4B',
             'imageURL': banner_url,
             'notify': False,
             'appID': BUNDLE_ID,
@@ -128,7 +128,7 @@ def write_source(repo, workdir, versions, news):
         news = news[:MAX_NEWS]
 
     source = {
-        'name': 'AyuGram для iOS',
+        'name': 'AstraGram для iOS',
         'identifier': 'com.github.{}'.format(repo.replace('/', '.').lower()),
         'subtitle': 'Режим призрака, удалённые сообщения, плагины',
         'description': SOURCE_DESCRIPTION,
@@ -139,9 +139,9 @@ def write_source(repo, workdir, versions, news):
         'tintColor': TINT_COLOR,
         'featuredApps': [BUNDLE_ID],
         'apps': [{
-            'name': 'AyuGram',
+            'name': 'AstraGram',
             'bundleIdentifier': BUNDLE_ID,
-            'developerName': 'AyuGram для iOS',
+            'developerName': 'AstraGram для iOS',
             'subtitle': APP_SUBTITLE,
             'localizedDescription': APP_DESCRIPTION,
             'iconURL': icon_url,
@@ -157,7 +157,7 @@ def write_source(repo, workdir, versions, news):
         json.dump(source, f, ensure_ascii=False, indent=2)
     gh('release', 'upload', SOURCE_TAG, path, '--repo', repo, '--clobber')
     gh('release', 'edit', SOURCE_TAG, '--repo', repo, '--title', 'Источник AltStore', '--notes',
-       'Источник AyuGram для AltStore и SideStore. Добавьте этот адрес в **Browse → Sources → +**:\n\n```\n{}\n```\n\nФайл обновляется сам после каждой сборки.'.format(source_url), check=False)
+       'Источник AstraGram для AltStore и SideStore. Добавьте этот адрес в **Browse → Sources → +**:\n\n```\n{}\n```\n\nФайл обновляется сам после каждой сборки.'.format(source_url), check=False)
     print('source updated:', source_url)
 
 
@@ -183,8 +183,8 @@ def main():
     ipa, version, build = sys.argv[1], sys.argv[2], sys.argv[3]
     repo = os.environ['GITHUB_REPOSITORY']
     tag = 'v{}-{}'.format(version, build)
-    asset_name = 'AyuGram-{}-{}.ipa'.format(version, build)
-    full_name = 'AyuGram-{}-{}-full.ipa'.format(version, build)
+    asset_name = 'AstraGram-{}-{}.ipa'.format(version, build)
+    full_name = 'AstraGram-{}-{}-full.ipa'.format(version, build)
     download_url = 'https://github.com/{}/releases/download/{}/{}'.format(repo, tag, asset_name)
     source_url = 'https://github.com/{}/releases/download/{}/source.json'.format(repo, SOURCE_TAG)
     commit_title = subprocess.run(['git', 'log', '-1', '--pretty=%s'], capture_output=True, text=True).stdout.strip()
@@ -219,7 +219,7 @@ def main():
     # The untouched build, with the share extension, widgets and the rest, for those with a paid developer account.
     full_path = os.path.join(upload_dir, full_name)
     shutil.copyfile(ipa, full_path)
-    gh('release', 'create', tag, upload_path, full_path, '--repo', repo, '--title', 'AyuGram {} ({})'.format(version, build), '--notes', notes, '--latest')
+    gh('release', 'create', tag, upload_path, full_path, '--repo', repo, '--title', 'AstraGram {} ({})'.format(version, build), '--notes', notes, '--latest')
     print('released', tag)
 
     # The current source, if there is one.
