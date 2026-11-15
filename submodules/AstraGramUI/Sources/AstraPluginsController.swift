@@ -126,7 +126,25 @@ public func astraPluginsController(context: AccountContext) -> ViewController {
 
     let manager = AstraPluginManager.shared
 
+    // AstraGram security: a plugin is code that sees messages and may change what is sent: it is installed after a
+    // clear yes.
     func install(source: String?) {
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let strings = AstraStrings(presentationData.strings)
+        guard let source = source, !source.isEmpty else {
+            performInstall(source: nil)
+            return
+        }
+        presentControllerImpl?(textAlertController(context: context, title: strings.pluginInstallTitle, text: strings.pluginInstallWarning, actions: [
+            TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {
+            }),
+            TextAlertAction(type: .genericAction, title: strings.pluginInstallConfirm, action: {
+                performInstall(source: source)
+            })
+        ]))
+    }
+
+    func performInstall(source: String?) {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         let strings = AstraStrings(presentationData.strings)
         if let source = source, manager.install(source: source) != nil {

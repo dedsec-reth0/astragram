@@ -504,6 +504,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         Queue.mainQueue().after(10.0, {
             AstraUpdateChecker.checkOnLaunch(window: astraUpdateWindow)
         })
+        // AstraGram security: locking again in the background, the cover for the app switcher, the clipboard.
+        AstraSecurityRuntime.start()
         // AstraGram look: the glass material and the springy presses, for the modules below the settings.
         AstraLook.glassMaterial = AstraGramSettings.current.glassMaterial
         AstraLook.springPresses = AstraGramSettings.current.springPresses
@@ -2170,6 +2172,15 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             }
             UIApplication.shared.applicationIconBadgeNumber = Int(count)
         }))
+    }
+
+    // AstraGram security: with the switch on, only the system keyboard may be used: a third-party keyboard sees every
+    // character typed.
+    func application(_ application: UIApplication, shouldAllowExtensionPointIdentifier extensionPointIdentifier: UIApplication.ExtensionPointIdentifier) -> Bool {
+        if extensionPointIdentifier == .keyboard && AstraGramSettings.current.blockThirdPartyKeyboards {
+            return false
+        }
+        return true
     }
 
     func handleWillResignActive() {

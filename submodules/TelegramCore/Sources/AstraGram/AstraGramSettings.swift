@@ -88,6 +88,24 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var callsTab: Bool
     /// Look: black, white and grays only, in the dark and the light appearance.
     public var monochrome: Bool
+    /// Security: cover the screen while the app is not active, so the app switcher shows nothing of it.
+    public var hideInAppSwitcher: Bool
+    /// Security: only the system keyboard may be used in the app.
+    public var blockThirdPartyKeyboards: Bool
+    /// Security: AstraGram's settings open after Face ID.
+    public var biometricForAstraGram: Bool
+    /// Security: the chats that open after Face ID.
+    public var lockedChats: [Int64]
+    /// Security: confirm before opening a link that looks dangerous.
+    public var warnSuspiciousLinks: Bool
+    /// Security: cut tracking parameters from links before they open.
+    public var stripLinkTrackers: Bool
+    /// Security: what the app copies leaves the clipboard in a minute.
+    public var clipboardExpire: Bool
+    /// Security: what the app copies is not handed to other devices.
+    public var clipboardLocalOnly: Bool
+    /// Security: the AI host the user agreed to send text to.
+    public var aiConsentEndpoint: String
     /// Look: with Monochrome, chats get a plain black or white background instead of the chosen one.
     public var monochromePlainBackground: Bool
     /// Look: the material of glass panels and buttons (0 Telegram's own, 1 clear, 2 matte).
@@ -172,6 +190,15 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         contactsTab: true,
         callsTab: true,
         monochrome: false,
+        hideInAppSwitcher: false,
+        blockThirdPartyKeyboards: false,
+        biometricForAstraGram: false,
+        lockedChats: [],
+        warnSuspiciousLinks: true,
+        stripLinkTrackers: true,
+        clipboardExpire: false,
+        clipboardLocalOnly: false,
+        aiConsentEndpoint: "",
         monochromePlainBackground: false,
         glassMaterial: 0,
         springPresses: false,
@@ -233,6 +260,15 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         contactsTab: Bool,
         callsTab: Bool,
         monochrome: Bool,
+        hideInAppSwitcher: Bool,
+        blockThirdPartyKeyboards: Bool,
+        biometricForAstraGram: Bool,
+        lockedChats: [Int64],
+        warnSuspiciousLinks: Bool,
+        stripLinkTrackers: Bool,
+        clipboardExpire: Bool,
+        clipboardLocalOnly: Bool,
+        aiConsentEndpoint: String,
         monochromePlainBackground: Bool,
         glassMaterial: Int,
         springPresses: Bool,
@@ -292,6 +328,15 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.contactsTab = contactsTab
         self.callsTab = callsTab
         self.monochrome = monochrome
+        self.hideInAppSwitcher = hideInAppSwitcher
+        self.blockThirdPartyKeyboards = blockThirdPartyKeyboards
+        self.biometricForAstraGram = biometricForAstraGram
+        self.lockedChats = lockedChats
+        self.warnSuspiciousLinks = warnSuspiciousLinks
+        self.stripLinkTrackers = stripLinkTrackers
+        self.clipboardExpire = clipboardExpire
+        self.clipboardLocalOnly = clipboardLocalOnly
+        self.aiConsentEndpoint = aiConsentEndpoint
         self.monochromePlainBackground = monochromePlainBackground
         self.glassMaterial = glassMaterial
         self.springPresses = springPresses
@@ -356,6 +401,15 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.contactsTab = try container.decodeIfPresent(Bool.self, forKey: .contactsTab) ?? d.contactsTab
         self.callsTab = try container.decodeIfPresent(Bool.self, forKey: .callsTab) ?? d.callsTab
         self.monochrome = try container.decodeIfPresent(Bool.self, forKey: .monochrome) ?? d.monochrome
+        self.hideInAppSwitcher = try container.decodeIfPresent(Bool.self, forKey: .hideInAppSwitcher) ?? d.hideInAppSwitcher
+        self.blockThirdPartyKeyboards = try container.decodeIfPresent(Bool.self, forKey: .blockThirdPartyKeyboards) ?? d.blockThirdPartyKeyboards
+        self.biometricForAstraGram = try container.decodeIfPresent(Bool.self, forKey: .biometricForAstraGram) ?? d.biometricForAstraGram
+        self.lockedChats = try container.decodeIfPresent([Int64].self, forKey: .lockedChats) ?? d.lockedChats
+        self.warnSuspiciousLinks = try container.decodeIfPresent(Bool.self, forKey: .warnSuspiciousLinks) ?? d.warnSuspiciousLinks
+        self.stripLinkTrackers = try container.decodeIfPresent(Bool.self, forKey: .stripLinkTrackers) ?? d.stripLinkTrackers
+        self.clipboardExpire = try container.decodeIfPresent(Bool.self, forKey: .clipboardExpire) ?? d.clipboardExpire
+        self.clipboardLocalOnly = try container.decodeIfPresent(Bool.self, forKey: .clipboardLocalOnly) ?? d.clipboardLocalOnly
+        self.aiConsentEndpoint = try container.decodeIfPresent(String.self, forKey: .aiConsentEndpoint) ?? d.aiConsentEndpoint
         self.monochromePlainBackground = try container.decodeIfPresent(Bool.self, forKey: .monochromePlainBackground) ?? d.monochromePlainBackground
         self.glassMaterial = try container.decodeIfPresent(Int.self, forKey: .glassMaterial) ?? d.glassMaterial
         self.springPresses = try container.decodeIfPresent(Bool.self, forKey: .springPresses) ?? d.springPresses

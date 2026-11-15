@@ -1972,6 +1972,11 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 gesture?.cancel()
                 return
             }
+            // AstraGram security: a chat locked with Face ID has no preview: a preview shows its messages.
+            if case let .peer(lockedPeerData) = item.content, AstraGramSettings.current.lockedChats.contains(lockedPeerData.peer.peerId.toInt64()) {
+                gesture?.cancel()
+                return
+            }
             
             var joined = false
             if case let .peer(peerData) = item.content, let message = peerData.messages.first {

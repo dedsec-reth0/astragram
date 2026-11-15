@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import TelegramCore
 
 /// AstraGram AI: an OpenAI-compatible API (OpenAI, OpenRouter, Groq, DeepSeek, a local server…) with the user's own key,
@@ -6,6 +7,8 @@ import TelegramCore
 public enum AstraAI {
     public enum AIError: Error {
         case notConfigured
+        /// The user did not agree to send the text to the AI server.
+        case declined
         case network(String)
         case server(String)
     }
@@ -48,8 +51,46 @@ public enum AstraAI {
         return "HTTP \(status)"
     }
 
+    /// AstraGram security: AI sends chat text to a server outside Telegram. The first request to a host is asked about,
+    /// and the answer is remembered for that host.
+    private static func withConsent(_ proceed: @escaping () -> Void, declined: @escaping () -> Void) {
+        let host = URL(string: AstraAI.baseUrl())?.host ?? AstraAI.baseUrl()
+        if AstraGramSettings.current.aiConsentEndpoint == host {
+            proceed()
+            return
+        }
+        DispatchQueue.main.async {
+            guard let presenter = astraTopViewController() else {
+                declined()
+                return
+            }
+            let isRussian = (Locale.preferredLanguages.first ?? "").lowercased().hasPrefix("ru")
+            let alert = UIAlertController(
+                title: isRussian ? "Отправить текст в AI?" : "Send the text to AI?",
+                message: isRussian ? "Текст сообщений уйдёт на сервер \(host), за пределы Telegram. Его владелец сможет этот текст прочитать." : "The text of the messages goes to the server \(host), outside Telegram. Its owner can read that text.",
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: isRussian ? "Отмена" : "Cancel", style: .cancel, handler: { _ in
+                declined()
+            }))
+            alert.addAction(UIAlertAction(title: isRussian ? "Отправлять" : "Send", style: .default, handler: { _ in
+                AstraGramSettings.update { $0.aiConsentEndpoint = host }
+                proceed()
+            }))
+            presenter.present(alert, animated: true)
+        }
+    }
+
     /// Asks the model; `completion` is called on the main queue.
     public static func complete(system: String, user: String, completion: @escaping (Result<String, AIError>) -> Void) {
+        AstraAI.withConsent({
+            AstraAI.performComplete(system: system, user: user, completion: completion)
+        }, declined: {
+            completion(.failure(.declined))
+        })
+    }
+
+    private static func performComplete(system: String, user: String, completion: @escaping (Result<String, AIError>) -> Void) {
         let settings = AstraGramSettings.current
         guard AstraAI.isConfigured, let url = URL(string: AstraAI.baseUrl() + "/chat/completions") else {
             completion(.failure(.notConfigured))
@@ -91,6 +132,14 @@ public enum AstraAI {
 
     /// Speech to text (an OpenAI-compatible /audio/transcriptions endpoint, model whisper-1).
     public static func transcribe(fileUrl: URL, fileName: String, mimeType: String, completion: @escaping (Result<String, AIError>) -> Void) {
+        AstraAI.withConsent({
+            AstraAI.performTranscribe(fileUrl: fileUrl, fileName: fileName, mimeType: mimeType, completion: completion)
+        }, declined: {
+            completion(.failure(.declined))
+        })
+    }
+
+    private static func performTranscribe(fileUrl: URL, fileName: String, mimeType: String, completion: @escaping (Result<String, AIError>) -> Void) {
         let settings = AstraGramSettings.current
         guard AstraAI.hasOwnKey, let url = URL(string: AstraAI.baseUrl() + "/audio/transcriptions"), let fileData = try? Data(contentsOf: fileUrl) else {
             completion(.failure(.notConfigured))
@@ -133,6 +182,8 @@ public enum AstraAI {
         switch error {
         case .notConfigured:
             return isRussian ? "Для этого действия нужен свой API-ключ: Настройки → AstraGram → AI (бесплатный AI работает только с текстом)." : "This action needs your own API key: Settings → AstraGram → AI (the free AI handles text only)."
+        case .declined:
+            return isRussian ? "Текст не отправлен." : "The text was not sent."
         case let .network(text):
             return (isRussian ? "Ошибка сети: " : "Network error: ") + text
         case let .server(text):

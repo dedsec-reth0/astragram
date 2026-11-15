@@ -2761,7 +2761,13 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             
             let contentData: ContentData
-            
+
+            // AstraGram security: a chat locked with Face ID shows neither its last message nor its pictures in the list.
+            var astraChatLocked = false
+            if case let .chat(lockedItemPeer) = contentPeer, AstraGramSettings.current.lockedChats.contains(lockedItemPeer.peerId.toInt64()) {
+                astraChatLocked = true
+            }
+
             var hideAuthor = false
             switch contentPeer {
                 case let .chat(itemPeer):
@@ -2795,6 +2801,15 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         break
                     }
                     
+                    if astraChatLocked {
+                        initialHideAuthor = true
+                        messageText = item.presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru") ? "Чат заблокирован" : "Chat is locked"
+                        messageEntities = []
+                        spoilers = nil
+                        customEmojiRanges = nil
+                        richTextPreview = nil
+                    }
+
                     contentData = .chat(itemPeer: itemPeer, threadInfo: threadInfo, peer: peer, hideAuthor: hideAuthor, messageText: messageText, messageEntities: messageEntities, spoilers: spoilers, customEmojiRanges: customEmojiRanges, richTextPreview: richTextPreview)
                     hideAuthor = initialHideAuthor
                 case let .group(groupPeers):
@@ -3295,7 +3310,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             }
                             
                             for message in messages {
-                                if contentImageSpecs.count >= 3 {
+                                if contentImageSpecs.count >= 3 || astraChatLocked {
                                     break
                                 }
                                 

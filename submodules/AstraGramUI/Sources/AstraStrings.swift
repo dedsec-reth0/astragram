@@ -270,4 +270,21 @@ public struct AstraStrings {
     public var glassMaterialMatte: String { t("Матовый", "Matte") }
     public var springPresses: String { t("Пружинящие нажатия", "Springy Presses") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }
+    public var securityHeader: String { t("БЕЗОПАСНОСТЬ", "SECURITY") }
+    public var securityCheck: String { t("Проверка безопасности", "Security Check") }
+    public var lockedChats: String { t("Чаты под Face ID", "Chats Locked with Face ID") }
+    public var lockedChatsNone: String { t("нет", "none") }
+    public var lockedChatsReason: String { t("Изменить список защищённых чатов", "Change the list of locked chats") }
+    public var biometricForAstraGram: String { t("Face ID для настроек AstraGram", "Face ID for AstraGram Settings") }
+    public var hideInAppSwitcher: String { t("Скрывать экран в переключателе приложений", "Hide Screen in App Switcher") }
+    public var blockThirdPartyKeyboards: String { t("Запретить сторонние клавиатуры", "Block Third-Party Keyboards") }
+    public var warnSuspiciousLinks: String { t("Предупреждать о подозрительных ссылках", "Warn about Suspicious Links") }
+    public var stripLinkTrackers: String { t("Убирать трекеры из ссылок", "Remove Trackers from Links") }
+    public var clipboardExpire: String { t("Очищать скопированное через минуту", "Clear What Is Copied in a Minute") }
+    public var clipboardLocalOnly: String { t("Не передавать буфер на другие устройства", "Keep the Clipboard on This Device") }
+    public var telegramPrivacy: String { t("Конфиденциальность Telegram", "Telegram Privacy and Security") }
+    public var securityFooter: String { t("Проверка безопасности показывает, что защищает аккаунт и приложение сейчас и что стоит поправить. Чат под Face ID открывается после Face ID или код-пароля устройства и остаётся открытым, пока приложение не уйдёт в фон; в списке чатов у него нет текста и картинок последнего сообщения, а предпросмотр по долгому нажатию отключён. Сторонняя клавиатура видит всё, что вы набираете. Подозрительной считается ссылка на IP-адрес, на адрес с особыми символами, на сайт, похожий на Telegram, и на файл, который может что-то установить. Трекеры — это метки в ссылке, по которым сайт узнаёт, откуда вы пришли. Очистка буфера касается того, что скопировано в самом приложении. Клавиатуры применяются после перезапуска.", "Security Check shows what protects the account and the app now and what is worth fixing. A chat locked with Face ID opens after Face ID or the device passcode and stays open until the app goes to the background; in the chat list it shows neither the text nor the pictures of its last message, and its long-press preview is off. A third-party keyboard sees everything you type. A link is suspicious when it leads to an IP address, to an address with special characters, to a site that resembles Telegram, or to a file that can install something. Trackers are marks in a link that tell a site where you came from. Clearing the clipboard applies to what was copied in the app itself. Keyboards apply after the app restarts.") }
+    public var pluginInstallTitle: String { t("Установить плагин?", "Install the Plugin?") }
+    public var pluginInstallWarning: String { t("Плагин — это программа: она видит ваши сообщения и может менять то, что вы отправляете. Устанавливайте плагины только из источников, которым доверяете.", "A plugin is a program: it sees your messages and can change what you send. Install plugins only from sources you trust.") }
+    public var pluginInstallConfirm: String { t("Установить", "Install") }
 }

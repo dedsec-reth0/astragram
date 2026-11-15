@@ -356,7 +356,32 @@ private func makeTelegramUrl(_ path: String, queryItems: [URLQueryItem] = []) ->
     return appendQueryItems(to: "https://t.me\(path)", items: queryItems)
 }
 
-func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, url: String, forceExternal: Bool, presentationData: PresentationData, navigationController: NavigationController?, dismissInput: @escaping () -> Void) {
+func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, url rawUrl: String, forceExternal: Bool, presentationData: PresentationData, navigationController: NavigationController?, dismissInput: @escaping () -> Void) {
+    // AstraGram security: trackers are cut from the link, and a link that looks dangerous is confirmed first.
+    let url = AstraGramSettings.current.stripLinkTrackers ? AstraLinkSafety.removingTrackers(rawUrl) : rawUrl
+    if AstraGramSettings.current.warnSuspiciousLinks, let warning = AstraLinkSafety.warning(for: url), !AstraLinkSafety.consumeConfirmation(url) {
+        let isRussian = presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+        let reason: String
+        switch warning {
+        case .lookalikeLetters:
+            reason = isRussian ? "Адрес сайта записан особыми символами и может выдавать себя за другой сайт." : "The site's address is written with special characters and may imitate another site."
+        case .ipAddress:
+            reason = isRussian ? "Ссылка ведёт на IP-адрес, а не на сайт с именем." : "The link leads to an IP address, not to a named site."
+        case .imitatesTelegram:
+            reason = isRussian ? "Сайт похож на Telegram по названию, но Telegram не принадлежит. Не вводите на нём номер, код входа и пароль." : "The site resembles Telegram by name but is not Telegram's. Do not enter your number, login code or password there."
+        case .dangerousFile:
+            reason = isRussian ? "Ссылка скачивает файл, который может установить или запустить программу." : "The link downloads a file that can install or run software."
+        }
+        context.sharedContext.presentGlobalController(textAlertController(context: context, title: isRussian ? "Подозрительная ссылка" : "Suspicious Link", text: reason + "\n\n" + url, actions: [
+            TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {
+            }),
+            TextAlertAction(type: .genericAction, title: isRussian ? "Открыть" : "Open", action: {
+                AstraLinkSafety.confirm(url)
+                openExternalUrlImpl(context: context, urlContext: urlContext, url: url, forceExternal: forceExternal, presentationData: presentationData, navigationController: navigationController, dismissInput: dismissInput)
+            })
+        ]), nil)
+        return
+    }
     // A login part hides the host a link opens (see `externalUrlWithLoginPart`). Every external link leaves through
     // here, whoever opens it, so here it is confirmed, unless a prompt that showed the real host was just accepted.
     if let loginPartUrl = externalUrlWithLoginPart(url), !consumeLoginPartConfirmation(loginPartUrl) {

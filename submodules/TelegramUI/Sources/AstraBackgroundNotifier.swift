@@ -117,6 +117,10 @@ final class AstraBackgroundNotifier {
                 body = EnginePeer(author).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) + ": " + body
             }
             content.title = chatTitle
+            // A chat locked with Face ID does not show its messages in a notification either.
+            if AstraGramSettings.current.lockedChats.contains(message.id.peerId.toInt64()) {
+                body = AstraStringsCompat.isRussian(presentationData) ? "Новое сообщение" : "New message"
+            }
             content.body = body
             content.sound = .default
             content.threadIdentifier = "\(message.id.peerId.toInt64())"

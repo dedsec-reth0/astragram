@@ -384,7 +384,13 @@ public enum AstraBackup {
     public static func exportData() -> Data? {
         var object: [String: Any] = ["format": "ayugram-ios-backup", "version": 1]
         if let settingsData = try? JSONEncoder().encode(AstraGramSettings.current), let settings = try? JSONSerialization.jsonObject(with: settingsData) {
-            object["settings"] = settings
+            // The AI key is a secret: it does not leave the device in a file that may be shared.
+            if var settingsObject = settings as? [String: Any] {
+                settingsObject["aiApiKey"] = ""
+                object["settings"] = settingsObject
+            } else {
+                object["settings"] = settings
+            }
         }
         if let bookmarksData = try? JSONEncoder().encode(AstraBookmarks.all), let bookmarks = try? JSONSerialization.jsonObject(with: bookmarksData) {
             object["bookmarks"] = bookmarks
@@ -401,7 +407,20 @@ public enum AstraBackup {
         // JSONSerialization raises an Objective-C exception (which `try?` does not catch) for a value that is not an
         // object or an array: the types are checked first.
         if let settings = object["settings"] as? [String: Any], let settingsData = try? JSONSerialization.data(withJSONObject: settings) {
+            // A backup neither wipes the AI key (it carries none) nor takes protection off.
+            let previous = AstraGramSettings.current
             AstraGramSettings.replace(withJSON: settingsData)
+            AstraGramSettings.update { settings in
+                if settings.aiApiKey.isEmpty {
+                    settings.aiApiKey = previous.aiApiKey
+                }
+                for peerId in previous.lockedChats where !settings.lockedChats.contains(peerId) {
+                    settings.lockedChats.append(peerId)
+                }
+                if previous.biometricForAstraGram {
+                    settings.biometricForAstraGram = true
+                }
+            }
         }
         if let bookmarks = object["bookmarks"] as? [Any], let bookmarksData = try? JSONSerialization.data(withJSONObject: bookmarks), let decoded = try? JSONDecoder().decode([AstraBookmark].self, from: bookmarksData) {
             AstraBookmarks.replaceAll(decoded)

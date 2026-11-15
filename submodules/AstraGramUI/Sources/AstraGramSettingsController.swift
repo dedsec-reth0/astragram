@@ -102,6 +102,7 @@ private enum AstraGramSettingsSection: Int32 {
     case onlineExceptions
     case media
     case tools
+    case security
     case footerSection
 }
 
@@ -340,7 +341,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openPlugins()
                 })
-            case .ai, .templates, .keywordAlerts, .bookmarks:
+            case .ai, .templates, .keywordAlerts, .bookmarks, .lockedChats, .securityCheck, .telegramPrivacy:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openTool(kind)
                 })
@@ -382,6 +383,9 @@ private enum AstraGramSettingsButtonKind: Equatable {
     case backupImport
     case restartApp
     case glassMaterial
+    case lockedChats
+    case securityCheck
+    case telegramPrivacy
 }
 
 private func formatFileSize(_ size: Int64) -> String {
@@ -496,6 +500,18 @@ private func astraGramSettingsEntries(strings: AstraStrings, settings: AstraGram
     entries.append(.button(id: 106, section: .tools, title: strings.backupImport, label: "", kind: .backupImport))
 
     // The look: every part has its own switch.
+    entries.append(.header(id: 130, section: .security, text: strings.securityHeader))
+    entries.append(.button(id: 139, section: .security, title: strings.securityCheck, label: "", kind: .securityCheck))
+    entries.append(.button(id: 134, section: .security, title: strings.lockedChats, label: settings.lockedChats.isEmpty ? strings.lockedChatsNone : "\(settings.lockedChats.count)", kind: .lockedChats))
+    entries.append(.flag(id: 133, section: .security, title: strings.biometricForAstraGram, value: settings.biometricForAstraGram, enabled: true, keyPath: \.biometricForAstraGram))
+    entries.append(.flag(id: 131, section: .security, title: strings.hideInAppSwitcher, value: settings.hideInAppSwitcher, enabled: true, keyPath: \.hideInAppSwitcher))
+    entries.append(.flag(id: 132, section: .security, title: strings.blockThirdPartyKeyboards, value: settings.blockThirdPartyKeyboards, enabled: true, keyPath: \.blockThirdPartyKeyboards))
+    entries.append(.flag(id: 135, section: .security, title: strings.warnSuspiciousLinks, value: settings.warnSuspiciousLinks, enabled: true, keyPath: \.warnSuspiciousLinks))
+    entries.append(.flag(id: 136, section: .security, title: strings.stripLinkTrackers, value: settings.stripLinkTrackers, enabled: true, keyPath: \.stripLinkTrackers))
+    entries.append(.flag(id: 137, section: .security, title: strings.clipboardExpire, value: settings.clipboardExpire, enabled: true, keyPath: \.clipboardExpire))
+    entries.append(.flag(id: 138, section: .security, title: strings.clipboardLocalOnly, value: settings.clipboardLocalOnly, enabled: true, keyPath: \.clipboardLocalOnly))
+    entries.append(.button(id: 140, section: .security, title: strings.telegramPrivacy, label: "", kind: .telegramPrivacy))
+    entries.append(.footer(id: 141, section: .security, text: strings.securityFooter))
     entries.append(.header(id: 110, section: .look, text: strings.lookHeader))
     entries.append(.flag(id: 111, section: .look, title: strings.monochrome, value: settings.monochrome, enabled: true, keyPath: \.monochrome))
     if settings.monochrome {
@@ -598,6 +614,48 @@ public func astraGramSettingsController(context: AccountContext, makeLinked: @es
                 pushControllerImpl?(astraBookmarksController(context: context))
             case .glassMaterial:
                 AstraGramSettings.update { $0.glassMaterial = (max(0, $0.glassMaterial) + 1) % 3 }
+            case .securityCheck:
+                let resultController = AstraTextResultController(title: strings.securityCheck, isRussian: strings.isRussian, load: { completion in
+                    astraSecurityReport(context: context, isRussian: strings.isRussian, completion: { text in
+                        completion(.success(text))
+                    })
+                })
+                presentNativeControllerImpl?(resultController.wrapped())
+            case .telegramPrivacy:
+                pushControllerImpl?(context.sharedContext.makePrivacyAndSecurityController(context: context))
+            case .lockedChats:
+                // Whoever holds the unlocked phone must not be able to take the lock off: the list opens after Face ID.
+                AstraBiometrics.authenticate(reason: strings.lockedChatsReason, completion: { success in
+                    guard success else {
+                        return
+                    }
+                    let selected = Set(AstraGramSettings.current.lockedChats.map { EnginePeer.Id($0) })
+                    let controller = context.sharedContext.makeContactMultiselectionController(ContactMultiselectionControllerParams(context: context, mode: .chatSelection(ContactMultiselectionControllerMode.ChatSelection(
+                        title: strings.lockedChats,
+                        searchPlaceholder: presentationData.strings.Common_Search,
+                        selectedChats: selected,
+                        additionalCategories: nil,
+                        chatListFilters: nil,
+                        onlyUsers: false,
+                        disableChannels: false,
+                        disableBots: false
+                    ))))
+                    let _ = (controller.result
+                    |> take(1)
+                    |> deliverOnMainQueue).start(next: { [weak controller] result in
+                        if case let .result(peerIds, _) = result {
+                            var ids: [Int64] = []
+                            for peerId in peerIds {
+                                if case let .peer(id) = peerId {
+                                    ids.append(id.toInt64())
+                                }
+                            }
+                            AstraGramSettings.update { $0.lockedChats = ids }
+                        }
+                        controller?.dismiss()
+                    })
+                    pushControllerImpl?(controller)
+                })
             case .restartApp:
                 AstraAppRestart.perform(title: strings.restartNotificationTitle, text: strings.restartNotificationText)
             case .backupExport:

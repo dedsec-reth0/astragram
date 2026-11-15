@@ -3,6 +3,7 @@ import UIKit
 import Display
 import SwiftSignalKit
 import TelegramCore
+import AstraGramUI
 import AccountContext
 import GalleryUI
 import InstantPageUI
@@ -22,6 +23,18 @@ import ChatMessageNotificationItem
 import FaceScanScreen
 
 public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParams) {
+    // AstraGram security: a chat locked with Face ID opens after authentication, until the app goes to the background.
+    if case let .peer(lockedPeer) = params.chatLocation, AstraChatLock.needsAuthentication(lockedPeer.id.toInt64()) {
+        let lockedPeerId = lockedPeer.id.toInt64()
+        let isRussian = params.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+        AstraBiometrics.authenticate(reason: isRussian ? "Открыть защищённый чат" : "Open the locked chat", completion: { success in
+            if success {
+                AstraChatLock.markUnlocked(lockedPeerId)
+                navigateToChatControllerImpl(params)
+            }
+        })
+        return
+    }
     if case let .peer(peer) = params.chatLocation {
         let _ = params.context.engine.peers.ensurePeerIsLocallyAvailable(peer: peer).startStandalone()
     }

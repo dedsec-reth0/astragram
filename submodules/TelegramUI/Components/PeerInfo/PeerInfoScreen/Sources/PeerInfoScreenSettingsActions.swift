@@ -312,6 +312,17 @@ extension PeerInfoScreenNode {
             }
             push(self.context.sharedContext.makeWalletScreen(context: self.context))
         case .astraGram:
+            // AstraGram security: its settings open after Face ID when that is asked for.
+            if AstraGramSettings.current.biometricForAstraGram && !AstraChatLock.settingsUnlocked {
+                let isRussian = self.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+                AstraBiometrics.authenticate(reason: isRussian ? "Открыть настройки AstraGram" : "Open AstraGram settings", completion: { [weak self] success in
+                    if success {
+                        AstraChatLock.settingsUnlocked = true
+                        self?.openSettings(section: .astraGram)
+                    }
+                })
+                return
+            }
             let context = self.context
             push(astraGramSettingsController(context: context, makeLinked: { section in
                 switch section {
