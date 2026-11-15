@@ -409,9 +409,6 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.flag(id: 18, section: .ghostExtra, title: strings.sendViaSchedule, value: settings.sendViaSchedule, enabled: settings.hideOnlineStatus, keyPath: \.sendViaSchedule))
     entries.append(.footer(id: 19, section: .ghostExtra, text: strings.sendViaScheduleFooter))
 
-    entries.append(.button(id: 7, section: .onlineExceptions, title: strings.ghostOnlineExceptions, label: settings.ghostOnlineExceptions.isEmpty ? strings.ghostOnlineNobody : "\(settings.ghostOnlineExceptions.count)", kind: .ghostOnlineExceptions))
-    entries.append(.footer(id: 8, section: .onlineExceptions, text: strings.onlineForExceptionsFooter))
-
     entries.append(.header(id: 3, section: .dedsec, text: strings.dedsecHeader))
     entries.append(.flag(id: 4, section: .dedsec, title: strings.dedsecSilence, value: settings.dedsecSilence, enabled: true, keyPath: \.dedsecSilence))
     entries.append(.footer(id: 5, section: .dedsec, text: strings.dedsecFooter))
@@ -602,7 +599,6 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
                             }
                         }
                         AyuGramSettings.update { $0.ghostOnlineExceptions = ids }
-                        AyuGhostOnlineExceptions.apply(context: context)
                     }
                     controller?.dismiss()
                 })
