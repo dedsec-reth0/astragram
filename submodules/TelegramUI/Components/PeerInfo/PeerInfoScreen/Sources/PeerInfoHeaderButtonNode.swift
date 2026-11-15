@@ -7,6 +7,7 @@ import Display
 import TelegramPresentationData
 import ComponentFlow
 import LottieComponent
+import TelegramCore
 
 enum PeerInfoHeaderButtonKey: Hashable {
     case message
@@ -306,25 +307,46 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
         transition.updateFrame(node: self.contentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: size.height * 0.5 * (1.0 - fraction)), size: size))
         transition.updateAlpha(node: self.contentNode, alpha: fraction)
         
-        let backgroundY: CGFloat = size.height * (1.0 - fraction)
-        let backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: backgroundY), size: CGSize(width: size.width, height: max(0.0, size.height - backgroundY)))
+        // AyuGram "Liquid Glass+ (beta)": a round glass button with its label under it, as in the concept, instead of
+        // a rounded rectangle with the label inside.
+        let ayuRound = AyuGramSettings.current.liquidGlassBeta
+        let ayuCircleSize: CGFloat = min(42.0, size.width)
+        let backgroundFrame: CGRect
+        let backgroundCornerRadius: CGFloat
+        let iconOriginY: CGFloat
+        let textOriginY: CGFloat
+        if ayuRound {
+            let backgroundY: CGFloat = ayuCircleSize * (1.0 - fraction)
+            let backgroundHeight = max(0.0, ayuCircleSize - backgroundY)
+            let backgroundWidth = min(ayuCircleSize, max(backgroundHeight, ayuCircleSize * fraction))
+            backgroundFrame = CGRect(origin: CGPoint(x: floor((size.width - backgroundWidth) / 2.0), y: backgroundY), size: CGSize(width: backgroundWidth, height: backgroundHeight))
+            backgroundCornerRadius = min(backgroundFrame.width, backgroundFrame.height) * 0.5
+            iconOriginY = floor((ayuCircleSize - iconSize.height) / 2.0)
+            textOriginY = ayuCircleSize + 3.0
+        } else {
+            let backgroundY: CGFloat = size.height * (1.0 - fraction)
+            backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: backgroundY), size: CGSize(width: size.width, height: max(0.0, size.height - backgroundY)))
+            backgroundCornerRadius = min(16.0, backgroundFrame.height * 0.5)
+            iconOriginY = 1.0
+            textOriginY = size.height - titleSize.height - 9.0
+        }
         //transition.updateFrame(node: self.backgroundNode, frame: backgroundFrame)
         transition.updateFrame(view: self.backgroundView, frame: backgroundFrame)
         
         transition.updateSublayerTransformScale(node: self.contentNode, scale: 1.0 * fraction + 0.001 * (1.0 - fraction))
         
-        transition.updateCornerRadius(layer: self.backgroundView.layer, cornerRadius: min(16.0, backgroundFrame.height * 0.5))
+        transition.updateCornerRadius(layer: self.backgroundView.layer, cornerRadius: backgroundCornerRadius)
         // The context source contains only the foreground; its backdrop is a
         // separate shared-blur mask. Match both its rounded shape and its visible
         // bounds, including a partially collapsed header.
-        self.referenceNode.contextMenuSourcePath = UIBezierPath(roundedRect: backgroundFrame, cornerRadius: min(16.0, backgroundFrame.height * 0.5))
+        self.referenceNode.contextMenuSourcePath = UIBezierPath(roundedRect: backgroundFrame, cornerRadius: backgroundCornerRadius)
         //self.backgroundNode.update(size: backgroundFrame.size, cornerRadius: min(11.0, backgroundFrame.height * 0.5), transition: transition)
         //self.backgroundNode.updateColor(color: backgroundColor, transition: transition)
-        transition.updateFrame(node: self.iconNode, frame: CGRect(origin: CGPoint(x: floor((size.width - iconSize.width) / 2.0), y: 1.0), size: iconSize))
+        transition.updateFrame(node: self.iconNode, frame: CGRect(origin: CGPoint(x: floor((size.width - iconSize.width) / 2.0), y: iconOriginY), size: iconSize))
         if let animatedIconView = self.animatedIcon?.view {
-            transition.updateFrame(view: animatedIconView, frame: CGRect(origin: CGPoint(x: floor((size.width - iconSize.width) / 2.0), y: 1.0), size: iconSize))
+            transition.updateFrame(view: animatedIconView, frame: CGRect(origin: CGPoint(x: floor((size.width - iconSize.width) / 2.0), y: iconOriginY), size: iconSize))
         }
-        transition.updateFrameAdditiveToCenter(node: self.textNode, frame: CGRect(origin: CGPoint(x: floor((size.width - titleSize.width) / 2.0), y: size.height - titleSize.height - 9.0), size: titleSize))
+        transition.updateFrameAdditiveToCenter(node: self.textNode, frame: CGRect(origin: CGPoint(x: floor((size.width - titleSize.width) / 2.0), y: textOriginY), size: titleSize))
         
         self.referenceNode.frame = self.containerNode.bounds
         self.updateContextMenuBackground()
