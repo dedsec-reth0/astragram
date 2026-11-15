@@ -719,7 +719,9 @@ public class GlassBackgroundView: UIView {
         self.update(size: size, shape: shape, isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, isVisible: isVisible, transition: transition)
     }
 
-    func update(size: CGSize, shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, isVisible: Bool = true, transition: ComponentTransition) {
+    func update(size: CGSize, shape: Shape, isDark: Bool, tintColor rawTintColor: TintColor, isInteractive: Bool = false, isVisible: Bool = true, transition: ComponentTransition) {
+        // AyuGram: the glass material chosen in the settings.
+        let tintColor = GlassBackgroundView.ayuMaterialTint(rawTintColor, isDark: isDark)
         
         if let glassHighlightRecognizer = self.glassHighlightRecognizer {
             glassHighlightRecognizer.isEnabled = isInteractive
@@ -2119,5 +2121,31 @@ extension GlassBackgroundContainerView {
         glassShapeKeyframes(self.nativeParamsView, sizes: sizes, timing: timing, frame: filling)
         glassShapeKeyframes(self.nativeView, sizes: sizes, timing: timing, frame: filling)
         glassShapeKeyframes(self.legacyView, sizes: sizes, timing: timing, frame: filling)
+    }
+}
+
+extension GlassBackgroundView {
+    /// AyuGram look: the tint a panel gets under the chosen glass material. Clear turns plain panels into clear
+    /// glass, matte fills them almost solid; tints with a color of their own stay as they are.
+    static func ayuMaterialTint(_ tintColor: TintColor, isDark: Bool) -> TintColor {
+        switch AyuLook.glassMaterial {
+        case 1:
+            switch tintColor.kind {
+            case .panel, .untinted:
+                return TintColor(kind: .clear, innerColor: tintColor.innerColor, innerInset: tintColor.innerInset)
+            case .clear, .custom:
+                return tintColor
+            }
+        case 2:
+            switch tintColor.kind {
+            case .panel, .untinted, .clear:
+                let color = isDark ? UIColor(white: 0.07, alpha: 0.8) : UIColor(white: 1.0, alpha: 0.8)
+                return TintColor(kind: .custom(style: .default, color: color), innerColor: tintColor.innerColor, innerInset: tintColor.innerInset)
+            case .custom:
+                return tintColor
+            }
+        default:
+            return tintColor
+        }
     }
 }

@@ -504,6 +504,20 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         Queue.mainQueue().after(10.0, {
             AyuUpdateChecker.checkOnLaunch(window: ayuUpdateWindow)
         })
+        // AyuGram look: the glass material and the springy presses, for the modules below the settings.
+        AyuLook.glassMaterial = AyuGramSettings.current.glassMaterial
+        AyuLook.springPresses = AyuGramSettings.current.springPresses
+        let _ = (AyuGramSettings.signal
+        |> map { settings -> (Int, Bool) in
+            return (settings.glassMaterial, settings.springPresses)
+        }
+        |> distinctUntilChanged(isEqual: { lhs, rhs in
+            return lhs == rhs
+        })
+        |> deliverOnMainQueue).start(next: { glassMaterial, springPresses in
+            AyuLook.glassMaterial = glassMaterial
+            AyuLook.springPresses = springPresses
+        })
         let ayuWindowLayer = window.layer
         let _ = (AyuGramSettings.signal
         |> map { settings -> (Bool, Bool) in

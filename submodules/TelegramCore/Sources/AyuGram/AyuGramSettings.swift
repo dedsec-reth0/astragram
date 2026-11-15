@@ -88,6 +88,10 @@ public struct AyuGramSettingsValues: Codable, Equatable {
     public var callsTab: Bool
     /// Look: black, white and grays only, in the dark and the light appearance.
     public var monochrome: Bool
+    /// Look: the material of glass panels and buttons (0 Telegram's own, 1 clear, 2 matte).
+    public var glassMaterial: Int
+    /// Look: buttons answer a press with a spring, the chat list highlights a row as a rounded plate.
+    public var springPresses: Bool
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -166,6 +170,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         contactsTab: true,
         callsTab: true,
         monochrome: false,
+        glassMaterial: 0,
+        springPresses: false,
         hideStickersFromOthers: false,
         hideGifsFromOthers: false,
         messageTemplates: [],
@@ -224,6 +230,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         contactsTab: Bool,
         callsTab: Bool,
         monochrome: Bool,
+        glassMaterial: Int,
+        springPresses: Bool,
         hideStickersFromOthers: Bool,
         hideGifsFromOthers: Bool,
         messageTemplates: [String],
@@ -280,6 +288,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.contactsTab = contactsTab
         self.callsTab = callsTab
         self.monochrome = monochrome
+        self.glassMaterial = glassMaterial
+        self.springPresses = springPresses
         self.hideStickersFromOthers = hideStickersFromOthers
         self.hideGifsFromOthers = hideGifsFromOthers
         self.messageTemplates = messageTemplates
@@ -341,6 +351,8 @@ public struct AyuGramSettingsValues: Codable, Equatable {
         self.contactsTab = try container.decodeIfPresent(Bool.self, forKey: .contactsTab) ?? d.contactsTab
         self.callsTab = try container.decodeIfPresent(Bool.self, forKey: .callsTab) ?? d.callsTab
         self.monochrome = try container.decodeIfPresent(Bool.self, forKey: .monochrome) ?? d.monochrome
+        self.glassMaterial = try container.decodeIfPresent(Int.self, forKey: .glassMaterial) ?? d.glassMaterial
+        self.springPresses = try container.decodeIfPresent(Bool.self, forKey: .springPresses) ?? d.springPresses
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

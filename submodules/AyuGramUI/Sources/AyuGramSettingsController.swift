@@ -356,6 +356,10 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openApiCredentials()
                 })
+            case .glassMaterial:
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, action: {
+                    arguments.openTool(kind)
+                })
             case .unhideMessages:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, action: {
                     arguments.unhideMessages()
@@ -377,6 +381,7 @@ private enum AyuGramSettingsButtonKind: Equatable {
     case backupExport
     case backupImport
     case restartApp
+    case glassMaterial
 }
 
 private func formatFileSize(_ size: Int64) -> String {
@@ -497,6 +502,8 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.flag(id: 113, section: .look, title: strings.profileMusicCapsule, value: settings.profileMusicCapsule, enabled: true, keyPath: \.profileMusicCapsule))
     entries.append(.flag(id: 114, section: .look, title: strings.contactsTab, value: settings.contactsTab, enabled: true, keyPath: \.contactsTab))
     entries.append(.flag(id: 115, section: .look, title: strings.callsTab, value: settings.callsTab, enabled: true, keyPath: \.callsTab))
+    entries.append(.button(id: 119, section: .look, title: strings.glassMaterial, label: [strings.glassMaterialStandard, strings.glassMaterialClear, strings.glassMaterialMatte][max(0, min(2, settings.glassMaterial))], kind: .glassMaterial))
+    entries.append(.flag(id: 120, section: .look, title: strings.springPresses, value: settings.springPresses, enabled: true, keyPath: \.springPresses))
     entries.append(.footer(id: 116, section: .look, text: strings.lookFooter))
     entries.append(.button(id: 117, section: .onlineExceptions, title: strings.restartApp, label: "", kind: .restartApp))
     entries.append(.footer(id: 118, section: .onlineExceptions, text: strings.restartFooter))
@@ -586,6 +593,8 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
                 pushControllerImpl?(ayuStringListController(context: context, title: strings.keywordAlerts, placeholder: strings.keywordPlaceholder, footer: strings.keywordAlertsFooter, keyPath: \.keywordAlerts))
             case .bookmarks:
                 pushControllerImpl?(ayuBookmarksController(context: context))
+            case .glassMaterial:
+                AyuGramSettings.update { $0.glassMaterial = (max(0, $0.glassMaterial) + 1) % 3 }
             case .restartApp:
                 AyuAppRestart.perform(title: strings.restartNotificationTitle, text: strings.restartNotificationText)
             case .backupExport:
