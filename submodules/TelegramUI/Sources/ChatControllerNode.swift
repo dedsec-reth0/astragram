@@ -5562,7 +5562,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         messages[messages.count - 1] = messages[messages.count - 1].withUpdatedCorrelationId(correlationId)
                         
                         var replyPanel: ChatInputAccessoryPanelView?
-                        if self.shouldAnimateMessageTransition, let inputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode, let textInput = inputPanelNode.makeSnapshotForTransition() {
+                        // AstraGram ghost mode: a message sent via schedule appears seconds later; it does not fly out of the input field.
+                        let astraViaSchedule = self.controller?.astraSendsViaSchedule(scheduleTime: scheduleTime, postpone: postpone) ?? false
+                        if !astraViaSchedule, self.shouldAnimateMessageTransition, let inputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode, let textInput = inputPanelNode.makeSnapshotForTransition() {
                             replyPanel = inputPanelNode.accessoryPanelView
                             
                             usedCorrelationId = correlationId

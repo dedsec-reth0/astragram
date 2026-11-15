@@ -153,6 +153,11 @@ import ChatMediaEditorScreen
 import OpenUserGeneratedUrl
 import AstraGramUI
 
+/// AstraGram ghost mode: how far ahead "Send via schedule" schedules a message, in seconds.
+let astraSendViaScheduleDelay: Int32 = 12
+/// When the notice about a message sent via schedule was last shown: several messages sent at once get one.
+private var astraLastSendViaScheduleNotice: Double = 0.0
+
 /// Set while a sticker or GIF the user confirmed is being sent, so that the confirmation is not asked again.
 private var astraStickerSendConfirmed = false
 
@@ -9250,18 +9255,46 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
     }
         
+    /// AstraGram ghost mode: whether "Send via schedule" turns a regular send from this chat into a scheduled one.
+    func astraSendsViaSchedule(scheduleTime: Int32?, postpone: Bool) -> Bool {
+        guard scheduleTime == nil, !postpone, AstraGramSettings.current.sendViaSchedule, AstraGramSettings.current.hideOnlineStatus, case let .peer(peerId) = self.chatLocation, peerId.namespace != Namespaces.Peer.SecretChat, peerId != self.context.account.peerId else {
+            return false
+        }
+        if case .scheduledMessages = self.presentationInterfaceState.subject {
+            return false
+        }
+        return true
+    }
+
+    /// AstraGram ghost mode: a message sent via schedule does not appear in the chat for a few seconds, so what waits
+    /// for it to appear (clearing the input field, closing the panels) runs now, and a notice says when it is sent.
+    func astraFinishSendViaSchedule() {
+        if let action = self.layoutActionOnViewTransitionAction {
+            self.layoutActionOnViewTransitionAction = nil
+            // Or it would run again when the message does appear, and clear what has been typed since.
+            self.chatDisplayNode.historyNode.layoutActionOnViewTransition = nil
+            action()
+        }
+        let now = CFAbsoluteTimeGetCurrent()
+        if now - astraLastSendViaScheduleNotice < 1.0 {
+            return
+        }
+        astraLastSendViaScheduleNotice = now
+        let isRussian = self.presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+        let text = isRussian ? "Сообщение отправится через \(astraSendViaScheduleDelay) секунд" : "The message will be sent in \(astraSendViaScheduleDelay) seconds"
+        self.present(UndoOverlayController(presentationData: self.presentationData, content: .info(title: nil, text: text, timeout: 3.0, customUndoText: nil), action: { _ in return false }), in: .current)
+    }
+
     func transformEnqueueMessages(_ messages: [EnqueueMessage], silentPosting: Bool, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false) -> [EnqueueMessage] {
         // AstraGram ghost mode: "Send via schedule" sends a message as scheduled a few seconds ahead, so sending it does
         // not show the account online.
         var scheduleTime = scheduleTime
-        if scheduleTime == nil, !postpone, AstraGramSettings.current.sendViaSchedule, AstraGramSettings.current.hideOnlineStatus, case let .peer(peerId) = self.chatLocation, peerId.namespace != Namespaces.Peer.SecretChat, peerId != self.context.account.peerId {
-            var isScheduledChat = false
-            if case .scheduledMessages = self.presentationInterfaceState.subject {
-                isScheduledChat = true
-            }
-            if !isScheduledChat {
-                scheduleTime = Int32(Date().timeIntervalSince1970) + 12
-            }
+        if self.astraSendsViaSchedule(scheduleTime: scheduleTime, postpone: postpone) {
+            scheduleTime = Int32(Date().timeIntervalSince1970) + astraSendViaScheduleDelay
+            // After the send has set up what it waits for.
+            Queue.mainQueue().after(0.15, { [weak self] in
+                self?.astraFinishSendViaSchedule()
+            })
         }
         var defaultThreadId: Int64?
         var defaultReplyMessageSubject: EngineMessageReplySubject?
