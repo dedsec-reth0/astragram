@@ -132,7 +132,7 @@ public enum AyuAI {
     public static func describe(_ error: AIError, isRussian: Bool) -> String {
         switch error {
         case .notConfigured:
-            return isRussian ? "Для этого действия нужен свой API-ключ: Настройки → AyuGram → AI (бесплатный AI работает только с текстом)." : "This action needs your own API key: Settings → AyuGram → AI (the free AI handles text only)."
+            return isRussian ? "Для этого действия нужен свой API-ключ: Настройки → AstraGram → AI (бесплатный AI работает только с текстом)." : "This action needs your own API key: Settings → AstraGram → AI (the free AI handles text only)."
         case let .network(text):
             return (isRussian ? "Ошибка сети: " : "Network error: ") + text
         case let .server(text):

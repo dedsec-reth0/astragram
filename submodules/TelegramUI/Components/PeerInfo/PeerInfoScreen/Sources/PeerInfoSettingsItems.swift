@@ -259,7 +259,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         notificationsWarning = false
     }
     // AyuGram settings, first in the section.
-    items[.advanced]!.append(PeerInfoScreenDisclosureItem(id: 7, label: AyuGramSettings.current.isGhostModePartiallyEnabled ? .text("👻") : .none, text: "AyuGram", icon: PresentationResourcesSettings.ayuGram, action: {
+    items[.advanced]!.append(PeerInfoScreenDisclosureItem(id: 7, label: AyuGramSettings.current.isGhostModePartiallyEnabled ? .text("👻") : .none, text: "AstraGram", icon: PresentationResourcesSettings.ayuGram, action: {
         interaction.openSettings(.ayuGram)
     }))
     items[.advanced]!.append(PeerInfoScreenDisclosureItem(id: 0, label: notificationsWarning ? .badge("!", presentationData.theme.list.itemDestructiveColor) : .none, text: presentationData.strings.Settings_NotificationsAndSounds, icon: PresentationResourcesSettings.notifications, labelAccessibilityText: notificationsWarning ? presentationData.strings.VoiceOver_TabBar_AttentionRequired : nil, action: {

@@ -15,7 +15,7 @@ public struct AyuStrings {
         return self.isRussian ? ru : en
     }
 
-    public var title: String { t("AyuGram", "AyuGram") }
+    public var title: String { t("AstraGram", "AstraGram") }
 
     // Ghost mode
     public var ghostHeader: String { t("РЕЖИМ ПРИЗРАКА", "GHOST MODE") }
@@ -77,8 +77,8 @@ public struct AyuStrings {
 
     // About
     public var aboutHeader: String { t("О ПРИЛОЖЕНИИ", "ABOUT") }
-    public var resetSettings: String { t("Сбросить настройки AyuGram", "Reset AyuGram Settings") }
-    public var resetDone: String { t("Настройки AyuGram сброшены", "AyuGram settings reset") }
+    public var resetSettings: String { t("Сбросить настройки AstraGram", "Reset AstraGram Settings") }
+    public var resetDone: String { t("Настройки AstraGram сброшены", "AstraGram settings reset") }
 
     // Deleted messages screen
     public var noDeletedMessages: String { t("Здесь появятся сообщения, которые были удалены.", "Deleted messages will appear here.") }
@@ -98,7 +98,7 @@ public struct AyuStrings {
         return self.isRussian ? "Версия \(n)" : "Version \(n)"
     }
     public var currentVersion: String { t("Текущая версия", "Current version") }
-    public var noEditHistory: String { t("Для этого сообщения нет сохранённых версий: правки сохраняются с момента установки AyuGram.", "No saved versions for this message: edits are saved since AyuGram was installed.") }
+    public var noEditHistory: String { t("Для этого сообщения нет сохранённых версий: правки сохраняются с момента установки AstraGram.", "No saved versions for this message: edits are saved since AstraGram was installed.") }
 
     public func mediaKind(_ kind: AyuSavedMediaKind) -> String {
         switch kind {
@@ -121,7 +121,7 @@ public struct AyuStrings {
     }
 
     // AyuGram features, second batch
-    public var messageMenu: String { t("AyuGram", "AyuGram") }
+    public var messageMenu: String { t("AstraGram", "AstraGram") }
     public var messageDetails: String { t("Детали сообщения", "Message Details") }
     public var repeatMessage: String { t("Повторить", "Repeat") }
     public var copyPlain: String { t("Копировать без форматирования", "Copy Without Formatting") }
@@ -170,7 +170,7 @@ public struct AyuStrings {
     public var pluginsInstall: String { t("Установить из файла", "Install from File") }
     public var pluginsInstallFromClipboard: String { t("Установить из буфера обмена", "Install from Clipboard") }
     public var pluginsInstalled: String { t("УСТАНОВЛЕННЫЕ", "INSTALLED") }
-    public var pluginsEmpty: String { t("Плагинов пока нет. Плагин — это файл .js с описанием в начале. Пример есть в документации AyuGram для iOS.", "No plugins yet. A plugin is a .js file with a header. See the AyuGram for iOS docs for an example.") }
+    public var pluginsEmpty: String { t("Плагинов пока нет. Плагин — это файл .js с описанием в начале. Пример есть в документации AstraGram для iOS.", "No plugins yet. A plugin is a .js file with a header. See the AstraGram for iOS docs for an example.") }
     public var pluginsDelete: String { t("Удалить", "Delete") }
     public var pluginsInvalid: String { t("Не удалось загрузить плагин", "Could not load the plugin") }
     public var pluginsInstalledDone: String { t("Плагин установлен", "Plugin installed") }
@@ -191,7 +191,7 @@ public struct AyuStrings {
     public var notificationsHeader: String { t("УВЕДОМЛЕНИЯ", "NOTIFICATIONS") }
     public var backgroundNotifications: String { t("Уведомления без push", "Notifications without push") }
     public var keepAliveInBackground: String { t("Держать соединение в фоне", "Stay connected in background") }
-    public var backgroundNotificationsFooter: String { t("Push-уведомления Telegram не приходят в приложения, установленные через AltStore. «Держать соединение в фоне» не даёт iOS усыпить AyuGram (проигрывается тишина, музыке это не мешает), поэтому сообщения приходят и уведомляются сразу, но батарея расходуется быстрее. Без него AyuGram проверяет сообщения, только когда iOS сама его будит (раз в 15–60 минут или реже). Смахивание AyuGram из списка недавних приложений останавливает и то и другое.", "Telegram push notifications do not reach apps installed with AltStore. \"Stay connected in background\" keeps iOS from suspending AyuGram (it plays silence, music is not affected), so messages arrive and are notified at once, at the cost of battery. Without it AyuGram checks for messages only when iOS wakes it up (every 15–60 minutes or less often). Swiping AyuGram away from recent apps stops both.") }
+    public var backgroundNotificationsFooter: String { t("Push-уведомления Telegram не приходят в приложения, установленные через AltStore. «Держать соединение в фоне» не даёт iOS усыпить AstraGram (проигрывается тишина, музыке это не мешает), поэтому сообщения приходят и уведомляются сразу, но батарея расходуется быстрее. Без него AstraGram проверяет сообщения, только когда iOS сама его будит (раз в 15–60 минут или реже). Смахивание AstraGram из списка недавних приложений останавливает и то и другое.", "Telegram push notifications do not reach apps installed with AltStore. \"Stay connected in background\" keeps iOS from suspending AstraGram (it plays silence, music is not affected), so messages arrive and are notified at once, at the cost of battery. Without it AstraGram checks for messages only when iOS wakes it up (every 15–60 minutes or less often). Swiping AstraGram away from recent apps stops both.") }
     public var shortcutGhostOn: String { t("Включить режим призрака", "Turn On Ghost Mode") }
     public var shortcutGhostOff: String { t("Выключить режим призрака", "Turn Off Ghost Mode") }
     public var shortcutStateOn: String { t("Сейчас включён", "Now on") }
@@ -217,7 +217,7 @@ public struct AyuStrings {
     public var aiTest: String { t("Проверить подключение", "Test Connection") }
     public var aiFooter: String { t("Без ключа AI работает через бесплатный публичный сервис Pollinations: регистрация не нужна, но не чаще одного запроса в 45 секунд и только текст (расшифровка голосовых недоступна). Со своим ключом (OpenAI, OpenRouter, Groq, DeepSeek или свой сервер с OpenAI-совместимым API) ограничений нет. Текст отправляется в сервис только когда вы сами выбираете AI-действие. Ключ хранится только на этом устройстве.", "Without a key, AI uses the free public Pollinations service: no sign-up, but at most one request every 45 seconds and text only (no voice transcription). With your own key (OpenAI, OpenRouter, Groq, DeepSeek or your own OpenAI-compatible server) there are no such limits. Text is sent to the service only when you pick an AI action. The key stays on this device.") }
     public var bookmarks: String { t("Закладки", "Bookmarks") }
-    public var bookmarksEmpty: String { t("Закладок пока нет. Долгое нажатие на сообщение → AyuGram → «В закладки».", "No bookmarks yet. Long press a message → AyuGram → Bookmark.") }
+    public var bookmarksEmpty: String { t("Закладок пока нет. Долгое нажатие на сообщение → AstraGram → «В закладки».", "No bookmarks yet. Long press a message → AstraGram → Bookmark.") }
     public var bookmarksClear: String { t("Удалить все закладки", "Delete All Bookmarks") }
     public var bookmarksClearConfirm: String { t("Удалить все закладки? Сами сообщения останутся в чатах.", "Delete all bookmarks? The messages stay in their chats.") }
     public var toolsHeader: String { t("ИНСТРУМЕНТЫ", "TOOLS") }
@@ -228,10 +228,10 @@ public struct AyuStrings {
     public var keywordAlerts: String { t("Уведомления по словам", "Keyword Alerts") }
     public var keywordPlaceholder: String { t("слово или фраза", "word or phrase") }
     public var keywordAlertsFooter: String { t("Сообщения с этими словами уведомляют, даже если чат без звука (работает вместе с «Уведомления без push»).", "Messages with these words notify even when the chat is muted (works with Notifications without push).") }
-    public var backupExport: String { t("Экспорт настроек AyuGram", "Export AyuGram Settings") }
-    public var backupImport: String { t("Импорт настроек AyuGram", "Import AyuGram Settings") }
+    public var backupExport: String { t("Экспорт настроек AstraGram", "Export AstraGram Settings") }
+    public var backupImport: String { t("Импорт настроек AstraGram", "Import AstraGram Settings") }
     public var backupDone: String { t("Настройки восстановлены", "Settings restored") }
-    public var backupInvalid: String { t("Это не резервная копия AyuGram", "This is not an AyuGram backup") }
+    public var backupInvalid: String { t("Это не резервная копия AstraGram", "This is not an AstraGram backup") }
     public var mediaHeader: String { t("ФИЛЬТРЫ МЕДИА", "MEDIA FILTERS") }
     public var hideStickers: String { t("Скрывать стикеры других", "Hide stickers from others") }
     public var hideGifs: String { t("Скрывать GIF других", "Hide GIFs from others") }
@@ -249,9 +249,9 @@ public struct AyuStrings {
     public var ocr: String { t("Распознать текст на фото", "Recognize Text") }
     public var bookmarkAdd: String { t("В закладки", "Bookmark") }
     public var bookmarkRemove: String { t("Убрать из закладок", "Remove Bookmark") }
-    public var bookmarkAdded: String { t("Сообщение в закладках AyuGram", "Message bookmarked") }
+    public var bookmarkAdded: String { t("Сообщение в закладках AstraGram", "Message bookmarked") }
     public var exportChat: String { t("Экспорт чата и статистика", "Export Chat and Statistics") }
-    public var aiNotConfiguredShort: String { t("Сначала добавьте ключ в Настройки → AyuGram → AI", "First add a key in Settings → AyuGram → AI") }
+    public var aiNotConfiguredShort: String { t("Сначала добавьте ключ в Настройки → AstraGram → AI", "First add a key in Settings → AstraGram → AI") }
     public var aiFree: String { t("бесплатный", "free") }
     public var lookHeader: String { t("ВИД", "LOOK") }
     public var roundProfileButtons: String { t("Круглые кнопки в профиле", "Round Profile Buttons") }
@@ -260,9 +260,9 @@ public struct AyuStrings {
     public var callsTab: String { t("Вкладка «Звонки»", "Calls Tab") }
     public var monochrome: String { t("Монохромное оформление", "Monochrome Look") }
     public var lookFooter: String { t("Каждая часть вида включается отдельно. Монохром оставляет только чёрный, белый и серые; тёмный или светлый вариант берётся из вашей темы и ночного режима, а фото, стикеры и эмодзи остаются цветными. Материал стекла меняет панели и кнопки: стандартный, прозрачный или матовый; строка переключает их по кругу. Пружинящие нажатия: кнопка проседает под пальцем и возвращается на пружине, а нажатая строка в списке чатов подсвечивается скруглённой плашкой. Вкладки, монохром и нажатия применяются сразу, кнопки и музыка при следующем открытии профиля. Материал стекла, значки настроек и заглушки аватаров полностью меняются после перезапуска.", "Every part of the look has its own switch. Monochrome leaves only black, white and grays; the dark or the light variant follows your theme and night mode, while photos, stickers and emoji keep their colors. Glass Material changes panels and buttons: standard, clear or matte; the row cycles through them. Springy Presses: a button sinks under the finger and comes back on a spring, and the pressed row of the chat list is highlighted as a rounded plate. Tabs, Monochrome and presses apply at once, buttons and music the next time a profile opens. The glass material, the settings icons and avatar placeholders change fully after the app restarts.") }
-    public var restartApp: String { t("Перезапустить AyuGram", "Restart AyuGram") }
-    public var restartFooter: String { t("iOS не позволяет приложению открыть себя заново. AyuGram закроется и пришлёт уведомление: нажмите на него, и приложение откроется снова. Если уведомления выключены, откройте его с домашнего экрана.", "iOS does not let an app reopen itself. AyuGram closes and sends a notification: tap it and the app opens again. If notifications are off, open it from the Home Screen.") }
-    public var restartNotificationTitle: String { t("AyuGram закрыт", "AyuGram is closed") }
+    public var restartApp: String { t("Перезапустить AstraGram", "Restart AstraGram") }
+    public var restartFooter: String { t("iOS не позволяет приложению открыть себя заново. AstraGram закроется и пришлёт уведомление: нажмите на него, и приложение откроется снова. Если уведомления выключены, откройте его с домашнего экрана.", "iOS does not let an app reopen itself. AstraGram closes and sends a notification: tap it and the app opens again. If notifications are off, open it from the Home Screen.") }
+    public var restartNotificationTitle: String { t("AstraGram закрыт", "AstraGram is closed") }
     public var restartNotificationText: String { t("Нажмите, чтобы открыть снова.", "Tap to open it again.") }
     public var glassMaterial: String { t("Материал стекла", "Glass Material") }
     public var glassMaterialStandard: String { t("Стандартный", "Standard") }

@@ -65,7 +65,7 @@ public final class AyuApiCredentialsController: UIViewController, UITextFieldDel
         self.stackView.addArrangedSubview(iconLabel)
 
         let titleLabel = UILabel()
-        titleLabel.text = "AyuGram"
+        titleLabel.text = "AstraGram"
         titleLabel.font = UIFont.systemFont(ofSize: 28.0, weight: .bold)
         titleLabel.textAlignment = .center
         self.stackView.addArrangedSubview(titleLabel)
@@ -77,7 +77,7 @@ public final class AyuApiCredentialsController: UIViewController, UITextFieldDel
         textLabel.textAlignment = .center
         textLabel.text = self.t(
             "Для работы нужны ваши собственные API ID и API Hash. Получите их на my.telegram.org → API development tools (войдите своим номером, создайте приложение с любым названием) и вставьте сюда. Они хранятся только на этом устройстве.",
-            "AyuGram needs your own API ID and API hash. Get them at my.telegram.org → API development tools (log in with your number, create an app with any name) and paste them here. They are stored on this device only."
+            "AstraGram needs your own API ID and API hash. Get them at my.telegram.org → API development tools (log in with your number, create an app with any name) and paste them here. They are stored on this device only."
         )
         self.stackView.addArrangedSubview(textLabel)
 

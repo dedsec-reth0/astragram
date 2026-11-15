@@ -108,7 +108,7 @@ final class AyuBackgroundNotifier {
             self.notifiedIds.insert(message.id)
 
             let content = UNMutableNotificationContent()
-            let chatTitle = message.peers[message.id.peerId].flatMap { EnginePeer($0).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) } ?? "AyuGram"
+            let chatTitle = message.peers[message.id.peerId].flatMap { EnginePeer($0).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) } ?? "AstraGram"
             var body = message.text
             if body.isEmpty {
                 body = AyuStringsCompat.isRussian(presentationData) ? "📎 Медиа" : "📎 Media"

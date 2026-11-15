@@ -114,7 +114,7 @@ public enum AyuUpdateChecker {
         if !notes.isEmpty {
             message += "\n\n" + notes
         }
-        let alert = UIAlertController(title: AyuUpdateChecker.t("Доступно обновление AyuGram", "AyuGram Update Available"), message: message, preferredStyle: .alert)
+        let alert = UIAlertController(title: AyuUpdateChecker.t("Доступно обновление AstraGram", "AstraGram Update Available"), message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: AyuUpdateChecker.t("Обновить в AltStore", "Update in AltStore"), style: .default, handler: { _ in
             AyuUpdateChecker.openSideStoreInstall(release)
         }))

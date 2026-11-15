@@ -510,7 +510,7 @@ private func ayuGramSettingsEntries(strings: AyuStrings, settings: AyuGramSettin
     entries.append(.reset(strings.resetSettings))
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
     let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
-    entries.append(.version("AyuGram for iOS \(version) (\(build))"))
+    entries.append(.version("AstraGram for iOS \(version) (\(build))"))
 
     return entries
 }
@@ -601,7 +601,7 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
                 guard let data = AyuBackup.exportData() else {
                     return
                 }
-                let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("AyuGram-backup.json")
+                let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("AstraGram-backup.json")
                 try? data.write(to: url)
                 let activityController = UIActivityViewController(activityItems: [url], applicationActivities: nil)
                 presentNativeControllerImpl?(activityController)
