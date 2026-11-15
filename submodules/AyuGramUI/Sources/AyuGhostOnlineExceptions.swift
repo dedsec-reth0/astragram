@@ -9,12 +9,9 @@ import AccountContext
 public enum AyuGhostOnlineExceptions {
     private static let previousKindKey = "ayugram.ghostOnline.previousPrivacyKind"
 
-    /// Empties the list and, if the list had changed the account's Last Seen privacy, puts back the kind of rule that
+    /// If the list had changed the account's Last Seen privacy, puts back the kind of rule that
     /// was set before (Everybody / My Contacts / Nobody).
     public static func restore(context: AccountContext) {
-        if !AyuGramSettings.current.ghostOnlineExceptions.isEmpty {
-            AyuGramSettings.update { $0.ghostOnlineExceptions = [] }
-        }
         guard let previousKind = UserDefaults.standard.string(forKey: AyuGhostOnlineExceptions.previousKindKey) else {
             return
         }

@@ -253,9 +253,4 @@ public struct AyuStrings {
     public var exportChat: String { t("Экспорт чата и статистика", "Export Chat and Statistics") }
     public var aiNotConfiguredShort: String { t("Сначала добавьте ключ в Настройки → AyuGram → AI", "First add a key in Settings → AyuGram → AI") }
     public var aiFree: String { t("бесплатный", "free") }
-    public var onlineForExceptions: String { t("Онлайн для избранных", "Online for selected people") }
-    public var onlineWhoSees: String { t("Кому виден мой онлайн", "Who Sees My Online Status") }
-    public var onlineForExceptionsFooter: String { t("Список режима призрака: выбранные люди видят вас «в сети», остальные нет. Сервер Telegram сам решает, кому показывать статус, поэтому, пока список не пуст и включено «Не отправлять „в сети“», AyuGram ставит приватность «Последняя активность» в «Никто, кроме списка», а при выключении режима призрака возвращает прежний вариант (Все / Контакты / Никто, без старых исключений). Без Premium вы тоже не видите время захода тех, от кого скрыли своё.", "The list of Ghost Mode: the selected people see you online, others do not. The Telegram server decides who sees the status, so while the list is not empty and online status is hidden, AyuGram sets Last Seen privacy to Nobody except the list, and puts the previous option back (Everybody / Contacts / Nobody, without old exceptions) when Ghost Mode is turned off. Without Premium you also do not see the last seen time of people you hide yours from.") }
-    public var ghostOnlineExceptions: String { t("Кто видит меня в сети", "Who Sees Me Online") }
-    public var ghostOnlineNobody: String { t("никто", "nobody") }
 }

@@ -340,11 +340,7 @@ private enum AyuGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openPlugins()
                 })
-            case .lastSeenPrivacy:
-                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
-                    arguments.openLinked(.privacy)
-                })
-            case .ai, .templates, .keywordAlerts, .bookmarks, .ghostOnlineExceptions:
+            case .ai, .templates, .keywordAlerts, .bookmarks:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openTool(kind)
                 })
@@ -374,8 +370,6 @@ private enum AyuGramSettingsButtonKind: Equatable {
     case unhideMessages
     case apiCredentials
     case checkUpdates
-    case lastSeenPrivacy
-    case ghostOnlineExceptions
     case ai
     case templates
     case keywordAlerts
@@ -576,33 +570,6 @@ public func ayuGramSettingsController(context: AccountContext, makeLinked: @esca
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let strings = AyuStrings(presentationData.strings)
             switch kind {
-            case .ghostOnlineExceptions:
-                let selected = Set(AyuGramSettings.current.ghostOnlineExceptions.map { EnginePeer.Id($0) })
-                let controller = context.sharedContext.makeContactMultiselectionController(ContactMultiselectionControllerParams(context: context, mode: .chatSelection(ContactMultiselectionControllerMode.ChatSelection(
-                    title: strings.ghostOnlineExceptions,
-                    searchPlaceholder: presentationData.strings.PrivacySettings_SearchUsersPlaceholder,
-                    selectedChats: selected,
-                    additionalCategories: nil,
-                    chatListFilters: nil,
-                    onlyUsers: true,
-                    disableChannels: true,
-                    disableBots: true
-                ))))
-                let _ = (controller.result
-                |> take(1)
-                |> deliverOnMainQueue).start(next: { [weak controller] result in
-                    if case let .result(peerIds, _) = result {
-                        var ids: [Int64] = []
-                        for peerId in peerIds {
-                            if case let .peer(id) = peerId, id.namespace == Namespaces.Peer.CloudUser {
-                                ids.append(id.toInt64())
-                            }
-                        }
-                        AyuGramSettings.update { $0.ghostOnlineExceptions = ids }
-                    }
-                    controller?.dismiss()
-                })
-                pushControllerImpl?(controller)
             case .ai:
                 pushControllerImpl?(ayuAIController(context: context))
             case .templates:
