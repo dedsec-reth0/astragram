@@ -312,7 +312,9 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
         // it is centered over it and overflows above and below, where the header leaves free space.
         let astraRound = AstraGramSettings.current.roundProfileButtons
         let astraCircleSize: CGFloat = min(60.0, size.width)
-        let astraTop: CGFloat = floor((size.height - (astraCircleSize + 4.0 + titleSize.height)) / 2.0)
+        // Lower than centered: most of the overflow goes below, where the header is free, and the music capsule
+        // above the buttons keeps its room.
+        let astraTop: CGFloat = floor((size.height - (astraCircleSize + 4.0 + titleSize.height)) / 2.0) + 6.0
         let backgroundFrame: CGRect
         let backgroundCornerRadius: CGFloat
         let iconOriginY: CGFloat

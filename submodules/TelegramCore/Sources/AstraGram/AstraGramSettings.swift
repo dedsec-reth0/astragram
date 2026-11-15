@@ -66,7 +66,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var showRegistrationDate: Bool
     /// Let message bubbles use more of the screen width.
     public var wideMessages: Bool
-    /// Mark people writing to groups on behalf of a channel with 📢.
+    /// Mark people writing to groups on behalf of a channel with a ◆ before the name.
     public var channelBadge: Bool
     /// Check GitHub for a newer AstraGram build at launch.
     public var checkForUpdates: Bool
@@ -88,6 +88,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var callsTab: Bool
     /// Look: black, white and grays only, in the dark and the light appearance.
     public var monochrome: Bool
+    /// Look: with Monochrome, chats get a plain black or white background instead of the chosen one.
+    public var monochromePlainBackground: Bool
     /// Look: the material of glass panels and buttons (0 Telegram's own, 1 clear, 2 matte).
     public var glassMaterial: Int
     /// Look: buttons answer a press with a spring, the chat list highlights a row as a rounded plate.
@@ -170,6 +172,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         contactsTab: true,
         callsTab: true,
         monochrome: false,
+        monochromePlainBackground: false,
         glassMaterial: 0,
         springPresses: false,
         hideStickersFromOthers: false,
@@ -179,7 +182,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         aiEndpoint: "https://api.openai.com/v1",
         aiApiKey: "",
         aiModel: "gpt-4o-mini",
-        deletedMark: "🧹",
+        deletedMark: "⌫",
         editedMark: "",
         showMessageSeconds: false,
         showPeerId: true,
@@ -230,6 +233,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         contactsTab: Bool,
         callsTab: Bool,
         monochrome: Bool,
+        monochromePlainBackground: Bool,
         glassMaterial: Int,
         springPresses: Bool,
         hideStickersFromOthers: Bool,
@@ -288,6 +292,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.contactsTab = contactsTab
         self.callsTab = callsTab
         self.monochrome = monochrome
+        self.monochromePlainBackground = monochromePlainBackground
         self.glassMaterial = glassMaterial
         self.springPresses = springPresses
         self.hideStickersFromOthers = hideStickersFromOthers
@@ -351,6 +356,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.contactsTab = try container.decodeIfPresent(Bool.self, forKey: .contactsTab) ?? d.contactsTab
         self.callsTab = try container.decodeIfPresent(Bool.self, forKey: .callsTab) ?? d.callsTab
         self.monochrome = try container.decodeIfPresent(Bool.self, forKey: .monochrome) ?? d.monochrome
+        self.monochromePlainBackground = try container.decodeIfPresent(Bool.self, forKey: .monochromePlainBackground) ?? d.monochromePlainBackground
         self.glassMaterial = try container.decodeIfPresent(Int.self, forKey: .glassMaterial) ?? d.glassMaterial
         self.springPresses = try container.decodeIfPresent(Bool.self, forKey: .springPresses) ?? d.springPresses
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
@@ -360,7 +366,9 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.aiEndpoint = try container.decodeIfPresent(String.self, forKey: .aiEndpoint) ?? d.aiEndpoint
         self.aiApiKey = try container.decodeIfPresent(String.self, forKey: .aiApiKey) ?? d.aiApiKey
         self.aiModel = try container.decodeIfPresent(String.self, forKey: .aiModel) ?? d.aiModel
-        self.deletedMark = try container.decodeIfPresent(String.self, forKey: .deletedMark) ?? d.deletedMark
+        // The mark was a broom emoji by default; whoever kept that default gets the new sign.
+        let storedDeletedMark = try container.decodeIfPresent(String.self, forKey: .deletedMark) ?? d.deletedMark
+        self.deletedMark = storedDeletedMark == "\u{1F9F9}" ? d.deletedMark : storedDeletedMark
         self.editedMark = try container.decodeIfPresent(String.self, forKey: .editedMark) ?? d.editedMark
         self.showMessageSeconds = try container.decodeIfPresent(Bool.self, forKey: .showMessageSeconds) ?? d.showMessageSeconds
         self.showPeerId = try container.decodeIfPresent(Bool.self, forKey: .showPeerId) ?? d.showPeerId

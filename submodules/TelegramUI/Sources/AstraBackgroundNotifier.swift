@@ -111,12 +111,12 @@ final class AstraBackgroundNotifier {
             let chatTitle = message.peers[message.id.peerId].flatMap { EnginePeer($0).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) } ?? "AstraGram"
             var body = message.text
             if body.isEmpty {
-                body = AstraStringsCompat.isRussian(presentationData) ? "📎 Медиа" : "📎 Media"
+                body = AstraStringsCompat.isRussian(presentationData) ? "Медиа" : "Media"
             }
             if message.id.peerId.namespace != Namespaces.Peer.CloudUser, let author = message.author, author.id != message.id.peerId {
                 body = EnginePeer(author).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) + ": " + body
             }
-            content.title = AstraBackgroundNotifier.matchesKeywordAlert(message.text) ? "🔔 " + chatTitle : chatTitle
+            content.title = chatTitle
             content.body = body
             content.sound = .default
             content.threadIdentifier = "\(message.id.peerId.toInt64())"

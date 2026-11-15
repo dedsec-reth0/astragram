@@ -77,7 +77,7 @@ public final class AstraTextResultController: UIViewController {
                     self.textView.text = text.isEmpty ? self.t("Пусто", "Empty") : text
                     self.navigationItem.rightBarButtonItems?.forEach { $0.isEnabled = !text.isEmpty }
                 case let .failure(error):
-                    self.textView.text = "⚠️ " + error.localizedDescription
+                    self.textView.text = error.localizedDescription
                     self.textView.textColor = .systemRed
                 }
             }

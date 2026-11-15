@@ -2306,7 +2306,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             buttonRightOrigin.y += actionButtonSize.height + 24.0
         }
         
-        transition.updateFrameAdditive(node: self.buttonsBackgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: buttonRightOrigin.y), size: CGSize(width: width, height: buttonSize.height + 40.0)))
+        // AstraGram: round buttons reach above their frame, and so must the background their circles are cut from.
+        let astraButtonsOverflow: CGFloat = AstraGramSettings.current.roundProfileButtons ? 12.0 : 0.0
+        transition.updateFrameAdditive(node: self.buttonsBackgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: buttonRightOrigin.y - astraButtonsOverflow), size: CGSize(width: width, height: buttonSize.height + 40.0 + astraButtonsOverflow)))
         self.buttonsBackgroundNode.update(size: self.buttonsBackgroundNode.bounds.size, transition: transition)
         self.buttonsBackgroundNode.updateColor(color: contentButtonBackgroundColor, enableBlur: true, transition: transition)
         if isReduceTransparencyEnabled() {
@@ -2337,7 +2339,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             } else {
                 buttonTransition.updateFrame(node: buttonNode, frame: buttonFrame)
             }
-            buttonTransition.updateFrame(view: buttonNode.backgroundContainerView, frame: buttonFrame.offsetBy(dx: 0.0, dy: -buttonFrame.minY))
+            buttonTransition.updateFrame(view: buttonNode.backgroundContainerView, frame: buttonFrame.offsetBy(dx: 0.0, dy: -buttonFrame.minY + astraButtonsOverflow))
             
             let buttonText: String
             let buttonIcon: PeerInfoHeaderButtonIcon
@@ -2709,7 +2711,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     }
                     return musicBackground
                 }()
-                musicTransition.updateFrame(view: musicBackground, frame: CGRect(origin: CGPoint(x: 0.0, y: backgroundHeight - 24.0 - buttonRightOrigin.y), size: CGSize(width: backgroundFrame.width, height: 24.0)))
+                musicTransition.updateFrame(view: musicBackground, frame: CGRect(origin: CGPoint(x: 0.0, y: backgroundHeight - 24.0 - buttonRightOrigin.y + astraButtonsOverflow), size: CGSize(width: backgroundFrame.width, height: 24.0)))
 
                 musicTransition.updateAlpha(layer: musicBackground.layer, alpha: 1.0)
             } else if let musicBackground = self.musicBackground {
@@ -2790,8 +2792,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 )
                 var musicFrame = CGRect(origin: CGPoint(x: stripLeft, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0) + 1.0 - UIScreenPixel), size: musicSize)
                 if astraMusicAbove {
-                    // Round buttons overflow their frame upwards, so the capsule moves up to stay in the middle of the gap.
-                    let astraRoundButtonsOffset: CGFloat = AstraGramSettings.current.roundProfileButtons ? 5.0 : 0.0
+                    // The capsule stands in the middle of the gap between the status and the buttons; round buttons
+                    // begin a little above their frame, so the middle is higher with them.
+                    let astraRoundButtonsOffset: CGFloat = AstraGramSettings.current.roundProfileButtons ? 11.0 : 9.0
                     musicFrame.origin.y = (apparentBackgroundHeight - backgroundHeight) + buttonRightOrigin.y - floor((bottomInset + 16.0 + musicSize.height) / 2.0) - astraRoundButtonsOffset
                 }
                 if let musicView = music.view {

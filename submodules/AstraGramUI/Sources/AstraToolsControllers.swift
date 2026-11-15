@@ -230,7 +230,7 @@ public func astraAIController(context: AccountContext) -> ViewController {
             let text: String
             switch result {
             case let .success(answer):
-                text = "✅ " + answer
+                text = answer
             case let .failure(error):
                 text = AstraAI.describe(error, isRussian: strings.isRussian)
             }
@@ -307,7 +307,7 @@ private enum AstraBookmarksEntry: ItemListNodeEntry {
         let arguments = arguments as! AstraBookmarksArguments
         switch self {
         case let .bookmark(_, bookmark, dateText):
-            let preview = bookmark.text.isEmpty ? "📎" : String(bookmark.text.prefix(80)).replacingOccurrences(of: "\n", with: " ")
+            let preview = bookmark.text.isEmpty ? (presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru") ? "Медиа" : "Media") : String(bookmark.text.prefix(80)).replacingOccurrences(of: "\n", with: " ")
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: preview, label: bookmark.chatTitle + " · " + dateText, labelStyle: .detailText, sectionId: self.section, style: .blocks, action: {
                 arguments.open(bookmark)
             })

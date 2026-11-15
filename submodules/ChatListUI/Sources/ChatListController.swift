@@ -6930,16 +6930,38 @@ private final class ChatListLocationContext {
     private var astraSettingsDisposable: Disposable?
 
     private static let astraGhostImages: (enabled: UIImage, disabled: UIImage) = {
-        func make(alpha: CGFloat) -> UIImage {
+        // An icon, not an emoji: a ghost drawn as a template image, so the header tints it like its other icons.
+        // Filled while ghost mode is on, an outline while it is off.
+        func make(filled: Bool) -> UIImage {
             let size = CGSize(width: 26.0, height: 26.0)
             return UIGraphicsImageRenderer(size: size).image { _ in
-                let text = NSAttributedString(string: "👻", attributes: [.font: UIFont.systemFont(ofSize: 20.0)])
-                let textSize = text.size()
-                UIGraphicsGetCurrentContext()?.setAlpha(alpha)
-                text.draw(at: CGPoint(x: (size.width - textSize.width) / 2.0, y: (size.height - textSize.height) / 2.0))
-            }.withRenderingMode(.alwaysOriginal)
+                // A dome over a hem of three scallops, with two eyes.
+                let body = UIBezierPath()
+                body.move(to: CGPoint(x: 5.0, y: 21.5))
+                body.addLine(to: CGPoint(x: 5.0, y: 12.0))
+                body.addArc(withCenter: CGPoint(x: 13.0, y: 12.0), radius: 8.0, startAngle: CGFloat.pi, endAngle: 0.0, clockwise: true)
+                body.addLine(to: CGPoint(x: 21.0, y: 21.5))
+                body.addQuadCurve(to: CGPoint(x: 15.67, y: 21.5), controlPoint: CGPoint(x: 18.33, y: 17.5))
+                body.addQuadCurve(to: CGPoint(x: 10.33, y: 21.5), controlPoint: CGPoint(x: 13.0, y: 17.5))
+                body.addQuadCurve(to: CGPoint(x: 5.0, y: 21.5), controlPoint: CGPoint(x: 7.67, y: 17.5))
+                body.close()
+                let eyes = UIBezierPath(ovalIn: CGRect(x: 8.6, y: 10.0, width: 2.8, height: 3.8))
+                eyes.append(UIBezierPath(ovalIn: CGRect(x: 14.6, y: 10.0, width: 2.8, height: 3.8)))
+                UIColor.black.setFill()
+                UIColor.black.setStroke()
+                if filled {
+                    body.append(eyes)
+                    body.usesEvenOddFillRule = true
+                    body.fill()
+                } else {
+                    body.lineWidth = 1.6
+                    body.lineJoinStyle = .round
+                    body.stroke()
+                    eyes.fill()
+                }
+            }.withRenderingMode(.alwaysTemplate)
         }
-        return (make(alpha: 1.0), make(alpha: 0.3))
+        return (make(filled: true), make(filled: false))
     }()
 
     /// Turns the whole ghost mode on and off from the chat list header (bright: on, faded: off).
@@ -6975,7 +6997,7 @@ private final class ChatListLocationContext {
         let isRussian = presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
         let text: String
         if enabled {
-            text = isRussian ? "👻 Режим призрака включён" : "👻 Ghost Mode is on"
+            text = isRussian ? "Режим призрака включён" : "Ghost Mode is on"
         } else {
             text = isRussian ? "Режим призрака выключен" : "Ghost Mode is off"
         }

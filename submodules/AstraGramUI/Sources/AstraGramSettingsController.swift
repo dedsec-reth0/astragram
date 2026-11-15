@@ -498,6 +498,9 @@ private func astraGramSettingsEntries(strings: AstraStrings, settings: AstraGram
     // The look: every part has its own switch.
     entries.append(.header(id: 110, section: .look, text: strings.lookHeader))
     entries.append(.flag(id: 111, section: .look, title: strings.monochrome, value: settings.monochrome, enabled: true, keyPath: \.monochrome))
+    if settings.monochrome {
+        entries.append(.flag(id: 121, section: .look, title: strings.monochromePlainBackground, value: settings.monochromePlainBackground, enabled: true, keyPath: \.monochromePlainBackground))
+    }
     entries.append(.flag(id: 112, section: .look, title: strings.roundProfileButtons, value: settings.roundProfileButtons, enabled: true, keyPath: \.roundProfileButtons))
     entries.append(.flag(id: 113, section: .look, title: strings.profileMusicCapsule, value: settings.profileMusicCapsule, enabled: true, keyPath: \.profileMusicCapsule))
     entries.append(.flag(id: 114, section: .look, title: strings.contactsTab, value: settings.contactsTab, enabled: true, keyPath: \.contactsTab))

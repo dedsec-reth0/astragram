@@ -51,7 +51,7 @@ extension ApplicationShortcutItem {
 func applicationShortcutItems(strings: PresentationStrings, otherAccountName: String?, ghostModeEnabled: Bool, dedsecSilence: Bool) -> [ApplicationShortcutItem] {
     let astraStrings = AstraStrings(strings)
     var items: [ApplicationShortcutItem] = [
-        ApplicationShortcutItem(type: .astraGhostMode, title: ghostModeEnabled ? astraStrings.shortcutGhostOff : astraStrings.shortcutGhostOn, subtitle: ghostModeEnabled ? "👻 " + astraStrings.shortcutStateOn : astraStrings.shortcutStateOff),
+        ApplicationShortcutItem(type: .astraGhostMode, title: ghostModeEnabled ? astraStrings.shortcutGhostOff : astraStrings.shortcutGhostOn, subtitle: ghostModeEnabled ? astraStrings.shortcutStateOn : astraStrings.shortcutStateOff),
         ApplicationShortcutItem(type: .astraDedsecSilence, title: dedsecSilence ? astraStrings.shortcutDedsecOff : astraStrings.shortcutDedsecOn, subtitle: dedsecSilence ? astraStrings.shortcutDedsecSubtitleOn : astraStrings.shortcutDedsecSubtitleOff),
         ApplicationShortcutItem(type: .search, title: strings.Common_Search, subtitle: nil)
     ]

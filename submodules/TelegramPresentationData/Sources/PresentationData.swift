@@ -748,8 +748,10 @@ public func chatServiceBackgroundColor(wallpaper: TelegramWallpaper, mediaBox: M
 }
 
 public func updatedPresentationData(accountManager: AccountManager<TelegramAccountManagerTypes>, applicationInForeground: Signal<Bool, NoError>, systemUserInterfaceStyle: Signal<WindowUserInterfaceStyle, NoError>) -> Signal<PresentationData, NoError> {
-    return combineLatest(accountManager.sharedData(keys: [SharedDataKeys.localizationSettings, ApplicationSpecificSharedDataKeys.presentationThemeSettings, ApplicationSpecificSharedDataKeys.contactSynchronizationSettings]), systemUserInterfaceStyle, AstraGramSettings.signal |> map { $0.monochrome } |> distinctUntilChanged)
-    |> mapToSignal { sharedData, systemUserInterfaceStyle, astraMonochrome -> Signal<PresentationData, NoError> in
+    return combineLatest(accountManager.sharedData(keys: [SharedDataKeys.localizationSettings, ApplicationSpecificSharedDataKeys.presentationThemeSettings, ApplicationSpecificSharedDataKeys.contactSynchronizationSettings]), systemUserInterfaceStyle, AstraGramSettings.signal |> map { ($0.monochrome ? 1 : 0) | ($0.monochromePlainBackground ? 2 : 0) } |> distinctUntilChanged)
+    |> mapToSignal { sharedData, systemUserInterfaceStyle, astraMonochromeState -> Signal<PresentationData, NoError> in
+        // Both switches are in the state, so the presentation follows either of them at once.
+        let astraMonochrome = (astraMonochromeState & 1) != 0
         let themeSettings: PresentationThemeSettings
         if let current = sharedData.entries[ApplicationSpecificSharedDataKeys.presentationThemeSettings]?.get(PresentationThemeSettings.self) {
             themeSettings = current
@@ -923,8 +925,7 @@ private func bubblelessPresentationData(mediaBox: MediaBox, themeSettings: Prese
     return PresentationData(strings: stringsValue, theme: theme, autoNightModeTriggered: autoNightModeTriggered, chatWallpaper: bubblelessChatWallpaper(theme: theme), chatFontSize: chatFontSize, chatBubbleCorners: chatBubbleCorners, listsFontSize: listsFontSize, dateTimeFormat: dateTimeFormat, nameDisplayOrder: nameDisplayOrder, nameSortOrder: nameSortOrder, reduceMotion: themeSettings.reduceMotion, largeEmoji: themeSettings.largeEmoji)
 }
 
-// AstraGram "Monochrome": the presentation data with the monochrome theme on its plain black or white page, whatever
-// theme is chosen. Strings, formats, font sizes and corners as usual.
+// AstraGram "Monochrome": the presentation data with the monochrome theme, whatever theme is chosen. Strings, formats, font sizes and corners as usual.
 private func astraMonochromePresentationData(mediaBox: MediaBox, themeSettings: PresentationThemeSettings, autoNightModeTriggered: Bool, localizationSettings: LocalizationSettings?, nameDisplayOrder: PresentationPersonNameOrder) -> PresentationData {
     let dark = astraMonochromeIsDark(themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered)
     let bubbleMode = themeSettings.chatBubbleSettings.bubbleMode
@@ -943,7 +944,48 @@ private func astraMonochromePresentationData(mediaBox: MediaBox, themeSettings: 
     
     let chatBubbleCorners = PresentationChatBubbleCorners(settings: themeSettings.chatBubbleSettings)
     
-    return PresentationData(strings: stringsValue, theme: theme, autoNightModeTriggered: autoNightModeTriggered, chatWallpaper: bubbleMode ? .color(dark ? 0x000000 : 0xffffff) : bubblelessChatWallpaper(theme: theme), chatFontSize: chatFontSize, chatBubbleCorners: chatBubbleCorners, listsFontSize: listsFontSize, dateTimeFormat: dateTimeFormat, nameDisplayOrder: nameDisplayOrder, nameSortOrder: nameSortOrder, reduceMotion: themeSettings.reduceMotion, largeEmoji: themeSettings.largeEmoji)
+    // The chat background stays the chosen one; the plain black or white page is its own switch.
+    let chatWallpaper: TelegramWallpaper
+    if !bubbleMode {
+        chatWallpaper = bubblelessChatWallpaper(theme: theme)
+    } else if AstraGramSettings.current.monochromePlainBackground {
+        chatWallpaper = .color(dark ? 0x000000 : 0xffffff)
+    } else {
+        chatWallpaper = astraChosenChatWallpaper(mediaBox: mediaBox, themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered)
+    }
+    
+    return PresentationData(strings: stringsValue, theme: theme, autoNightModeTriggered: autoNightModeTriggered, chatWallpaper: chatWallpaper, chatFontSize: chatFontSize, chatBubbleCorners: chatBubbleCorners, listsFontSize: listsFontSize, dateTimeFormat: dateTimeFormat, nameDisplayOrder: nameDisplayOrder, nameSortOrder: nameSortOrder, reduceMotion: themeSettings.reduceMotion, largeEmoji: themeSettings.largeEmoji)
+}
+
+// AstraGram "Monochrome": the chat background chosen for the theme in use, resolved as the regular presentation does.
+private func astraChosenChatWallpaper(mediaBox: MediaBox, themeSettings: PresentationThemeSettings, autoNightModeTriggered: Bool) -> TelegramWallpaper {
+    let effectiveTheme: PresentationThemeReference
+    var preferredBaseTheme: TelegramBaseTheme?
+    if autoNightModeTriggered {
+        effectiveTheme = themeSettings.automaticThemeSwitchSetting.theme
+        if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.night, .tinted].contains(baseTheme) {
+            preferredBaseTheme = baseTheme
+        } else {
+            preferredBaseTheme = .night
+        }
+    } else {
+        effectiveTheme = themeSettings.theme
+        if let baseTheme = themeSettings.themePreferredBaseTheme[effectiveTheme.index], [.classic, .day].contains(baseTheme) {
+            preferredBaseTheme = baseTheme
+        }
+    }
+    let effectiveColors = themeSettings.themeSpecificAccentColors[effectiveTheme.index]
+    var wallpaper: TelegramWallpaper
+    if let chosen = themeSettings.themeSpecificChatWallpapers[coloredThemeIndex(reference: effectiveTheme, accentColor: effectiveColors)] ?? themeSettings.themeSpecificChatWallpapers[effectiveTheme.index] {
+        wallpaper = chosen
+    } else {
+        let theme = makePresentationTheme(mediaBox: mediaBox, themeReference: effectiveTheme, baseTheme: preferredBaseTheme, accentColor: effectiveColors?.colorFor(baseTheme: preferredBaseTheme ?? .day), bubbleColors: effectiveColors?.customBubbleColors ?? [], baseColor: effectiveColors?.baseColor) ?? defaultPresentationTheme
+        wallpaper = theme.chat.defaultWallpaper
+    }
+    if case .builtin = wallpaper {
+        wallpaper = defaultBuiltinWallpaper(data: .legacy, colors: legacyBuiltinWallpaperGradientColors.map(\.rgb))
+    }
+    return wallpaper
 }
 
 private func resolveFontSize(settings: PresentationThemeSettings) -> (chat: PresentationFontSize, lists: PresentationFontSize) {

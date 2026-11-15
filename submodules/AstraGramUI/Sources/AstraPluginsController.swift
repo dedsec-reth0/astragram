@@ -195,7 +195,7 @@ public func astraPluginsController(context: AccountContext) -> ViewController {
                 info.append(plugin.description)
             }
             if let error = plugin.error {
-                info.append("⚠️ " + error)
+                info.append(error)
             }
             if !info.isEmpty {
                 entries.append(.pluginInfo(index: index, text: info.joined(separator: "\n")))

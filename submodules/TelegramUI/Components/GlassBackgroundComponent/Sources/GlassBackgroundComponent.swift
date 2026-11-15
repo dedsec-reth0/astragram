@@ -2138,8 +2138,13 @@ extension GlassBackgroundView {
             }
         case 2:
             switch tintColor.kind {
-            case .panel, .untinted, .clear:
-                let color = isDark ? UIColor(white: 0.07, alpha: 0.8) : UIColor(white: 1.0, alpha: 0.8)
+            case .panel, .clear:
+                // Frosted, not solid: what is behind still shows through as a blur.
+                let color = isDark ? UIColor(white: 0.13, alpha: 0.6) : UIColor(white: 1.0, alpha: 0.68)
+                return TintColor(kind: .custom(style: .default, color: color), innerColor: tintColor.innerColor, innerInset: tintColor.innerInset)
+            case .untinted:
+                // The bars with a lens under the selected item (the tab bar): a light frost, or the lens is lost in it.
+                let color = isDark ? UIColor(white: 0.13, alpha: 0.3) : UIColor(white: 1.0, alpha: 0.36)
                 return TintColor(kind: .custom(style: .default, color: color), innerColor: tintColor.innerColor, innerInset: tintColor.innerInset)
             case .custom:
                 return tintColor

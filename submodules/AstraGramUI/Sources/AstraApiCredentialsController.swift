@@ -58,11 +58,21 @@ public final class AstraApiCredentialsController: UIViewController, UITextFieldD
             self.stackView.bottomAnchor.constraint(equalTo: self.scrollView.contentLayoutGuide.bottomAnchor, constant: -32.0)
         ])
 
-        let iconLabel = UILabel()
-        iconLabel.text = "👻"
-        iconLabel.font = UIFont.systemFont(ofSize: 64.0)
-        iconLabel.textAlignment = .center
-        self.stackView.addArrangedSubview(iconLabel)
+        // The app's icon (the default alternate icon's file lies in the bundle).
+        let iconView = UIImageView(image: UIImage(named: "BlueIcon"))
+        iconView.contentMode = .scaleAspectFit
+        iconView.layer.cornerRadius = 19.0
+        iconView.layer.cornerCurve = .continuous
+        iconView.clipsToBounds = true
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            iconView.widthAnchor.constraint(equalToConstant: 84.0),
+            iconView.heightAnchor.constraint(equalToConstant: 84.0)
+        ])
+        let iconContainer = UIStackView(arrangedSubviews: [iconView])
+        iconContainer.axis = .vertical
+        iconContainer.alignment = .center
+        self.stackView.addArrangedSubview(iconContainer)
 
         let titleLabel = UILabel()
         titleLabel.text = "AstraGram"

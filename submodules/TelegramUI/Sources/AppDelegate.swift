@@ -3069,7 +3069,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                                 case .astraGhostMode:
                                     let enabled = !AstraGramSettings.current.isGhostModeFullyEnabled
                                     AstraGramSettings.update { $0.setGhostMode(enabled) }
-                                    self.astraShowToast(context: context.context, text: enabled ? "👻 " + AstraStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings).ghostToastOn : AstraStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings).ghostToastOff)
+                                    self.astraShowToast(context: context.context, text: enabled ? AstraStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings).ghostToastOn : AstraStrings(context.context.sharedContext.currentPresentationData.with { $0 }.strings).ghostToastOff)
                                 case .astraDedsecSilence:
                                     let silent = !AstraGramSettings.current.dedsecSilence
                                     AstraGramSettings.update { $0.dedsecSilence = silent }

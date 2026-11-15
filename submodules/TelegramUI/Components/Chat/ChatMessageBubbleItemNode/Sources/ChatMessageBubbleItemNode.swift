@@ -2773,7 +2773,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 authorNameString = EnginePeer(effectiveAuthor).displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
                 // AstraGram: a badge for people writing to a group on behalf of a channel.
                 if AstraGramSettings.current.channelBadge, let authorChannel = effectiveAuthor as? TelegramChannel, case .broadcast = authorChannel.info, effectiveAuthor.id != item.message.id.peerId, let authorNameValue = authorNameString {
-                    authorNameString = "📢 " + authorNameValue
+                    authorNameString = "◆ " + authorNameValue
                 }
                 // Not when the author is the chat itself (an anonymous admin), which the chat header already badges, as
                 // a broadcast channel's own posts above.

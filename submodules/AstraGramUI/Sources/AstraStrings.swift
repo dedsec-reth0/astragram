@@ -145,7 +145,7 @@ public struct AstraStrings {
     public var detailsPackOwner: String { t("ID автора набора", "Pack author ID") }
     public var detailsPack: String { t("Набор", "Pack") }
     public var detailsPhoto: String { t("Фото", "Photo") }
-    public var ghostButtonHint: String { t("Кнопка 👻 в шапке экрана «Чаты» включает и выключает весь режим призрака.", "The 👻 button at the top of the Chats screen turns the whole Ghost Mode on and off.") }
+    public var ghostButtonHint: String { t("Кнопка с призраком в шапке экрана «Чаты» включает и выключает весь режим призрака.", "The ghost button at the top of the Chats screen turns the whole Ghost Mode on and off.") }
     public var markReadAfterReaction: String { t("Прочитать при реакции и голосовании", "Mark as read when reacting or voting") }
     public var sendViaSchedule: String { t("Отправлять через отложку", "Send via schedule") }
     public var sendViaScheduleFooter: String { t("Сообщения отправляются как отложенные на несколько секунд вперёд, поэтому отправка не показывает вас «в сети». Работает, когда включено «Не отправлять «в сети»».", "Messages are sent as scheduled a few seconds ahead, so sending does not show you online. Works while \"Don't send online status\" is on.") }
@@ -185,7 +185,7 @@ public struct AstraStrings {
     public var apiCredentials: String { t("API ID и Hash", "API ID and Hash") }
     public var viewHeader: String { t("ВИД СООБЩЕНИЙ", "MESSAGES") }
     public var wideMessages: String { t("Широкие сообщения", "Wide messages") }
-    public var channelBadge: String { t("Значок 📢 у пишущих от имени канала", "📢 badge for posting as a channel") }
+    public var channelBadge: String { t("Значок ◆ у пишущих от имени канала", "◆ badge for posting as a channel") }
     public var checkForUpdates: String { t("Проверять обновления", "Check for updates") }
     public var checkUpdatesNow: String { t("Проверить обновления сейчас", "Check for Updates Now") }
     public var notificationsHeader: String { t("УВЕДОМЛЕНИЯ", "NOTIFICATIONS") }
@@ -198,12 +198,12 @@ public struct AstraStrings {
     public var shortcutStateOff: String { t("Сейчас выключен", "Now off") }
     public var shortcutDedsecOn: String { t("DEDSEC: тишина групп и каналов", "DEDSEC: Silence Groups & Channels") }
     public var shortcutDedsecOff: String { t("DEDSEC: вернуть звук групп и каналов", "DEDSEC: Unmute Groups & Channels") }
-    public var shortcutDedsecSubtitleOn: String { t("🔕 Группы и каналы молчат", "🔕 Groups and channels are silent") }
+    public var shortcutDedsecSubtitleOn: String { t("Группы и каналы молчат", "Groups and channels are silent") }
     public var shortcutDedsecSubtitleOff: String { t("Одна кнопка для всех групп и каналов", "One switch for all groups and channels") }
     public var ghostToastOn: String { t("Режим призрака включён", "Ghost Mode is on") }
     public var ghostToastOff: String { t("Режим призрака выключен", "Ghost Mode is off") }
-    public var dedsecToastOn: String { t("🔕 DEDSEC: группы и каналы без звука и уведомлений", "🔕 DEDSEC: groups and channels are silent") }
-    public var dedsecToastOff: String { t("🔔 DEDSEC: уведомления групп и каналов включены", "🔔 DEDSEC: group and channel notifications are on") }
+    public var dedsecToastOn: String { t("DEDSEC: группы и каналы без звука и уведомлений", "DEDSEC: groups and channels are silent") }
+    public var dedsecToastOff: String { t("DEDSEC: уведомления групп и каналов включены", "DEDSEC: group and channel notifications are on") }
     public var dedsecHeader: String { t("DEDSEC", "DEDSEC") }
     public var dedsecSilence: String { t("Тишина групп и каналов", "Silence groups and channels") }
     public var dedsecFooter: String { t("Функция от автора (DEDSEC): выключает уведомления и звуки всех групп и каналов одной кнопкой, новые группы и каналы тоже будут молчать. Чтобы какой-то чат уведомлял, включите в его профиле уведомления: это исключение. Переключается и из меню иконки приложения (долгое нажатие на иконку).", "From the author (DEDSEC): one switch turns off notifications and sounds of all groups and channels, and new ones are silent too. To keep a chat notifying, turn its notifications on in its profile: that is an exception. Also available from the app icon menu (long press the icon).") }
@@ -235,7 +235,7 @@ public struct AstraStrings {
     public var mediaHeader: String { t("ФИЛЬТРЫ МЕДИА", "MEDIA FILTERS") }
     public var hideStickers: String { t("Скрывать стикеры других", "Hide stickers from others") }
     public var hideGifs: String { t("Скрывать GIF других", "Hide GIFs from others") }
-    public var aiMenu: String { t("AI ✨", "AI ✨") }
+    public var aiMenu: String { t("AI", "AI") }
     public var aiTranslate: String { t("Перевести", "Translate") }
     public var aiSummarize: String { t("Кратко пересказать", "Summarize") }
     public var aiExplain: String { t("Объяснить", "Explain") }
@@ -259,7 +259,7 @@ public struct AstraStrings {
     public var contactsTab: String { t("Вкладка «Контакты»", "Contacts Tab") }
     public var callsTab: String { t("Вкладка «Звонки»", "Calls Tab") }
     public var monochrome: String { t("Монохромное оформление", "Monochrome Look") }
-    public var lookFooter: String { t("Каждая часть вида включается отдельно. Монохром оставляет только чёрный, белый и серые; тёмный или светлый вариант берётся из вашей темы и ночного режима, а фото, стикеры и эмодзи остаются цветными. Материал стекла меняет панели и кнопки: стандартный, прозрачный или матовый; строка переключает их по кругу. Пружинящие нажатия: кнопка проседает под пальцем и возвращается на пружине, а нажатая строка в списке чатов подсвечивается скруглённой плашкой. Вкладки, монохром и нажатия применяются сразу, кнопки и музыка при следующем открытии профиля. Материал стекла, значки настроек и заглушки аватаров полностью меняются после перезапуска.", "Every part of the look has its own switch. Monochrome leaves only black, white and grays; the dark or the light variant follows your theme and night mode, while photos, stickers and emoji keep their colors. Glass Material changes panels and buttons: standard, clear or matte; the row cycles through them. Springy Presses: a button sinks under the finger and comes back on a spring, and the pressed row of the chat list is highlighted as a rounded plate. Tabs, Monochrome and presses apply at once, buttons and music the next time a profile opens. The glass material, the settings icons and avatar placeholders change fully after the app restarts.") }
+    public var lookFooter: String { t("Каждая часть вида включается отдельно. Монохром оставляет только чёрный, белый и серые; тёмный или светлый вариант берётся из вашей темы и ночного режима, а фон чатов, фото, стикеры и эмодзи остаются как были. Когда монохром включён, под ним появляется «Однотонный фон чатов»: чёрный в тёмном варианте и белый в светлом. Материал стекла меняет панели и кнопки: стандартный, прозрачный или матовый; строка переключает их по кругу. Пружинящие нажатия: кнопка проседает под пальцем и возвращается на пружине, а нажатая строка в списке чатов подсвечивается скруглённой плашкой. Вкладки, монохром и нажатия применяются сразу, кнопки и музыка при следующем открытии профиля. Материал стекла, значки настроек и заглушки аватаров полностью меняются после перезапуска.", "Every part of the look has its own switch. Monochrome leaves only black, white and grays; the dark or the light variant follows your theme and night mode, while the chat background, photos, stickers and emoji stay as they are. While Monochrome is on, Plain Chat Background appears under it: black in the dark variant and white in the light one. Glass Material changes panels and buttons: standard, clear or matte; the row cycles through them. Springy Presses: a button sinks under the finger and comes back on a spring, and the pressed row of the chat list is highlighted as a rounded plate. Tabs, Monochrome and presses apply at once, buttons and music the next time a profile opens. The glass material, the settings icons and avatar placeholders change fully after the app restarts.") }
     public var restartApp: String { t("Перезапустить AstraGram", "Restart AstraGram") }
     public var restartFooter: String { t("iOS не позволяет приложению открыть себя заново. AstraGram закроется и пришлёт уведомление: нажмите на него, и приложение откроется снова. Если уведомления выключены, откройте его с домашнего экрана.", "iOS does not let an app reopen itself. AstraGram closes and sends a notification: tap it and the app opens again. If notifications are off, open it from the Home Screen.") }
     public var restartNotificationTitle: String { t("AstraGram закрыт", "AstraGram is closed") }
@@ -269,4 +269,5 @@ public struct AstraStrings {
     public var glassMaterialClear: String { t("Прозрачный", "Clear") }
     public var glassMaterialMatte: String { t("Матовый", "Matte") }
     public var springPresses: String { t("Пружинящие нажатия", "Springy Presses") }
+    public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }
 }
