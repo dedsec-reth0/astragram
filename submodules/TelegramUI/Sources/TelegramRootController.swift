@@ -223,10 +223,15 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         // can be Contacts / Calls / Chats / Settings. Both are created even when hidden: `updateRootControllers`
         // shows and hides them.
         let contactsTabController = ContactsController(context: self.context)
-        let contactsIcon = UIImage(bundleImageName: "Chat List/Tabs/IconContacts")
+        contactsTabController.astraIsTab = true
+        // A template image, so the tab bar tints it like the other tabs' icons (a plain image keeps its own black).
+        let contactsIcon = UIImage(bundleImageName: "Chat List/Tabs/IconContacts")?.withRenderingMode(.alwaysTemplate)
         contactsTabController.tabBarItem.title = self.presentationData.strings.Contacts_Title
         contactsTabController.tabBarItem.image = contactsIcon
         contactsTabController.tabBarItem.selectedImage = contactsIcon
+        if !self.presentationData.reduceMotion {
+            contactsTabController.tabBarItem.animationName = "TabContacts"
+        }
         self.astraContactsTabController = contactsTabController
         self.astraShowNewsTab = showNewsTab
         let astraSettings = AstraGramSettings.current

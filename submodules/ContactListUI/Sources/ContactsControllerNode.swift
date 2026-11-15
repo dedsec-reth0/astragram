@@ -341,14 +341,23 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                     self.controller?.addPressed()
                 }
             )
-            // The left is the back button's: Sort stands on the right, its own capsule beside Add.
-            leftButton = nil
-            rightButtons = [sortButton, addButton]
+            if self.controller?.astraIsTab ?? false {
+                // AstraGram: as a tab there is nothing to go back to: Sort stands on the left, Add on the right.
+                leftButton = sortButton
+                rightButtons = [addButton]
+            } else {
+                // The left is the back button's: Sort stands on the right, its own capsule beside Add.
+                leftButton = nil
+                rightButtons = [sortButton, addButton]
+            }
         }
         
-        // Pushed (from Settings) the header has a back button.
-        let backPressed: (() -> Void)? = { [weak self] in
-            self?.controller?.navigationController?.popViewController(animated: true)
+        // Pushed (from Settings) the header has a back button; the Contacts tab has none.
+        var backPressed: (() -> Void)?
+        if !(self.controller?.astraIsTab ?? false) {
+            backPressed = { [weak self] in
+                self?.controller?.navigationController?.popViewController(animated: true)
+            }
         }
         let primaryContent = ChatListHeaderComponent.Content(
             title: self.presentationData.strings.Contacts_Title,

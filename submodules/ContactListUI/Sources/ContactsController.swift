@@ -41,6 +41,9 @@ private final class HeaderContextReferenceContentSource: ContextReferenceContent
 }
 
 public class ContactsController: ViewController {
+    /// AstraGram: this Contacts screen is a tab of the root tab bar, not a screen pushed from Settings: its header has
+    /// no back button, Sort on the left and Add on the right. Set before the screen is shown.
+    public var astraIsTab: Bool = false
     private let context: AccountContext
     
     /// The contact list draws its own header (no Display bar); it takes part in navigation transitions itself.
