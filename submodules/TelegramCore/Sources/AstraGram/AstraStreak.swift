@@ -1,7 +1,7 @@
 import Foundation
 import Postbox
 import SwiftSignalKit
-import sqlcipher
+internal import sqlcipher
 
 /// AstraGram "Streak" (огонёк) with one person in a private chat.
 ///
