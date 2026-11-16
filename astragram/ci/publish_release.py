@@ -286,7 +286,8 @@ def main():
     # The untouched build, with the share extension, widgets and the rest, for those with a paid developer account.
     full_path = os.path.join(upload_dir, full_name)
     shutil.copyfile(ipa, full_path)
-    gh('release', 'create', tag, upload_path, full_path, '--repo', repo, '--title', 'AstraGram 1.0 Alpha ({})'.format(build), '--notes', notes, '--latest')
+    target = ['--target', os.environ['GITHUB_SHA']] if os.environ.get('GITHUB_SHA') else []
+    gh('release', 'create', tag, upload_path, full_path, '--repo', repo, *target, '--title', 'AstraGram 1.0 Alpha ({})'.format(build), '--notes', notes, '--latest')
     print('released', tag)
 
     # The current source, if there is one.

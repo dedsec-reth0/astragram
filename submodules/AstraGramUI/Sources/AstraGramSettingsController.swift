@@ -345,7 +345,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openTool(kind)
                 })
-            case .backupExport, .backupImport, .restartApp:
+            case .backupExport, .backupImport, .restartApp, .clearBadge:
                 return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .generic, alignment: .natural, sectionId: section, style: .blocks, action: {
                     arguments.openTool(kind)
                 })
@@ -386,6 +386,7 @@ private enum AstraGramSettingsButtonKind: Equatable {
     case lockedChats
     case securityCheck
     case telegramPrivacy
+    case clearBadge
 }
 
 private func formatFileSize(_ size: Int64) -> String {
@@ -524,6 +525,7 @@ private func astraGramSettingsEntries(strings: AstraStrings, settings: AstraGram
     entries.append(.button(id: 119, section: .look, title: strings.glassMaterial, label: [strings.glassMaterialStandard, strings.glassMaterialClear, strings.glassMaterialMatte][max(0, min(2, settings.glassMaterial))], kind: .glassMaterial))
     entries.append(.flag(id: 120, section: .look, title: strings.springPresses, value: settings.springPresses, enabled: true, keyPath: \.springPresses))
     entries.append(.flag(id: 122, section: .look, title: strings.astraBadge, value: settings.astraBadge, enabled: true, keyPath: \.astraBadge))
+    entries.append(.button(id: 123, section: .look, title: strings.astraBadgeClear, label: "", kind: .clearBadge))
     entries.append(.footer(id: 116, section: .look, text: strings.lookFooter))
     entries.append(.button(id: 117, section: .onlineExceptions, title: strings.restartApp, label: "", kind: .restartApp))
     entries.append(.footer(id: 118, section: .onlineExceptions, text: strings.restartFooter))
@@ -659,6 +661,11 @@ public func astraGramSettingsController(context: AccountContext, makeLinked: @es
                 })
             case .restartApp:
                 AstraAppRestart.perform(title: strings.restartNotificationTitle, text: strings.restartNotificationText)
+            case .clearBadge:
+                AstraBadgeSync.clearName(context: context, completion: { removed in
+                    let text = removed ? strings.astraBadgeCleared : strings.astraBadgeNothing
+                    presentControllerImpl?(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }))
+                })
             case .backupExport:
                 guard let data = AstraBackup.exportData() else {
                     return
@@ -666,6 +673,9 @@ public func astraGramSettingsController(context: AccountContext, makeLinked: @es
                 let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("AstraGram-backup.json")
                 try? data.write(to: url)
                 let activityController = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                activityController.completionWithItemsHandler = { _, _, _, _ in
+                    try? FileManager.default.removeItem(at: url)
+                }
                 presentNativeControllerImpl?(activityController)
             case .backupImport:
                 let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.json, UTType.item], asCopy: true)

@@ -45,6 +45,9 @@ public enum AstraBadgeSync {
             } else {
                 updatedFirstName = AstraBadge.removing(from: firstName)
                 updatedLastName = AstraBadge.removing(from: lastName)
+                if updatedFirstName.isEmpty {
+                    return
+                }
             }
             AstraBadgeSync.lastSent[peerId] = enabled
             let _ = context.engine.accountData.updateAccountPeerName(firstName: updatedFirstName, lastName: updatedLastName).startStandalone()
@@ -59,6 +62,30 @@ public enum AstraBadgeSync {
         }
     }
 
+    /// Turns the badge off and takes the mark out of this account's name now, whatever this session sent before.
+    /// `completion` gets whether there was a mark to take out.
+    public static func clearName(context: AccountContext, completion: @escaping (Bool) -> Void) {
+        let peerId = context.account.peerId
+        AstraGramSettings.update { $0.astraBadgeAsked = true; $0.astraBadge = false }
+        // The switch above is handled here, not by the subscription.
+        AstraBadgeSync.lastSent[peerId] = false
+        let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+        |> deliverOnMainQueue).start(next: { peer in
+            guard case let .user(user)? = peer else {
+                completion(false)
+                return
+            }
+            let firstName = user.firstName ?? ""
+            let lastName = user.lastName ?? ""
+            if !AstraBadge.contains(firstName) && !AstraBadge.contains(lastName) {
+                completion(false)
+                return
+            }
+            let _ = context.engine.accountData.updateAccountPeerName(firstName: AstraBadge.removing(from: firstName), lastName: AstraBadge.removing(from: lastName)).startStandalone()
+            completion(true)
+        })
+    }
+
     private static func ask(isRussian: Bool) {
         guard let top = astraTopViewController() else {
             // Asked at the next launch instead.
@@ -67,8 +94,8 @@ public enum AstraBadgeSync {
         }
         let title = isRussian ? "Значок AstraGram" : "AstraGram Badge"
         let message = isRussian
-            ? "Другие пользователи AstraGram увидят рядом с вашим именем значок AstraGram, а вы — у них.\n\nДля этого в конец вашего имени добавляются два невидимых символа. В обычном Telegram имя выглядит как прежде, но через API эти символы может прочитать кто угодно.\n\nИзменить можно в настройках AstraGram → «Оформление»."
-            : "Other AstraGram users will see an AstraGram badge beside your name, and you beside theirs.\n\nTo do this, two invisible characters are added to the end of your name. In regular Telegram your name looks the same, but anyone can read these characters through the API.\n\nYou can change this in AstraGram settings → Look."
+            ? "Другие пользователи AstraGram увидят рядом с вашим именем значок AstraGram, а вы — у них.\n\nДля этого в конец вашего имени добавляются два невидимых символа. В обычном Telegram имя выглядит как прежде, но через API эти символы может прочитать кто угодно.\n\nЗначок ничего не подтверждает: те же символы может вписать в имя кто угодно. Не доверяйте человеку только из-за значка.\n\nПеред удалением AstraGram выключите значок, иначе символы останутся в имени. Изменить можно в настройках AstraGram → «Оформление»."
+            : "Other AstraGram users will see an AstraGram badge beside your name, and you beside theirs.\n\nTo do this, two invisible characters are added to the end of your name. In regular Telegram your name looks the same, but anyone can read these characters through the API.\n\nThe badge proves nothing: anyone can put the same characters in their name. Do not trust someone because of the badge alone.\n\nTurn the badge off before deleting AstraGram, or the characters stay in your name. You can change this in AstraGram settings → Look."
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: isRussian ? "Не показывать" : "Don't Show", style: .cancel, handler: { _ in
             AstraGramSettings.update { $0.astraBadgeAsked = true; $0.astraBadge = false }

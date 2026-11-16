@@ -411,9 +411,11 @@ public enum AstraBackup {
             let previous = AstraGramSettings.current
             AstraGramSettings.replace(withJSON: settingsData)
             AstraGramSettings.update { settings in
-                if settings.aiApiKey.isEmpty {
-                    settings.aiApiKey = previous.aiApiKey
-                }
+                // The AI address and the host the user agreed to send text to stay this device's own: a backup from
+                // someone else would otherwise send the key and the messages to their server.
+                settings.aiEndpoint = previous.aiEndpoint
+                settings.aiConsentEndpoint = previous.aiConsentEndpoint
+                settings.aiApiKey = previous.aiApiKey
                 for peerId in previous.lockedChats where !settings.lockedChats.contains(peerId) {
                     settings.lockedChats.append(peerId)
                 }
@@ -425,9 +427,10 @@ public enum AstraBackup {
         if let bookmarks = object["bookmarks"] as? [Any], let bookmarksData = try? JSONSerialization.data(withJSONObject: bookmarks), let decoded = try? JSONDecoder().decode([AstraBookmark].self, from: bookmarksData) {
             AstraBookmarks.replaceAll(decoded)
         }
+        // Plugins from a file arrive switched off: each is turned on by hand in Plugins, after reading what it is.
         if let plugins = object["plugins"] as? [String] {
             for source in plugins {
-                AstraPluginManager.shared.install(source: source)
+                AstraPluginManager.shared.install(source: source, enable: false)
             }
         }
         return true

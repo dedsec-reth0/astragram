@@ -27,9 +27,10 @@ concurrency:
   group: build-${{ github.ref }}-${{ inputs.configuration || 'release_arm64' }}
   cancel-in-progress: false
 
+# Actions are pinned to full commit SHAs. The build job runs a lot of third-party build code, so it cannot write to the
+# repository; only the small publish job below, which runs no build code, can create a release.
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 env:
   SOURCE_DIR: /Users/Shared/telegram-ios
@@ -43,9 +44,16 @@ jobs:
   build:
     runs-on: xcode-27
     timeout-minutes: 355
+    permissions:
+      contents: read
+      actions: write   # starting the next attempt
+    outputs:
+      app_version: ${{ steps.build.outputs.app_version }}
+      build_number: ${{ steps.build.outputs.build_number }}
+      ipa_ready: ${{ steps.collect.outputs.ipa_ready }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
           fetch-depth: 1
@@ -72,7 +80,7 @@ jobs:
           echo "cpus=$(sysctl -n hw.ncpu) memory=$(( $(sysctl -n hw.memsize) / 1073741824 ))GB"
 
       - name: Restore Bazel cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ env.CACHE_DIR }}
           key: bazel-${{ env.CONFIGURATION }}-${{ github.sha }}-${{ github.run_id }}
@@ -102,6 +110,8 @@ jobs:
           BUILD_NUMBER=$(( $(cat build_number_offset) + 100000 + ${{ github.run_number }} ))
           echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
 
           # The fake provisioning profiles in the repository have expired: re-sign them with a future date.
           python3 astragram/ci/refresh_profiles.py "$SOURCE_DIR" || exit 1
@@ -133,7 +143,7 @@ jobs:
 
       - name: Save Bazel cache
         if: always() && steps.build.outcome != 'skipped'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ env.CACHE_DIR }}
           key: bazel-${{ env.CONFIGURATION }}-${{ github.sha }}-${{ github.run_id }}
@@ -153,13 +163,14 @@ jobs:
 
       - name: Upload build log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: build-log-${{ github.run_id }}
           path: ${{ env.SOURCE_DIR }}/build.log
           if-no-files-found: ignore
 
       - name: Collect IPA
+        id: collect
         if: steps.build.outcome == 'success' && env.CONFIGURATION == 'release_arm64'
         run: |
           set -euo pipefail
@@ -176,19 +187,37 @@ jobs:
           echo "IPA: $IPA"
           cp -L "$IPA" "$GITHUB_WORKSPACE/out/AstraGram.ipa"
           python3 astragram/ci/verify_ipa.py "$GITHUB_WORKSPACE/out/AstraGram.ipa"
+          echo "ipa_ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Upload IPA
         if: steps.build.outcome == 'success' && env.CONFIGURATION == 'release_arm64'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: AstraGram-${{ env.APP_VERSION }}-${{ env.BUILD_NUMBER }}
           path: out/AstraGram.ipa
           if-no-files-found: error
           retention-days: 30
 
-      # A GitHub release with the IPA (the app checks it for updates) and the SideStore source that lists it.
+  # A GitHub release with the IPA (the app checks it for updates) and the SideStore source that lists it.
+  publish:
+    needs: build
+    if: needs.build.outputs.ipa_ready == 'true' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+
+      - name: Download IPA
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: AstraGram-${{ needs.build.outputs.app_version }}-${{ needs.build.outputs.build_number }}
+          path: out
+
       - name: Publish release
-        if: steps.build.outcome == 'success' && env.CONFIGURATION == 'release_arm64' && github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 astragram/ci/publish_release.py out/AstraGram.ipa "$APP_VERSION" "$BUILD_NUMBER"
+        run: python3 astragram/ci/publish_release.py out/AstraGram.ipa "${{ needs.build.outputs.app_version }}" "${{ needs.build.outputs.build_number }}"

@@ -100,7 +100,7 @@ public final class AstraPluginManager {
 
     /// Installs (or replaces) a plugin from its source. Returns the plugin id, or nil when the source has no `@id`.
     @discardableResult
-    public func install(source: String) -> String? {
+    public func install(source: String, enable: Bool = true) -> String? {
         let header = AstraPluginManager.parseHeader(source)
         guard let id = header["id"], !id.isEmpty, id.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil else {
             return nil
@@ -112,8 +112,13 @@ public final class AstraPluginManager {
         } catch {
             return nil
         }
+        // A plugin installed switched off is switched off even when it replaces an enabled one with the same id.
         var enabled = self.enabledIds
-        enabled.insert(id)
+        if enable {
+            enabled.insert(id)
+        } else {
+            enabled.remove(id)
+        }
         self.enabledIds = enabled
         self.reload()
         return id
@@ -138,6 +143,8 @@ public final class AstraPluginManager {
 
     public func remove(id: String) {
         try? FileManager.default.removeItem(at: self.directory.appendingPathComponent(id + ".js"))
+        // What the plugin kept goes with it.
+        UserDefaults.standard.removeObject(forKey: "ayugram.plugins.storage." + id)
         var ids = self.enabledIds
         ids.remove(id)
         self.enabledIds = ids
@@ -236,7 +243,9 @@ public final class AstraPluginManager {
         let storageKey = "ayugram.plugins.storage." + id
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         let log: @convention(block) (String) -> Void = { text in
+            #if DEBUG
             NSLog("[AstraPlugin \(id)] \(text)")
+            #endif
         }
         // The storage keeps JSON strings; the JavaScript wrapper below turns them back into values.
         let storageGet: @convention(block) (String) -> String? = { key in
@@ -278,7 +287,11 @@ public final class AstraPluginManager {
         }
         context.exceptionHandler = { _, exception in
             let exceptionValue: JSValue? = exception
+            #if DEBUG
             NSLog("[AstraPlugin \(id)] error: \(exceptionValue.flatMap { AstraPluginManager.string($0) } ?? "")")
+            #else
+            let _ = exceptionValue
+            #endif
         }
         return .success(LoadedPlugin(id: id, context: context, plugin: plugin))
     }

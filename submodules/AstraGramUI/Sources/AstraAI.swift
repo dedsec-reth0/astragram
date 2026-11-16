@@ -28,6 +28,26 @@ public enum AstraAI {
         return true
     }
 
+    /// Whether an endpoint may carry the key and the text: https, or http to this device only.
+    public static func isSecureEndpoint(_ endpoint: String) -> Bool {
+        guard let url = URL(string: endpoint.trimmingCharacters(in: .whitespacesAndNewlines)), let scheme = url.scheme?.lowercased(), let host = url.host?.lowercased() else {
+            return false
+        }
+        if scheme == "https" {
+            return true
+        }
+        return scheme == "http" && (host == "localhost" || host == "127.0.0.1" || host == "::1")
+    }
+
+    /// An error when the own endpoint is not secure (nothing is sent then).
+    private static func insecureEndpointError() -> AIError? {
+        if AstraAI.hasOwnKey && !AstraAI.isSecureEndpoint(AstraGramSettings.current.aiEndpoint) {
+            let isRussian = (Locale.preferredLanguages.first ?? "").lowercased().hasPrefix("ru")
+            return .server(isRussian ? "Адрес AI должен начинаться с https:// — по http ключ и текст ушли бы незашифрованными. Ничего не отправлено." : "The AI address must start with https:// — over http the key and the text would travel unencrypted. Nothing was sent.")
+        }
+        return nil
+    }
+
     private static func baseUrl() -> String {
         if !AstraAI.hasOwnKey {
             return AstraAI.freeEndpoint
@@ -83,6 +103,12 @@ public enum AstraAI {
 
     /// Asks the model; `completion` is called on the main queue.
     public static func complete(system: String, user: String, completion: @escaping (Result<String, AIError>) -> Void) {
+        if let error = AstraAI.insecureEndpointError() {
+            DispatchQueue.main.async {
+                completion(.failure(error))
+            }
+            return
+        }
         AstraAI.withConsent({
             AstraAI.performComplete(system: system, user: user, completion: completion)
         }, declined: {
@@ -132,6 +158,12 @@ public enum AstraAI {
 
     /// Speech to text (an OpenAI-compatible /audio/transcriptions endpoint, model whisper-1).
     public static func transcribe(fileUrl: URL, fileName: String, mimeType: String, completion: @escaping (Result<String, AIError>) -> Void) {
+        if let error = AstraAI.insecureEndpointError() {
+            DispatchQueue.main.async {
+                completion(.failure(error))
+            }
+            return
+        }
         AstraAI.withConsent({
             AstraAI.performTranscribe(fileUrl: fileUrl, fileName: fileName, mimeType: mimeType, completion: completion)
         }, declined: {
