@@ -955,7 +955,7 @@ func infoItems(
     }
     
     // AstraGram: the streak (огонёк) with this person.
-    if let user = data.peer as? TelegramUser, user.botInfo == nil, user.id != context.account.peerId, !isMyProfile, user.id.namespace == Namespaces.Peer.CloudUser {
+    if case let .user(user)? = data.peer, user.botInfo == nil, user.id != context.account.peerId, !isMyProfile, user.id.namespace == Namespaces.Peer.CloudUser {
         let isRussian = presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
         let streakText = astraStreakSummary(AstraStreak.cached(accountPeerId: context.account.peerId, peerId: user.id), isRussian: isRussian)
         let userId = user.id
