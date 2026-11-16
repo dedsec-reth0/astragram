@@ -954,6 +954,18 @@ func infoItems(
         }
     }
     
+    // AstraGram: the streak (огонёк) with this person.
+    if let user = data.peer as? TelegramUser, user.botInfo == nil, user.id != context.account.peerId, !isMyProfile, user.id.namespace == Namespaces.Peer.CloudUser {
+        let isRussian = presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+        let streakText = astraStreakSummary(AstraStreak.cached(accountPeerId: context.account.peerId, peerId: user.id), isRussian: isRussian)
+        let userId = user.id
+        items[.peerInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.streak", label: isRussian ? "Огонёк" : "Streak", text: streakText, textColor: .primary, action: { _, _ in
+            astraOpenStreak(context: context, peerId: userId)
+        }, requestLayout: { animated in
+            interaction.requestLayout(animated)
+        }))
+    }
+
     // AstraGram: the numeric ID (in the Bot API form), tap to copy.
     if AstraGramSettings.current.showPeerId, let peer = data.peer, !isMyProfile {
         let rawId = peer.id.id._internalGetInt64Value()

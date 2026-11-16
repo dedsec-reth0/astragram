@@ -3557,6 +3557,13 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             titleBadgeText = item.presentationData.strings.ChatList_MonoforumLabel
                         }
                         titleAttributedString = NSAttributedString(string: displayTitle, font: titleFont, textColor: textColor)
+                        // AstraGram: the streak (огонёк) beside the name.
+                        if let mainPeerId = itemPeer.chatMainPeer?.id, mainPeerId.namespace == Namespaces.Peer.CloudUser, let streak = AstraStreak.cached(accountPeerId: item.context.account.peerId, peerId: mainPeerId), streak.displayCount > 0 {
+                            let titleWithStreak = NSMutableAttributedString(attributedString: NSAttributedString(string: displayTitle, font: titleFont, textColor: textColor))
+                            let streakColor = streak.restorableDay != nil ? theme.messageTextColor : UIColor(rgb: 0xFF7A1A)
+                            titleWithStreak.append(NSAttributedString(string: " 🔥\(streak.displayCount)", font: titleFont, textColor: streakColor))
+                            titleAttributedString = titleWithStreak
+                        }
                     }
                 case .group:
                     titleAttributedString = NSAttributedString(string: item.presentationData.strings.ChatList_ArchivedChatsTitle, font: titleFont, textColor: theme.titleColor)

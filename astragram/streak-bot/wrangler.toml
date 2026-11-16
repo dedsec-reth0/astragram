@@ -1,0 +1,15 @@
+# AstraGram streak bot on Cloudflare Workers (free plan). Deployed by .github/workflows/streak-bot.yml:
+# the workflow fills in the database ID and sets the BOT_TOKEN secret; nothing secret is kept in this file.
+name = "astragram-streak-bot"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "astragram-streaks"
+database_id = "DATABASE_ID"
+
+# Every hour: evening reminders (by each AstraGram user's time zone) and removal of stale data.
+[triggers]
+crons = ["5 * * * *"]

@@ -1,6 +1,7 @@
 import Foundation
 import Postbox
 import SwiftSignalKit
+import Security
 
 /// AstraGram client-side settings.
 ///
@@ -112,6 +113,9 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var astraBadge: Bool
     /// Whether the user has been asked about the AstraGram badge.
     public var astraBadgeAsked: Bool
+    /// The streak bot (огонёк for people without AstraGram): its username and the address of its server.
+    public var streakBotUsername: String
+    public var streakBotURL: String
     /// Look: the material of glass panels and buttons (0 Telegram's own, 1 clear, 2 matte).
     public var glassMaterial: Int
     /// Look: buttons answer a press with a spring, the chat list highlights a row as a rounded plate.
@@ -206,6 +210,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         monochromePlainBackground: false,
         astraBadge: false,
         astraBadgeAsked: false,
+        streakBotUsername: "",
+        streakBotURL: "",
         glassMaterial: 0,
         springPresses: false,
         hideStickersFromOthers: false,
@@ -278,6 +284,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         monochromePlainBackground: Bool,
         astraBadge: Bool,
         astraBadgeAsked: Bool,
+        streakBotUsername: String,
+        streakBotURL: String,
         glassMaterial: Int,
         springPresses: Bool,
         hideStickersFromOthers: Bool,
@@ -348,6 +356,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.monochromePlainBackground = monochromePlainBackground
         self.astraBadge = astraBadge
         self.astraBadgeAsked = astraBadgeAsked
+        self.streakBotUsername = streakBotUsername
+        self.streakBotURL = streakBotURL
         self.glassMaterial = glassMaterial
         self.springPresses = springPresses
         self.hideStickersFromOthers = hideStickersFromOthers
@@ -423,6 +433,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.monochromePlainBackground = try container.decodeIfPresent(Bool.self, forKey: .monochromePlainBackground) ?? d.monochromePlainBackground
         self.astraBadge = try container.decodeIfPresent(Bool.self, forKey: .astraBadge) ?? d.astraBadge
         self.astraBadgeAsked = try container.decodeIfPresent(Bool.self, forKey: .astraBadgeAsked) ?? d.astraBadgeAsked
+        self.streakBotUsername = try container.decodeIfPresent(String.self, forKey: .streakBotUsername) ?? d.streakBotUsername
+        self.streakBotURL = try container.decodeIfPresent(String.self, forKey: .streakBotURL) ?? d.streakBotURL
         self.glassMaterial = try container.decodeIfPresent(Int.self, forKey: .glassMaterial) ?? d.glassMaterial
         self.springPresses = try container.decodeIfPresent(Bool.self, forKey: .springPresses) ?? d.springPresses
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
@@ -464,8 +476,62 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     }
 }
 
+/// AstraGram: the AI key lives in the Keychain (this device only, readable after the first unlock), not with the other
+/// settings in the app group's defaults.
+private enum AstraSecretStore {
+    private static let service = "org.astragram.ai"
+    private static let account = "apiKey"
+
+    static func read() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: AstraSecretStore.service,
+            kSecAttrAccount as String: AstraSecretStore.account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @discardableResult
+    static func write(_ value: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: AstraSecretStore.service,
+            kSecAttrAccount as String: AstraSecretStore.account
+        ]
+        SecItemDelete(query as CFDictionary)
+        if value.isEmpty {
+            return true
+        }
+        var attributes = query
+        attributes[kSecValueData as String] = value.data(using: .utf8)
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
+    }
+}
+
 public final class AstraGramSettings {
     private static let defaultsKey = "ayugram.settings.v1"
+
+    /// The AI key last read from or written to the Keychain: it is written only when it changes, so an extension
+    /// (which has no access to the app's Keychain item) never wipes it.
+    private static let storedApiKey = Atomic<String?>(value: nil)
+
+    /// The settings as stored in the defaults: without the AI key, which goes to the Keychain.
+    private static func encodeForStorage(_ value: AstraGramSettingsValues) -> Data? {
+        let key = value.aiApiKey
+        if AstraGramSettings.storedApiKey.swap(key) != key {
+            AstraSecretStore.write(key)
+        }
+        var stripped = value
+        stripped.aiApiKey = ""
+        return try? JSONEncoder().encode(stripped)
+    }
 
     private static let state: Atomic<AstraGramSettingsValues> = Atomic(value: AstraGramSettings.load())
     private static let promise: ValuePromise<AstraGramSettingsValues> = ValuePromise(AstraGramSettings.state.with { $0 }, ignoreRepeated: true)
@@ -490,7 +556,23 @@ public final class AstraGramSettings {
         guard let data = AstraGramSettings.defaults.data(forKey: AstraGramSettings.defaultsKey) ?? UserDefaults.standard.data(forKey: AstraGramSettings.defaultsKey) else {
             return .default
         }
-        if let value = try? JSONDecoder().decode(AstraGramSettingsValues.self, from: data) {
+        if var value = try? JSONDecoder().decode(AstraGramSettingsValues.self, from: data) {
+            if !value.aiApiKey.isEmpty {
+                // Saved by a build that kept the key in the defaults: it moves to the Keychain.
+                if AstraSecretStore.write(value.aiApiKey) {
+                    let _ = AstraGramSettings.storedApiKey.swap(value.aiApiKey)
+                    var stripped = value
+                    stripped.aiApiKey = ""
+                    if let strippedData = try? JSONEncoder().encode(stripped) {
+                        AstraGramSettings.defaults.set(strippedData, forKey: AstraGramSettings.defaultsKey)
+                        UserDefaults.standard.removeObject(forKey: AstraGramSettings.defaultsKey)
+                    }
+                }
+            } else {
+                let key = AstraSecretStore.read() ?? ""
+                let _ = AstraGramSettings.storedApiKey.swap(key)
+                value.aiApiKey = key
+            }
             return value
         }
         return .default
@@ -521,7 +603,7 @@ public final class AstraGramSettings {
             f(&current)
             return current
         }
-        if let data = try? JSONEncoder().encode(updated) {
+        if let data = AstraGramSettings.encodeForStorage(updated) {
             AstraGramSettings.defaults.set(data, forKey: AstraGramSettings.defaultsKey)
         }
         AstraGramSettings.promise.set(updated)

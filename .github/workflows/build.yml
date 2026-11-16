@@ -22,6 +22,8 @@ on:
       - 'astragram/uitest/**'
       - 'Telegram/Tests/**'
       - '.github/workflows/ui-test.yml'
+      - '.github/workflows/streak-bot.yml'
+      - 'astragram/streak-bot/**'
 
 concurrency:
   group: build-${{ github.ref }}-${{ inputs.configuration || 'release_arm64' }}

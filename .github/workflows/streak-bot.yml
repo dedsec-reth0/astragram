@@ -1,0 +1,104 @@
+name: Streak Bot
+
+# Deploys the AstraGram streak bot (astragram/streak-bot) to Cloudflare Workers with a D1 database, both on the free
+# plan, and points the Telegram bot's webhook at it. Needs three repository secrets:
+#   CLOUDFLARE_API_TOKEN  - a Cloudflare API token with "Edit Cloudflare Workers" and "D1 Edit" permissions
+#   CLOUDFLARE_ACCOUNT_ID - the Cloudflare account ID
+#   STREAK_BOT_TOKEN      - the bot's token from @BotFather
+# Without them the job only says what is missing.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'astragram/streak-bot/**'
+      - '.github/workflows/streak-bot.yml'
+
+concurrency:
+  group: streak-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BOT_TOKEN: ${{ secrets.STREAK_BOT_TOKEN }}
+      WRANGLER: npx --yes wrangler@4.155.0
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+
+      - name: Check secrets
+        id: secrets
+        run: |
+          missing=""
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$BOT_TOKEN" ] || missing="$missing STREAK_BOT_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::notice::Streak bot not deployed, missing secrets:$missing"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          node-version: '22'
+
+      - name: Database
+        if: steps.secrets.outputs.ready == 'true'
+        working-directory: astragram/streak-bot
+        run: |
+          set -euo pipefail
+          db_id() { $WRANGLER d1 list --json | jq -r '.[] | select(.name == "astragram-streaks") | .uuid' | head -1; }
+          ID=$(db_id || true)
+          if [ -z "$ID" ]; then
+            $WRANGLER d1 create astragram-streaks
+            ID=$(db_id)
+          fi
+          [ -n "$ID" ] || { echo "::error::Could not find or create the D1 database"; exit 1; }
+          sed -i "s/DATABASE_ID/$ID/" wrangler.toml
+          $WRANGLER d1 execute astragram-streaks --remote --file schema.sql --yes
+
+      - name: Deploy worker
+        if: steps.secrets.outputs.ready == 'true'
+        working-directory: astragram/streak-bot
+        run: |
+          set -euo pipefail
+          $WRANGLER deploy | tee deploy.log
+          printf '%s' "$BOT_TOKEN" | $WRANGLER secret put BOT_TOKEN
+          URL=$(grep -oE 'https://[A-Za-z0-9.-]+\.workers\.dev' deploy.log | head -1)
+          [ -n "$URL" ] || { echo "::error::No workers.dev address in the deploy output (is the workers.dev subdomain set up in Cloudflare?)"; exit 1; }
+          echo "URL=$URL" >> "$GITHUB_ENV"
+
+      - name: Connect Telegram
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          SECRET=$(printf '%s' "$BOT_TOKEN:webhook" | sha256sum | cut -c1-48)
+          API="https://api.telegram.org/bot$BOT_TOKEN"
+          curl -fsS "$API/setWebhook" -H 'content-type: application/json' \
+            -d "{\"url\":\"$URL/tg\",\"secret_token\":\"$SECRET\",\"allowed_updates\":[\"message\",\"callback_query\"],\"drop_pending_updates\":true}" > /dev/null
+          curl -fsS "$API/setMyCommands" -H 'content-type: application/json' \
+            -d '{"commands":[{"command":"streaks","description":"Мои огоньки"},{"command":"help","description":"Как работает огонёк"},{"command":"stop","description":"Выключить напоминания"}]}' > /dev/null
+          curl -fsS "$API/setMyDescription" -H 'content-type: application/json' \
+            -d '{"description":"🔥 Огоньки AstraGram для тех, у кого нет AstraGram: счёт, напоминание вечером и восстановление пропущенного дня. Боту приходят только числа, тексты сообщений — никогда."}' > /dev/null
+          USERNAME=$(curl -fsS "$API/getMe" | jq -r .result.username)
+          {
+            echo "### Streak bot is live"
+            echo ""
+            echo "- Bot: @$USERNAME"
+            echo "- Server: $URL"
+            echo ""
+            echo "AstraGram settings: streakBotUsername = \`$USERNAME\`, streakBotURL = \`$URL\`"
+          } >> "$GITHUB_STEP_SUMMARY"

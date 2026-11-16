@@ -278,6 +278,7 @@ public final class AstraPluginManager {
         var plugin = { commands: {} };
         """)
 
+        AstraPluginManager.limitExecutionTime(of: context)
         context.evaluateScript(source, withSourceURL: URL(string: "astragram-plugin://\(id).js"))
         if let exceptionText = exceptionText {
             return .failure(LoadError(message: exceptionText))
@@ -294,6 +295,30 @@ public final class AstraPluginManager {
             #endif
         }
         return .success(LoadedPlugin(id: id, context: context, plugin: plugin))
+    }
+
+    // MARK: Time limit
+
+    private typealias SetExecutionTimeLimit = @convention(c) (JSContextGroupRef?, Double, UnsafeRawPointer?, UnsafeMutableRawPointer?) -> Void
+
+    /// JavaScriptCore's watchdog (`JSContextGroupSetExecutionTimeLimit`, not in the public headers, so looked up at run
+    /// time): a plugin call that runs longer than the limit is stopped with an exception instead of hanging sending
+    /// and the chat list. Without the function nothing changes.
+    private static let setExecutionTimeLimit: SetExecutionTimeLimit? = {
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "JSContextGroupSetExecutionTimeLimit") else {
+            return nil
+        }
+        return unsafeBitCast(symbol, to: SetExecutionTimeLimit.self)
+    }()
+
+    /// Seconds a single call into a plugin may take.
+    static let executionTimeLimit: Double = 0.5
+
+    static func limitExecutionTime(of context: JSContext) {
+        guard let setExecutionTimeLimit = AstraPluginManager.setExecutionTimeLimit else {
+            return
+        }
+        setExecutionTimeLimit(JSContextGetGroup(context.jsGlobalContextRef), AstraPluginManager.executionTimeLimit, nil, nil)
     }
 
     // MARK: Hooks

@@ -303,6 +303,7 @@ public enum AccountResult {
 public func accountWithId(accountManager: AccountManager<TelegramAccountManagerTypes>, networkArguments: NetworkInitializationArguments, id: AccountRecordId, encryptionParameters: ValueBoxEncryptionParameters, supplementary: Bool, isSupportUser: Bool, rootPath: String, beginWithTestingEnvironment: Bool, backupData: AccountBackupData?, auxiliaryMethods: AccountAuxiliaryMethods, shouldKeepAutoConnection: Bool = true) -> Signal<AccountResult, NoError> {
     let path = "\(rootPath)/\(accountRecordIdPathName(id))"
     
+    AstraMessageStore.setEncryptionParameters(encryptionParameters)
     let postbox = openPostbox(
         basePath: path + "/postbox",
         seedConfiguration: telegramPostboxSeedConfiguration,
@@ -1811,6 +1812,7 @@ public func standaloneStateManager(
 ) -> Signal<AccountStateManager?, NoError> {
     let path = "\(rootPath)/\(accountRecordIdPathName(id))"
 
+    AstraMessageStore.setEncryptionParameters(encryptionParameters)
     let postbox = openPostbox(
         basePath: path + "/postbox",
         seedConfiguration: telegramPostboxSeedConfiguration,

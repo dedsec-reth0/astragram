@@ -416,6 +416,8 @@ public enum AstraBackup {
                 settings.aiEndpoint = previous.aiEndpoint
                 settings.aiConsentEndpoint = previous.aiConsentEndpoint
                 settings.aiApiKey = previous.aiApiKey
+                settings.streakBotUsername = previous.streakBotUsername
+                settings.streakBotURL = previous.streakBotURL
                 for peerId in previous.lockedChats where !settings.lockedChats.contains(peerId) {
                     settings.lockedChats.append(peerId)
                 }

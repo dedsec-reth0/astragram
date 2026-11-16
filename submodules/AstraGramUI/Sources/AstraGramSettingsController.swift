@@ -341,7 +341,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openPlugins()
                 })
-            case .ai, .templates, .keywordAlerts, .bookmarks, .lockedChats, .securityCheck, .telegramPrivacy:
+            case .ai, .templates, .keywordAlerts, .bookmarks, .lockedChats, .securityCheck, .telegramPrivacy, .streaks:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openTool(kind)
                 })
@@ -387,6 +387,7 @@ private enum AstraGramSettingsButtonKind: Equatable {
     case securityCheck
     case telegramPrivacy
     case clearBadge
+    case streaks
 }
 
 private func formatFileSize(_ size: Int64) -> String {
@@ -526,6 +527,7 @@ private func astraGramSettingsEntries(strings: AstraStrings, settings: AstraGram
     entries.append(.flag(id: 120, section: .look, title: strings.springPresses, value: settings.springPresses, enabled: true, keyPath: \.springPresses))
     entries.append(.flag(id: 122, section: .look, title: strings.astraBadge, value: settings.astraBadge, enabled: true, keyPath: \.astraBadge))
     entries.append(.button(id: 123, section: .look, title: strings.astraBadgeClear, label: "", kind: .clearBadge))
+    entries.append(.button(id: 124, section: .look, title: strings.streaks, label: "", kind: .streaks))
     entries.append(.footer(id: 116, section: .look, text: strings.lookFooter))
     entries.append(.button(id: 117, section: .onlineExceptions, title: strings.restartApp, label: "", kind: .restartApp))
     entries.append(.footer(id: 118, section: .onlineExceptions, text: strings.restartFooter))
@@ -661,6 +663,8 @@ public func astraGramSettingsController(context: AccountContext, makeLinked: @es
                 })
             case .restartApp:
                 AstraAppRestart.perform(title: strings.restartNotificationTitle, text: strings.restartNotificationText)
+            case .streaks:
+                pushControllerImpl?(astraStreaksListController(context: context))
             case .clearBadge:
                 AstraBadgeSync.clearName(context: context, completion: { removed in
                     let text = removed ? strings.astraBadgeCleared : strings.astraBadgeNothing

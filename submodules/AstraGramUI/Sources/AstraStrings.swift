@@ -271,6 +271,7 @@ public struct AstraStrings {
     public var springPresses: String { t("Пружинящие нажатия", "Springy Presses") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }
     public var astraBadge: String { t("Значок AstraGram у имени", "AstraGram Badge by My Name") }
+    public var streaks: String { t("🔥 Огоньки", "🔥 Streaks") }
     public var astraBadgeClear: String { t("Убрать метку AstraGram из имени", "Remove AstraGram Mark from My Name") }
     public var astraBadgeCleared: String { t("Метка AstraGram убрана из имени, значок выключен", "The AstraGram mark is removed from your name and the badge is off") }
     public var astraBadgeNothing: String { t("В имени нет метки AstraGram, значок выключен", "Your name has no AstraGram mark; the badge is off") }

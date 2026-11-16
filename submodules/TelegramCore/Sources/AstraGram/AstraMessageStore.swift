@@ -209,9 +209,9 @@ public final class AstraMessageStore {
     }
 
     private let path: String
-    private let queue: Queue
+    let queue: Queue
     private var database: OpaquePointer?
-    private let changesPipe = ValuePipe<Void>()
+    let changesPipe = ValuePipe<Void>()
 
     private init(path: String) {
         self.path = path
@@ -221,18 +221,129 @@ public final class AstraMessageStore {
         }
     }
 
-    private func open() {
+    // MARK: Encryption
+
+    /// The key of the accounts' Postbox (key + salt, as SQLCipher's raw key). The store is encrypted with the same key
+    /// as Telegram's own database, so the app and the notification service extension both can open it.
+    private static let encryptionKey = Atomic<Data?>(value: nil)
+
+    /// Called before an account's Postbox opens (the app and the notification service extension).
+    public static func setEncryptionParameters(_ parameters: ValueBoxEncryptionParameters) {
+        let data = parameters.key.data + parameters.salt.data
+        let _ = AstraMessageStore.encryptionKey.swap(data)
+    }
+
+    private static func hexString(_ data: Data) -> String {
+        return data.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func openConnection(_ path: String) -> OpaquePointer? {
         var database: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
-        if sqlite3_open_v2(self.path, &database, flags, nil) != SQLITE_OK {
+        if sqlite3_open_v2(path, &database, flags, nil) != SQLITE_OK {
             if let database = database {
                 sqlite3_close(database)
             }
+            return nil
+        }
+        sqlite3_busy_timeout(database, 5000)
+        return database
+    }
+
+    private static func exec(_ database: OpaquePointer, _ sql: String) -> Bool {
+        return sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK
+    }
+
+    private static func removeFiles(_ path: String) {
+        for suffix in ["", "-wal", "-shm"] {
+            try? FileManager.default.removeItem(atPath: path + suffix)
+        }
+    }
+
+    /// Whether the file is an old store without encryption (its schema reads without a key).
+    private static func isPlaintext(_ path: String) -> Bool {
+        guard FileManager.default.fileExists(atPath: path), let database = AstraMessageStore.openConnection(path) else {
+            return false
+        }
+        defer {
+            sqlite3_close(database)
+        }
+        return AstraMessageStore.exec(database, "SELECT count(*) FROM sqlite_master")
+    }
+
+    /// Copies an old store into an encrypted file and puts it in its place. Under a file lock, because the app and the
+    /// notification service extension may start at the same time.
+    private static func encryptPlaintextStore(_ path: String, hexKey: String) {
+        let lockFd = Darwin.open(path + ".lock", O_CREAT | O_RDWR, 0o600)
+        if lockFd >= 0 {
+            flock(lockFd, LOCK_EX)
+        }
+        defer {
+            if lockFd >= 0 {
+                flock(lockFd, LOCK_UN)
+                Darwin.close(lockFd)
+            }
+        }
+        guard AstraMessageStore.isPlaintext(path), let database = AstraMessageStore.openConnection(path) else {
+            return
+        }
+        let exportPath = path + ".encrypted"
+        AstraMessageStore.removeFiles(exportPath)
+        let _ = AstraMessageStore.exec(database, "PRAGMA cipher_default_plaintext_header_size=32")
+        var exported = AstraMessageStore.exec(database, "ATTACH DATABASE '\(exportPath)' AS encrypted KEY \"x'\(hexKey)'\"")
+        if exported {
+            exported = AstraMessageStore.exec(database, "SELECT sqlcipher_export('encrypted')")
+            let _ = AstraMessageStore.exec(database, "DETACH DATABASE encrypted")
+        }
+        sqlite3_close(database)
+        if exported {
+            AstraMessageStore.removeFiles(path)
+            try? FileManager.default.moveItem(atPath: exportPath, toPath: path)
+            Logger.shared.log("AstraGram", "encrypted the message store")
+        } else {
+            AstraMessageStore.removeFiles(exportPath)
+            Logger.shared.log("AstraGram", "could not encrypt the message store")
+        }
+    }
+
+    private func open(attempt: Int = 0) {
+        guard let key = AstraMessageStore.encryptionKey.with({ $0 }) else {
+            // The key comes with the account's Postbox; the store is not opened without it.
+            if attempt < 60 {
+                self.queue.after(1.0, {
+                    self.open(attempt: attempt + 1)
+                })
+            } else {
+                Logger.shared.log("AstraGram", "no key for the message store")
+            }
+            return
+        }
+        let hexKey = AstraMessageStore.hexString(key)
+        if AstraMessageStore.isPlaintext(self.path) {
+            AstraMessageStore.encryptPlaintextStore(self.path, hexKey: hexKey)
+        }
+        var opened: OpaquePointer?
+        for _ in 0 ..< 2 {
+            guard let database = AstraMessageStore.openConnection(self.path) else {
+                break
+            }
+            let _ = AstraMessageStore.exec(database, "PRAGMA cipher_plaintext_header_size=32")
+            let _ = AstraMessageStore.exec(database, "PRAGMA cipher_default_plaintext_header_size=32")
+            let _ = AstraMessageStore.exec(database, "PRAGMA key=\"x'\(hexKey)'\"")
+            if AstraMessageStore.exec(database, "SELECT count(*) FROM sqlite_master") {
+                opened = database
+                break
+            }
+            // Unreadable with the key (damaged): it is started anew rather than left broken.
+            sqlite3_close(database)
+            Logger.shared.log("AstraGram", "the message store is unreadable, starting anew")
+            AstraMessageStore.removeFiles(self.path)
+        }
+        guard let database = opened else {
             Logger.shared.log("AstraGram", "could not open \(self.path)")
             return
         }
         self.database = database
-        sqlite3_busy_timeout(database, 5000)
         self.execute("PRAGMA journal_mode=WAL")
         self.execute("PRAGMA synchronous=NORMAL")
         self.execute("""
@@ -272,9 +383,10 @@ public final class AstraMessageStore {
             )
             """)
         self.execute("CREATE INDEX IF NOT EXISTS edit_history_message ON edit_history(peer_id, namespace, message_id)")
+        self.createStreakTables()
     }
 
-    private func execute(_ sql: String) {
+    func execute(_ sql: String) {
         guard let database = self.database else {
             return
         }
@@ -287,7 +399,7 @@ public final class AstraMessageStore {
         }
     }
 
-    private func prepare(_ sql: String) -> OpaquePointer? {
+    func prepare(_ sql: String) -> OpaquePointer? {
         guard let database = self.database else {
             return nil
         }

@@ -227,6 +227,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         contactsTabController.astraIsTab = true
         // AstraGram: the AstraGram mark in the account's name, and the question whether to show it.
         AstraBadgeSync.start(context: self.context)
+        AstraStreakManager.start(context: self.context)
         // A template image, so the tab bar tints it like the other tabs' icons (a plain image keeps its own black).
         let contactsIcon = UIImage(bundleImageName: "Chat List/Tabs/IconContacts")?.withRenderingMode(.alwaysTemplate)
         contactsTabController.tabBarItem.title = self.presentationData.strings.Contacts_Title
