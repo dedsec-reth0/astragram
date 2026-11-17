@@ -283,12 +283,33 @@ async function remind(env) {
   ]);
 }
 
+// Points the bot's webhook at this worker and sets its commands. Safe to call by anyone: it can only point the bot at
+// this same worker. Returns the bot's username (public) so the app can be told where the bot is.
+async function handleSetup(url, env) {
+  if (!env.BOT_TOKEN) return json({ ok: false, error: 'BOT_TOKEN is not set' }, 500);
+  const me = await tg(env, 'getMe', {});
+  if (!me.ok) return json({ ok: false, error: 'the bot token is not valid' }, 500);
+  const hook = await tg(env, 'setWebhook', {
+    url: `${url.origin}/tg`,
+    secret_token: await webhookSecret(env),
+    allowed_updates: ['message', 'callback_query'],
+  });
+  await tg(env, 'setMyCommands', { commands: [
+    { command: 'streaks', description: 'Мои огоньки' },
+    { command: 'help', description: 'Как работает огонёк' },
+    { command: 'stop', description: 'Выключить напоминания' },
+  ] });
+  await tg(env, 'setMyDescription', { description: '🔥 Огоньки AstraGram для тех, у кого нет AstraGram: счёт, напоминание вечером и восстановление пропущенного дня. Боту приходят только числа, тексты сообщений — никогда.' });
+  return json({ ok: hook.ok === true, username: me.result.username, server: url.origin });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === 'POST' && url.pathname === '/tg') return handleTelegram(request, env);
     if (request.method === 'POST' && url.pathname === '/api/sync') return handleSync(request, env);
     if (request.method === 'POST' && url.pathname === '/api/unlink') return handleUnlink(request, env);
+    if (url.pathname === '/setup') return handleSetup(url, env);
     if (url.pathname === '/') return new Response('AstraGram streak bot', { headers: { 'content-type': 'text/plain; charset=utf-8' } });
     return new Response('not found', { status: 404 });
   },

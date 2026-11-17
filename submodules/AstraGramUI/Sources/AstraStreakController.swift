@@ -48,13 +48,22 @@ public func astraStreakSummary(_ state: AstraStreakState?, isRussian: Bool) -> S
 /// The bot that keeps a streak for someone without AstraGram: AstraGram sends it the streak numbers (never the texts),
 /// and the bot shows them to the other person, reminds them, and takes their restore requests.
 public enum AstraStreakBot {
+    /// The AstraGram streak bot and its server (astragram/streak-bot). The settings can point elsewhere; empty means these.
+    static let defaultUsername = "infoastragram_bot"
+    static let defaultURL = "https://astragram-streak-bot.dedsec-reth0.workers.dev"
+
     public static var username: String {
-        return AstraGramSettings.current.streakBotUsername.trimmingCharacters(in: CharacterSet(charactersIn: "@ "))
+        let value = AstraGramSettings.current.streakBotUsername.trimmingCharacters(in: CharacterSet(charactersIn: "@ "))
+        return value.isEmpty ? AstraStreakBot.defaultUsername : value
+    }
+
+    static var serverURL: String {
+        let value = AstraGramSettings.current.streakBotURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? AstraStreakBot.defaultURL : value
     }
 
     public static var isAvailable: Bool {
-        let url = AstraGramSettings.current.streakBotURL
-        return !AstraStreakBot.username.isEmpty && url.hasPrefix("https://")
+        return !AstraStreakBot.username.isEmpty && AstraStreakBot.serverURL.hasPrefix("https://")
     }
 
     public static var link: String {
@@ -117,7 +126,7 @@ public enum AstraStreakBot {
     }
 
     private static func request(path: String, token: String, body: [String: Any], completion: @escaping ([String: Any]?) -> Void) {
-        var base = AstraGramSettings.current.streakBotURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        var base = AstraStreakBot.serverURL
         while base.hasSuffix("/") {
             base.removeLast()
         }

@@ -24,8 +24,10 @@
    Account → D1 → Edit. Скопируйте токен и Account ID (он справа на главной странице Workers & Pages).
 4. В репозитории GitHub: Settings → Secrets and variables → Actions → New repository secret:
    `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `STREAK_BOT_TOKEN`.
-5. Actions → Streak Bot → Run workflow. В отчёте запуска будут username бота и адрес сервера: их нужно прописать в
-   AstraGram (`streakBotUsername` и `streakBotURL` в `AstraGramSettings`), после чего новая сборка покажет бота в
-   приложении.
+5. Actions → Streak Bot → Run workflow. Или локально: `npx wrangler login`, `npx wrangler deploy`,
+   `npx wrangler secret put BOT_TOKEN`, затем открыть `<адрес сервера>/setup` — сервер сам подключит бота.
+   Username бота и адрес сервера прописаны в `AstraStreakBot` (`AstraStreakController.swift`).
+
+Сейчас запущены бот @infoastragram_bot и сервер https://astragram-streak-bot.dedsec-reth0.workers.dev.
 
 Обновления сервера выкладываются сами при каждом изменении этой папки в `master`.

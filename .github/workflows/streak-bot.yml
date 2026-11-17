@@ -67,7 +67,7 @@ jobs:
             ID=$(db_id)
           fi
           [ -n "$ID" ] || { echo "::error::Could not find or create the D1 database"; exit 1; }
-          sed -i "s/DATABASE_ID/$ID/" wrangler.toml
+          sed -i "s/database_id = \".*\"/database_id = \"$ID\"/" wrangler.toml
           $WRANGLER d1 execute astragram-streaks --remote --file schema.sql --yes
 
       - name: Deploy worker

@@ -8,7 +8,7 @@ workers_dev = true
 [[d1_databases]]
 binding = "DB"
 database_name = "astragram-streaks"
-database_id = "DATABASE_ID"
+database_id = "0ad7ab57-a36d-4672-92f2-0f9c86564334"
 
 # Every hour: evening reminders (by each AstraGram user's time zone) and removal of stale data.
 [triggers]
