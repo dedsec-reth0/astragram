@@ -37,6 +37,8 @@ public enum AttachmentButtonType: Equatable {
     case link
     case richText
     case standalone
+    /// AstraGram: the streak (огонёк) with the person of the chat.
+    case astraStreak
 
     public var key: String {
         switch self {
@@ -72,6 +74,8 @@ public enum AttachmentButtonType: Equatable {
             return "richText"
         case .standalone:
             return "standalone"
+        case .astraStreak:
+            return "astraStreak"
         }
     }
 
@@ -169,6 +173,12 @@ public enum AttachmentButtonType: Equatable {
             }
         case .standalone:
             if case .standalone = rhs {
+                return true
+            } else {
+                return false
+            }
+        case .astraStreak:
+            if case .astraStreak = rhs {
                 return true
             } else {
                 return false

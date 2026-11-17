@@ -1,4 +1,5 @@
 import Foundation
+import AstraGramUI
 import UIKit
 import Display
 import SwiftSignalKit
@@ -296,6 +297,10 @@ extension ChatControllerImpl {
             case .default, .gift:
                 if WalletConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 }).isAvailable, !isScheduledMessages, banSendText == nil, let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.id != self.context.account.peerId, !user.isDeleted, !isServicePeer(user), user.botInfo == nil, !user.flags.contains(.isSupport), let fileIndex = availableButtons.firstIndex(of: .file) {
                     availableButtons.insert(.money, at: fileIndex + 1)
+                }
+                // AstraGram: the streak (огонёк) with this person.
+                if !isScheduledMessages, let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.id != self.context.account.peerId, user.id.namespace == Namespaces.Peer.CloudUser, !user.isDeleted, !isServicePeer(user), user.botInfo == nil, !user.flags.contains(.isSupport) {
+                    availableButtons.append(.astraStreak)
                 }
             case .edit, .bot:
                 break
@@ -1060,6 +1065,12 @@ extension ChatControllerImpl {
                             }
                         }
                         return true
+                    case .astraStreak:
+                        if let peerId = strongSelf.presentationInterfaceState.chatLocation.peerId {
+                            strongSelf.attachmentController?.dismiss(animated: true)
+                            strongSelf.push(astraStreakController(context: strongSelf.context, peerId: peerId))
+                        }
+                        return false
                     case .quickReply:
                         let _ = (strongSelf.context.sharedContext.makeQuickReplySetupScreenInitialData(context: strongSelf.context)
                                  |> take(1)

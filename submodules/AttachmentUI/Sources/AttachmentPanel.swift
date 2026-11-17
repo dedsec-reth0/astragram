@@ -312,6 +312,9 @@ private final class AttachButtonComponent: CombinedComponent {
                 name = strings.Attachment_Article
                 animationName = "TabArticle"
                 imageName = ""
+            case .astraStreak:
+                name = strings.baseLanguageCode.lowercased().hasPrefix("ru") ? "Огонёк" : "Streak"
+                imageName = "Chat/Attach Menu/Streak"
             }
 
             let tintColor: UIColor
@@ -2303,6 +2306,8 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                 accessibilityTitle = self.presentationData.strings.Attachment_Reply
             case .richText:
                 accessibilityTitle = self.presentationData.strings.Attachment_Article
+            case .astraStreak:
+                accessibilityTitle = self.presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru") ? "Огонёк" : "Streak"
             }
             buttonView.isAccessibilityElement = true
             buttonView.accessibilityLabel = accessibilityTitle
