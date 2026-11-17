@@ -534,7 +534,10 @@ private func astraGramSettingsEntries(strings: AstraStrings, settings: AstraGram
     entries.append(.reset(strings.resetSettings))
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
     let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
-    entries.append(.version("AstraGram 1.0 Alpha · \(version) (\(build))"))
+    // The version people see: one step per build after 103783 (as in astragram/ci/publish_release.py).
+    let astraBuildNumber = Int(build) ?? 0
+    let astraMarketingVersion = astraBuildNumber > 103783 ? "1.0.\(astraBuildNumber - 103783)" : "1.0.0"
+    entries.append(.version("AstraGram \(astraMarketingVersion) Alpha · \(version) (\(build))"))
 
     return entries
 }

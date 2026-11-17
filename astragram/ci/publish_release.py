@@ -31,6 +31,18 @@ SOURCE_TAG = 'sidestore-source'
 SOURCE_IDENTIFIER = 'com.github.dedsec-reth0.ayugram'
 BUNDLE_ID = 'ph.telegra.Telegraph'
 MAX_NEWS = 5
+# The version people see: 1.0.1, 1.0.2, ... one step per build after MARKETING_BASE. The app's own version
+# (CFBundleShortVersionString, 13.2) and the build number stay as they are, so AltStore keeps seeing every build as an
+# update; AltStore shows `marketingVersion` instead. The same base is in AstraGramSettingsController.swift.
+MARKETING_PREFIX = '1.0'
+MARKETING_BASE = 103783
+
+
+def marketing_version(build):
+    number = int(build) - MARKETING_BASE
+    if number <= 0:
+        return '{}.0 ({})'.format(MARKETING_PREFIX, build)
+    return '{}.{}'.format(MARKETING_PREFIX, number)
 TINT_COLOR = '#7C4DFF'
 WHATSNEW_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'WHATSNEW.md')
 # What older builds brought, by build number: the text AltStore shows for a build in the list of versions.
@@ -139,6 +151,7 @@ def release_versions(repo, known):
         versions.append({
             'version': version,
             'buildVersion': build,
+            'marketingVersion': marketing_version(build),
             'date': previous.get('date') or release.get('published_at'),
             'localizedDescription': description,
             'downloadURL': asset['browser_download_url'],
@@ -167,7 +180,7 @@ def write_source(repo, workdir, versions, news):
         # A caption is one sentence: the first line of what the build brought.
         caption = (latest.get('localizedDescription') or '').split(chr(10))[0].lstrip('• ').strip()
         news.insert(0, {
-            'title': 'AstraGram 1.0 Alpha ({})'.format(latest['buildVersion']),
+            'title': 'AstraGram {} Alpha'.format(marketing_version(latest['buildVersion'])),
             'identifier': identifier,
             'caption': caption,
             'date': latest['date'],
@@ -287,7 +300,7 @@ def main():
     full_path = os.path.join(upload_dir, full_name)
     shutil.copyfile(ipa, full_path)
     target = ['--target', os.environ['GITHUB_SHA']] if os.environ.get('GITHUB_SHA') else []
-    gh('release', 'create', tag, upload_path, full_path, '--repo', repo, *target, '--title', 'AstraGram 1.0 Alpha ({})'.format(build), '--notes', notes, '--latest')
+    gh('release', 'create', tag, upload_path, full_path, '--repo', repo, *target, '--title', 'AstraGram {} Alpha ({})'.format(marketing_version(build), build), '--notes', notes, '--latest')
     print('released', tag)
 
     # The current source, if there is one.
@@ -300,6 +313,7 @@ def main():
     known.insert(0, {
         'version': version,
         'buildVersion': build,
+        'marketingVersion': marketing_version(build),
         'date': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'localizedDescription': whats_new,
         'downloadURL': download_url,
