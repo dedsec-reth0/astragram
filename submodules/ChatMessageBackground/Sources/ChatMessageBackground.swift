@@ -73,6 +73,81 @@ public class ChatMessageBackground: ASDisplayNode {
     private var imageView: UIImageView?
     private var imageViewImage: UIImage?
 
+    // AstraGram: an outline of the bubble's own shape (tail and merged corners included), and a see-through fill.
+    private var astraOutlineView: UIImageView?
+    private static var astraRingCache: [ObjectIdentifier: UIImage] = [:]
+
+    /// The colour of an outline drawn along the bubble's shape, or nil for none.
+    public var astraOutlineColor: UIColor? {
+        didSet {
+            if oldValue != self.astraOutlineColor {
+                self.astraUpdateOutline()
+            }
+        }
+    }
+
+    /// The opacity of the bubble's fill (the outline stays opaque).
+    public var astraFillAlpha: CGFloat = 1.0 {
+        didSet {
+            self.imageView?.alpha = self.astraFillAlpha
+        }
+    }
+
+    /// The bubble image turned into a ring: the image, minus itself drawn 1.5 pt smaller on every side. A resizable
+    /// image stretches only between its caps, so the smaller copy keeps the tail and the corners, and what is left is
+    /// a line along the bubble's edge.
+    private static func astraRing(_ image: UIImage, color: UIColor) -> UIImage? {
+        let key = ObjectIdentifier(image)
+        if let cached = ChatMessageBackground.astraRingCache[key] {
+            return cached
+        }
+        let size = image.size
+        guard size.width > 6.0, size.height > 6.0 else {
+            return nil
+        }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        format.opaque = false
+        let lineWidth: CGFloat = 1.5
+        let ring = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            let rect = CGRect(origin: CGPoint(), size: size)
+            image.draw(in: rect)
+            context.cgContext.setBlendMode(.sourceIn)
+            context.cgContext.setFillColor(color.cgColor)
+            context.cgContext.fill(rect)
+            image.draw(in: rect.insetBy(dx: lineWidth, dy: lineWidth), blendMode: .destinationOut, alpha: 1.0)
+        }
+        let result = ring.resizableImage(withCapInsets: image.capInsets, resizingMode: image.resizingMode)
+        if ChatMessageBackground.astraRingCache.count > 64 {
+            ChatMessageBackground.astraRingCache.removeAll()
+        }
+        ChatMessageBackground.astraRingCache[key] = result
+        return result
+    }
+
+    private func astraUpdateOutline() {
+        // With a bubble background from the wallpaper the fill comes from elsewhere: the bubble's mask has the shape.
+        var shapeImage = self.imageViewImage
+        if shapeImage == nil, let type = self.type, let graphics = self.graphics {
+            shapeImage = bubbleMaskForType(type, graphics: graphics)
+        }
+        guard let color = self.astraOutlineColor, let image = shapeImage, let imageView = self.imageView, let ring = ChatMessageBackground.astraRing(image, color: color) else {
+            self.astraOutlineView?.removeFromSuperview()
+            self.astraOutlineView = nil
+            return
+        }
+        let outlineView: UIImageView
+        if let current = self.astraOutlineView {
+            outlineView = current
+        } else {
+            outlineView = UIImageView()
+            self.astraOutlineView = outlineView
+            self.view.insertSubview(outlineView, aboveSubview: imageView)
+        }
+        outlineView.image = ring
+        outlineView.frame = imageView.frame
+    }
+
     private var tearBands: [BubbleTearBand] = []
     private var tearMaskView: BubbleTearMaskView?
     
@@ -108,6 +183,7 @@ public class ChatMessageBackground: ASDisplayNode {
         
         imageView.image = self.imageViewImage
         imageView.tintColor = self.customHighlightColor
+        imageView.alpha = self.astraFillAlpha
         
         if let imageFrame = self.imageFrame {
             imageView.frame = imageFrame
@@ -120,6 +196,9 @@ public class ChatMessageBackground: ASDisplayNode {
         if let imageView = self.imageView {
             transition.updateFrame(view: imageView, frame: imageFrame)
         }
+        if let outlineView = self.astraOutlineView {
+            transition.updateFrame(view: outlineView, frame: imageFrame)
+        }
         transition.updateFrame(node: self.outlineImageNode, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -1.0, dy: -1.0))
         self.updateTearMask(size: size, animation: .None)
     }
@@ -129,6 +208,9 @@ public class ChatMessageBackground: ASDisplayNode {
         self.imageFrame = imageFrame
         if let imageView = self.imageView {
             transition.animator.updateFrame(layer: imageView.layer, frame: imageFrame, completion: nil)
+        }
+        if let outlineView = self.astraOutlineView {
+            transition.animator.updateFrame(layer: outlineView.layer, frame: imageFrame, completion: nil)
         }
 
         transition.animator.updateFrame(layer: self.outlineImageNode.layer, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -1.0, dy: -1.0), completion: nil)
@@ -400,6 +482,7 @@ public class ChatMessageBackground: ASDisplayNode {
         if let imageView = self.imageView {
             imageView.image = image
         }
+        self.astraUpdateOutline()
         
         self.outlineImageNode.image = outlineImage
     }

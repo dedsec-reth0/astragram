@@ -777,32 +777,6 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
     private var trailingItemSpaceOffset: CGFloat = 0.0
     private let backgroundWallpaperNode: ChatMessageBubbleBackdrop
     private let backgroundNode: ChatMessageBackground
-    /// AstraGram: the red outline of a deleted message kept in the chat.
-    private var astraDeletedOutlineLayer: SimpleShapeLayer?
-
-    private func astraUpdateDeletedOutline(isDeleted: Bool, frame: CGRect) {
-        guard isDeleted, frame.width > 4.0, frame.height > 4.0 else {
-            if let layer = self.astraDeletedOutlineLayer {
-                layer.removeFromSuperlayer()
-                self.astraDeletedOutlineLayer = nil
-            }
-            return
-        }
-        let layer: SimpleShapeLayer
-        if let current = self.astraDeletedOutlineLayer {
-            layer = current
-        } else {
-            layer = SimpleShapeLayer()
-            layer.fillColor = UIColor.clear.cgColor
-            layer.strokeColor = UIColor(rgb: 0xFF3B30).cgColor
-            layer.lineWidth = 1.5
-            self.astraDeletedOutlineLayer = layer
-            self.mainContextSourceNode.contentNode.layer.insertSublayer(layer, above: self.backgroundNode.layer)
-        }
-        let bounds = CGRect(origin: CGPoint(), size: frame.size).insetBy(dx: 1.0, dy: 1.0)
-        layer.frame = frame
-        layer.path = UIBezierPath(roundedRect: bounds, cornerRadius: min(17.0, bounds.height / 2.0)).cgPath
-    }
     private var backgroundHighlightNode: ChatMessageBackground?
     private let shadowNode: ChatMessageShadowNode
     private var clippingNode: ChatMessageBubbleClippingNode
@@ -4514,14 +4488,14 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         strongSelf.backgroundNode.backgroundFrame = backgroundFrame
 
         // AstraGram: a message deleted on the server but kept in the chat ("anti-delete") stands out: its bubble is
-        // see-through and outlined in red.
+        // see-through and outlined in red along its own shape.
         let astraIsDeleted = item.content.firstMessage.astraDeletedAt != nil
-        let astraBackgroundAlpha: CGFloat = astraIsDeleted ? 0.45 : 1.0
-        if strongSelf.backgroundNode.alpha != astraBackgroundAlpha {
-            strongSelf.backgroundNode.alpha = astraBackgroundAlpha
-            strongSelf.backgroundWallpaperNode.alpha = astraBackgroundAlpha
+        let astraFillAlpha: CGFloat = astraIsDeleted ? 0.45 : 1.0
+        if strongSelf.backgroundNode.astraFillAlpha != astraFillAlpha {
+            strongSelf.backgroundNode.astraFillAlpha = astraFillAlpha
+            strongSelf.backgroundWallpaperNode.alpha = astraFillAlpha
         }
-        strongSelf.astraUpdateDeletedOutline(isDeleted: astraIsDeleted, frame: backgroundFrame)
+        strongSelf.backgroundNode.astraOutlineColor = astraIsDeleted ? UIColor(rgb: 0xFF3B30) : nil
         
         // Without bubbles a card is its bubble's outline alone, starting below its author header; the clipping node and
         // every content frame still use the full `backgroundFrame`. Two pixels further out than a bubble's, the stroke
