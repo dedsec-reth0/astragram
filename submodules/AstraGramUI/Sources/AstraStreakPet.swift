@@ -248,7 +248,8 @@ final class AstraStreakPetView: UIView {
         CATransaction.setDisableActions(true)
 
         let flame = AstraStreakPetView.flamePath(in: bodyRect)
-        self.glowLayer.frame = self.bodyContainer.bounds
+        self.glowLayer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
+        self.glowLayer.position = CGPoint(x: side / 2.0, y: side / 2.0)
         self.glowLayer.path = flame.cgPath
         self.glowLayer.shadowPath = flame.cgPath
         self.glowLayer.shadowColor = self.stage.colors.bottom.cgColor
@@ -256,16 +257,19 @@ final class AstraStreakPetView: UIView {
         self.glowLayer.shadowRadius = size * 0.12
         self.glowLayer.shadowOffset = CGSize()
 
-        self.bodyGradient.frame = self.bodyContainer.bounds
+        self.bodyGradient.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
+        self.bodyGradient.position = CGPoint(x: side / 2.0, y: side / 2.0)
         self.bodyGradient.colors = [self.stage.colors.top.cgColor, self.stage.colors.bottom.cgColor]
         self.bodyGradient.startPoint = CGPoint(x: 0.5, y: 0.0)
         self.bodyGradient.endPoint = CGPoint(x: 0.5, y: 1.0)
-        self.bodyMask.frame = self.bodyContainer.bounds
+        self.bodyMask.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
+        self.bodyMask.position = CGPoint(x: side / 2.0, y: side / 2.0)
         self.bodyMask.path = flame.cgPath
 
         // A lighter belly.
         let innerRect = CGRect(x: bodyRect.minX + size * 0.3, y: bodyRect.minY + size * 0.5, width: size * 0.4, height: size * 0.42)
-        self.innerLayer.frame = self.bodyContainer.bounds
+        self.innerLayer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
+        self.innerLayer.position = CGPoint(x: side / 2.0, y: side / 2.0)
         self.innerLayer.path = UIBezierPath(ovalIn: innerRect).cgPath
         self.innerLayer.fillColor = self.stage.colors.inner.withAlphaComponent(0.55).cgColor
 
@@ -274,8 +278,9 @@ final class AstraStreakPetView: UIView {
         let eyeSize = CGSize(width: size * 0.15, height: size * 0.19)
         let leftEyeRect = CGRect(x: bodyRect.midX - size * 0.17 - eyeSize.width / 2.0, y: eyeY - eyeSize.height / 2.0, width: eyeSize.width, height: eyeSize.height)
         let rightEyeRect = CGRect(x: bodyRect.midX + size * 0.17 - eyeSize.width / 2.0, y: eyeY - eyeSize.height / 2.0, width: eyeSize.width, height: eyeSize.height)
-        self.eyesLayer.frame = self.bodyContainer.bounds
-        self.eyesLayer.anchorPoint = CGPoint(x: 0.5, y: eyeY / max(1.0, side))
+        self.eyesLayer.transform = CATransform3DIdentity
+        self.eyesLayer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
+        self.eyesLayer.anchorPoint = CGPoint(x: 0.5, y: side > 0.0 ? eyeY / side : 0.5)
         self.eyesLayer.position = CGPoint(x: side / 2.0, y: eyeY)
         self.leftEye.path = UIBezierPath(ovalIn: leftEyeRect).cgPath
         self.rightEye.path = UIBezierPath(ovalIn: rightEyeRect).cgPath
@@ -288,7 +293,8 @@ final class AstraStreakPetView: UIView {
         let cheekSize = size * 0.09
         let cheeks = UIBezierPath(ovalIn: CGRect(x: leftEyeRect.minX - cheekSize * 0.6, y: eyeY + eyeSize.height * 0.55, width: cheekSize * 1.3, height: cheekSize * 0.8))
         cheeks.append(UIBezierPath(ovalIn: CGRect(x: rightEyeRect.maxX - cheekSize * 0.7, y: eyeY + eyeSize.height * 0.55, width: cheekSize * 1.3, height: cheekSize * 0.8)))
-        self.cheeksLayer.frame = self.bodyContainer.bounds
+        self.cheeksLayer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
+        self.cheeksLayer.position = CGPoint(x: side / 2.0, y: side / 2.0)
         self.cheeksLayer.path = cheeks.cgPath
         self.cheeksLayer.isHidden = self.mood == .sad || self.mood == .sleepy
 
@@ -306,12 +312,14 @@ final class AstraStreakPetView: UIView {
             mouth.move(to: CGPoint(x: bodyRect.midX - mouthWidth * 0.4, y: mouthY + size * 0.05))
             mouth.addQuadCurve(to: CGPoint(x: bodyRect.midX + mouthWidth * 0.4, y: mouthY + size * 0.05), controlPoint: CGPoint(x: bodyRect.midX, y: mouthY - size * 0.03))
         }
-        self.mouthLayer.frame = self.bodyContainer.bounds
+        self.mouthLayer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
+        self.mouthLayer.position = CGPoint(x: side / 2.0, y: side / 2.0)
         self.mouthLayer.path = mouth.cgPath
         self.mouthLayer.lineWidth = max(1.2, size * 0.035)
 
         let tearRect = CGRect(x: rightEyeRect.midX - size * 0.03, y: rightEyeRect.maxY + size * 0.01, width: size * 0.06, height: size * 0.09)
-        self.tearLayer.frame = self.bodyContainer.bounds
+        self.tearLayer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
+        self.tearLayer.position = CGPoint(x: side / 2.0, y: side / 2.0)
         self.tearLayer.path = UIBezierPath(ovalIn: tearRect).cgPath
         self.tearLayer.isHidden = self.mood != .sad
 
@@ -803,7 +811,8 @@ final class AstraStreakPetController: UIViewController {
         case .sleepy:
             moodText = self.text("Серийчик спит. Напишите друг другу по \(AstraStreak.messagesPerDay) сообщения, чтобы разбудить", "Your buddy is asleep. Write \(AstraStreak.messagesPerDay) messages each to wake it")
         }
-        self.subtitleLabel.text = self.text("дней подряд с \(self.peerName)", "days in a row with \(self.peerName)") + "\n" + moodText
+        let daysWord = astraDaysText(days, isRussian: self.isRussian).replacingOccurrences(of: "\(days) ", with: "")
+        self.subtitleLabel.text = self.text("\(daysWord) подряд · \(self.peerName)", "\(daysWord) in a row · \(self.peerName)") + "\n" + moodText
 
         if let next = stage.nextDays {
             let nextStage = AstraStreakPetStage.forDays(next)
@@ -857,7 +866,8 @@ final class AstraStreakPetController: UIViewController {
             let row = UIStackView()
             row.axis = .horizontal
             row.spacing = 8.0
-            row.distribution = .fillEqually
+            row.distribution = .fill
+            row.alignment = .center
             let current: String?
             switch slot {
             case .head:
@@ -872,7 +882,19 @@ final class AstraStreakPetController: UIViewController {
                 let locked = self.look.best < item.unlockDays
                 row.addArrangedSubview(self.wardrobeButton(emoji: item.emoji, caption: locked ? "🔒 \(item.unlockDays)" : (self.isRussian ? item.titleRu : item.titleEn), selected: current == item.id, locked: locked, tag: slot.rawValue * 100 + index))
             }
-            self.wardrobeStack.addArrangedSubview(row)
+            let rowScroll = UIScrollView()
+            rowScroll.showsHorizontalScrollIndicator = false
+            rowScroll.alwaysBounceHorizontal = true
+            row.translatesAutoresizingMaskIntoConstraints = false
+            rowScroll.addSubview(row)
+            NSLayoutConstraint.activate([
+                row.topAnchor.constraint(equalTo: rowScroll.contentLayoutGuide.topAnchor),
+                row.bottomAnchor.constraint(equalTo: rowScroll.contentLayoutGuide.bottomAnchor),
+                row.leadingAnchor.constraint(equalTo: rowScroll.contentLayoutGuide.leadingAnchor),
+                row.trailingAnchor.constraint(equalTo: rowScroll.contentLayoutGuide.trailingAnchor),
+                rowScroll.heightAnchor.constraint(equalTo: row.heightAnchor)
+            ])
+            self.wardrobeStack.addArrangedSubview(rowScroll)
         }
     }
 
@@ -908,7 +930,8 @@ final class AstraStreakPetController: UIViewController {
             stack.centerYAnchor.constraint(equalTo: button.centerYAnchor),
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: button.leadingAnchor, constant: 2.0),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: button.trailingAnchor, constant: -2.0),
-            button.heightAnchor.constraint(equalToConstant: 58.0)
+            button.heightAnchor.constraint(equalToConstant: 58.0),
+            button.widthAnchor.constraint(equalToConstant: 60.0)
         ])
         return button
     }
