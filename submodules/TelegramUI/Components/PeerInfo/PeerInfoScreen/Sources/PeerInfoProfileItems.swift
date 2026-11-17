@@ -46,6 +46,9 @@ enum InfoSection: Int, CaseIterable {
     case calls
     case personalChannel
     case peerInfo
+    /// AstraGram: the streak, the ID and the registration date, in a card of their own (after the profile's own card,
+    /// which may end with a footnote).
+    case astraInfo
     case agentProviders
     case balances
     case permissions
@@ -959,7 +962,7 @@ func infoItems(
         let isRussian = presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
         let streakText = astraStreakSummary(AstraStreak.cached(accountPeerId: context.account.peerId, peerId: user.id), isRussian: isRussian)
         let userId = user.id
-        items[.peerInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.streak", label: isRussian ? "Огонёк" : "Streak", text: streakText, textColor: .primary, action: { _, _ in
+        items[.astraInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.streak", label: isRussian ? "Огонёк" : "Streak", text: streakText, textColor: .primary, action: { _, _ in
             astraOpenStreak(context: context, peerId: userId)
         }, requestLayout: { animated in
             interaction.requestLayout(animated)
@@ -978,7 +981,7 @@ func infoItems(
             apiId = rawId
         }
         let idText = "\(apiId)"
-        items[.peerInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.peerId", label: "ID", text: idText, textColor: .primary, action: { _, _ in
+        items[.astraInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.peerId", label: "ID", text: idText, textColor: .primary, action: { _, _ in
             UIPasteboard.general.string = idText
             AstraHaptics.success()
         }, requestLayout: { animated in
@@ -986,7 +989,7 @@ func infoItems(
         }))
         // AstraGram: the approximate registration date, derived from the user ID.
         if AstraGramSettings.current.showRegistrationDate, peer.id.namespace == Namespaces.Peer.CloudUser, let registrationText = astraApproximateRegistrationDate(userId: rawId) {
-            items[.peerInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.registration", label: AstraStrings(presentationData.strings).registrationDate, text: registrationText, textColor: .primary, action: nil, requestLayout: { animated in
+            items[.astraInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.registration", label: AstraStrings(presentationData.strings).registrationDate, text: registrationText, textColor: .primary, action: nil, requestLayout: { animated in
                 interaction.requestLayout(animated)
             }))
         }
