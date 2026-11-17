@@ -14,7 +14,7 @@ private func astraIsRussian(_ context: AccountContext) -> Bool {
     return context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.lowercased().hasPrefix("ru")
 }
 
-private func astraDaysText(_ count: Int, isRussian: Bool) -> String {
+func astraDaysText(_ count: Int, isRussian: Bool) -> String {
     if !isRussian {
         return count == 1 ? "1 day" : "\(count) days"
     }

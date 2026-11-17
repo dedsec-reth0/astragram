@@ -306,6 +306,8 @@ struct ScrolledToMessageId: Equatable {
 
 public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate {    
     var validLayout: ContainerViewLayout?
+    /// AstraGram: the streak buddy (серийчик) floating over a chat that has a streak.
+    var astraStreakPet: AstraStreakPetAttachment?
     
     public weak var parentController: ViewController?
     public weak var customNavigationController: NavigationController?
@@ -8079,6 +8081,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         self.forwardSideListAppearance(.didAppear, animated: animated)
+
+        // AstraGram: the streak buddy, in a chat with a person (not in scheduled messages, threads or previews).
+        if self.astraStreakPet == nil, self.subject == nil, case .peer = self.chatLocation, let peerId = self.chatLocation.peerId, peerId.namespace == Namespaces.Peer.CloudUser, peerId != self.context.account.peerId {
+            self.astraStreakPet = AstraStreakPetAttachment(context: self.context, peerId: peerId, hostView: self.view)
+        }
         
         self.didAppear = true
         
