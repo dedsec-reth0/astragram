@@ -4489,7 +4489,10 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
 
         // AstraGram: a message deleted on the server but kept in the chat ("anti-delete") stands out: its bubble is
         // see-through and outlined in red along its own shape.
-        let astraIsDeleted = item.content.firstMessage.astraDeletedAt != nil
+        // A round video has a ring of its own (ChatMessageInteractiveInstantVideoNode): the bubble behind it is not its
+        // shape, and its outline showed in pieces around the circle.
+        let astraIsRoundVideo = item.content.firstMessage.media.contains(where: { ($0 as? TelegramMediaFile)?.isInstantVideo == true })
+        let astraIsDeleted = item.content.firstMessage.astraDeletedAt != nil && !astraIsRoundVideo
         let astraFillAlpha: CGFloat = astraIsDeleted ? 0.45 : 1.0
         if strongSelf.backgroundNode.astraFillAlpha != astraFillAlpha {
             strongSelf.backgroundNode.astraFillAlpha = astraFillAlpha

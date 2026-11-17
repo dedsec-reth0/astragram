@@ -149,10 +149,11 @@ public enum AstraStreakBot {
         }).resume()
     }
 
-    /// Sends the numbers of the streaks; returns the days the other people asked to restore in the bot.
-    static func sync(accountPeerId: EnginePeer.Id, states: [EnginePeer.Id: AstraStreakState], completion: @escaping ([(peerId: EnginePeer.Id, day: Int32)]) -> Void) {
+    /// Sends the numbers of the streaks; returns the days the other people asked to restore in the bot, or nil when the
+    /// server did not take them (no connection, or Start not pressed in the bot yet).
+    static func sync(accountPeerId: EnginePeer.Id, states: [EnginePeer.Id: AstraStreakState], completion: @escaping ([(peerId: EnginePeer.Id, day: Int32)]?) -> Void) {
         guard AstraStreakBot.isAvailable, let token = AstraStreakBot.token(accountPeerId: accountPeerId) else {
-            completion([])
+            completion(nil)
             return
         }
         var pairs: [[String: Any]] = []
@@ -173,8 +174,12 @@ public enum AstraStreakBot {
             pairs.append(pair)
         }
         AstraStreakBot.request(path: "/api/sync", token: token, body: ["pairs": pairs, "need": AstraStreak.messagesPerDay, "tz": TimeZone.current.secondsFromGMT()], completion: { object in
+            guard let object = object else {
+                completion(nil)
+                return
+            }
             var result: [(peerId: EnginePeer.Id, day: Int32)] = []
-            if let restores = object?["restores"] as? [[String: Any]] {
+            if let restores = object["restores"] as? [[String: Any]] {
                 for restore in restores {
                     if let friend = (restore["friend"] as? NSNumber)?.int64Value, let day = (restore["day"] as? NSNumber)?.int32Value {
                         result.append((peerId: EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(friend)), day: day))
@@ -213,6 +218,8 @@ public final class AstraStreakManager {
     private var states: [EnginePeer.Id: AstraStreakState] = [:]
     private var lastSync: Double = 0.0
     private var lastSyncedStates: [EnginePeer.Id: AstraStreakState] = [:]
+    /// The bot token the numbers were last sent with: a new link (a new token) sends them again at once.
+    private var lastSyncedToken: String?
     private let statesPromise = ValuePromise<[EnginePeer.Id: AstraStreakState]>([:], ignoreRepeated: true)
 
     var statesSignal: Signal<[EnginePeer.Id: AstraStreakState], NoError> {
@@ -282,22 +289,31 @@ public final class AstraStreakManager {
         self.syncIfNeeded()
     }
 
-    /// The bot gets the numbers when they change, at most once a minute, and every 15 minutes otherwise.
+    /// The bot gets the numbers when they change, at most once a minute, and every 15 minutes otherwise. A sync the
+    /// server did not take is retried the next minute: right after linking the token is sent before Start is pressed in
+    /// the bot, and the server turns it away until then.
     private func syncIfNeeded() {
-        let now = CFAbsoluteTimeGetCurrent()
-        let changed = self.states != self.lastSyncedStates
-        if !(changed && now - self.lastSync > 60.0) && now - self.lastSync < 15.0 * 60.0 {
+        guard AstraStreakBot.isAvailable, let token = AstraStreakBot.token(accountPeerId: self.accountPeerId) else {
             return
         }
-        guard AstraStreakBot.isAvailable, AstraStreakBot.isLinked(accountPeerId: self.accountPeerId) else {
+        let now = CFAbsoluteTimeGetCurrent()
+        let changed = self.states != self.lastSyncedStates || token != self.lastSyncedToken
+        if !(changed && now - self.lastSync > 60.0) && now - self.lastSync < 15.0 * 60.0 {
             return
         }
         self.lastSync = now
         let states = self.states
         self.lastSyncedStates = states
+        self.lastSyncedToken = token
         let store = self.store
-        AstraStreakBot.sync(accountPeerId: self.accountPeerId, states: states, completion: { restores in
+        AstraStreakBot.sync(accountPeerId: self.accountPeerId, states: states, completion: { [weak self] restores in
             Queue.mainQueue().async {
+                guard let restores = restores else {
+                    if let self, self.lastSyncedToken == token {
+                        self.lastSyncedToken = nil
+                    }
+                    return
+                }
                 var applied = false
                 for restore in restores {
                     // Only what the rules allow now: yesterday, while it can still be restored.
@@ -307,7 +323,7 @@ public final class AstraStreakManager {
                     }
                 }
                 if applied {
-                    self.lastSync = 0.0
+                    self?.lastSync = 0.0
                 }
             }
         })

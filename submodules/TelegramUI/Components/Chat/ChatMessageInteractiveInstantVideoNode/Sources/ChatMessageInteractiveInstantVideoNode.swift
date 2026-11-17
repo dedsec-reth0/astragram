@@ -100,6 +100,8 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
     private var playbackStatusNode: InstantVideoRadialStatusNode?
     public private(set) var videoFrame: CGRect?
     private var imageScale: CGFloat = 1.0
+    /// AstraGram: the red ring around a round video deleted on the server and kept in the chat.
+    private var astraDeletedRingLayer: SimpleShapeLayer?
     
     private var item: ChatMessageBubbleContentItem?
     private var automaticDownload: Bool?
@@ -1019,6 +1021,30 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                         }
                     }
                     animation.animator.updateFrame(layer: strongSelf.secretVideoPlaceholderBackground.layer, frame: displayVideoFrame, completion: nil)
+
+                    // AstraGram: a deleted round video gets a red ring along the circle itself (the bubble's outline
+                    // would not follow it). It scales and moves with the video.
+                    if item.message.astraDeletedAt != nil {
+                        let ring: SimpleShapeLayer
+                        if let current = strongSelf.astraDeletedRingLayer {
+                            ring = current
+                        } else {
+                            ring = SimpleShapeLayer()
+                            ring.fillColor = UIColor.clear.cgColor
+                            ring.strokeColor = UIColor(rgb: 0xFF3B30).cgColor
+                            ring.lineWidth = 2.0
+                            strongSelf.astraDeletedRingLayer = ring
+                        }
+                        // Above the video, which can be added after this ring.
+                        strongSelf.layer.addSublayer(ring)
+                        ring.bounds = CGRect(origin: CGPoint(), size: videoFrame.size)
+                        ring.path = UIBezierPath(ovalIn: CGRect(origin: CGPoint(), size: videoFrame.size).insetBy(dx: 1.0, dy: 1.0)).cgPath
+                        animation.animator.updateScale(layer: ring, scale: imageScale, completion: nil)
+                        animation.animator.updatePosition(layer: ring, position: displayVideoFrame.center, completion: nil)
+                    } else if let ring = strongSelf.astraDeletedRingLayer {
+                        ring.removeFromSuperlayer()
+                        strongSelf.astraDeletedRingLayer = nil
+                    }
                     
                     let placeholderFrame = videoFrame.insetBy(dx: 2.0, dy: 2.0)
                     strongSelf.secretVideoPlaceholder.bounds = CGRect(origin: CGPoint(), size: placeholderFrame.size)
