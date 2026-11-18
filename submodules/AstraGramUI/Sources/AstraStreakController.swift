@@ -494,7 +494,9 @@ public func astraStreakController(context: AccountContext, peerId: EnginePeer.Id
         },
         invite: {
             let isRussian = astraIsRussian(context)
-            let text = isRussian ? "Давай держать огонёк 🔥 Каждый день по \(AstraStreak.messagesPerDay) сообщения друг другу. Счёт и напоминания — в боте: \(AstraStreakBot.link)" : "Let's keep a streak 🔥 \(AstraStreak.messagesPerDay) messages to each other every day. The count and reminders are in the bot: \(AstraStreakBot.link)"
+            // The link names who invited, so the bot can tell the other person whose streak is on its way.
+            let inviteLink = "\(AstraStreakBot.link)?start=f\(accountPeerId.id._internalGetInt64Value())"
+            let text = isRussian ? "Давай держать огонёк 🔥 Каждый день по \(AstraStreak.messagesPerDay) сообщения друг другу. Счёт и напоминания — в боте: \(inviteLink)" : "Let's keep a streak 🔥 \(AstraStreak.messagesPerDay) messages to each other every day. The count and reminders are in the bot: \(inviteLink)"
             showAlert(title: isRussian ? "Пригласить в бота?" : "Invite to the bot?", text: isRussian ? "В чат уйдёт сообщение:\n\n\(text)" : "This message goes to the chat:\n\n\(text)", actionTitle: isRussian ? "Отправить" : "Send", action: {
                 send(text)
                 toast(isRussian ? "Приглашение отправлено" : "Invitation sent")

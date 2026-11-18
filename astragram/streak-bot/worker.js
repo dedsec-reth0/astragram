@@ -32,6 +32,12 @@ async function tg(env, method, body) {
   return response.json().catch(() => ({ ok: false }));
 }
 
+// Telegram names may carry invisible characters (AstraGram's badge marker is made of them). They are dropped.
+function cleanName(name) {
+  const cleaned = String(name || '').replace(/[\u200B-\u200F\u2060-\u2064\uFEFF]/g, '').trim();
+  return (cleaned || 'AstraGram').slice(0, 64);
+}
+
 function now() {
   return Math.floor(Date.now() / 1000);
 }
@@ -91,6 +97,7 @@ async function handleSync(request, env) {
   const tz = int(body.tz, -14 * 3600, 14 * 3600, 0);
   const t = now();
   const statements = [env.DB.prepare('UPDATE owners SET last_sync = ?, tz = ? WHERE token_hash = ?').bind(t, tz, owner.token_hash)];
+  const known = new Set(((await env.DB.prepare('SELECT friend_id FROM pairs WHERE owner_id = ?').bind(owner.tg_id).all()).results || []).map((r) => r.friend_id));
   const friendIds = [];
   for (const pair of pairs) {
     const friend = int(pair.friend, 1, Number.MAX_SAFE_INTEGER, 0);
@@ -113,6 +120,18 @@ async function handleSync(request, env) {
     statements.push(env.DB.prepare('DELETE FROM pairs WHERE owner_id = ?').bind(owner.tg_id));
   }
   await env.DB.batch(statements);
+
+  // Whoever started the bot before this streak reached it hears about it now, without pressing anything.
+  const fresh = friendIds.filter((id) => !known.has(id));
+  if (fresh.length > 0) {
+    const listening = (await env.DB.prepare(`SELECT tg_id FROM friends WHERE stopped = 0 AND tg_id IN (${fresh.map(() => '?').join(',')})`).bind(...fresh).all()).results || [];
+    const name = cleanName(owner.name);
+    for (const row of listening) {
+      const reply = await streaksMessage(env, row.tg_id, true);
+      reply.text = `🔥 ${name} начал(а) с тобой огонёк!\n\n${reply.text}`;
+      await tg(env, 'sendMessage', { chat_id: row.tg_id, ...reply });
+    }
+  }
 
   const restores = await env.DB.prepare('SELECT friend_id, day FROM restore_requests WHERE owner_id = ?').bind(owner.tg_id).all();
   await env.DB.prepare('DELETE FROM restore_requests WHERE owner_id = ?').bind(owner.tg_id).run();
@@ -141,14 +160,15 @@ async function streaksMessage(env, userId, ru) {
   if (rows.length === 0) {
     return {
       text: ru
-        ? 'Огоньков пока нет.\n\nОгонёк ведёт тот, у кого AstraGram: пусть откроет ваш профиль, нажмёт «Огонёк» и подключит бота. Тогда здесь появится счёт, а вечером — напоминание.'
-        : 'No streaks yet.\n\nA streak is kept by someone with AstraGram: they open your profile, tap Streak and connect the bot. Then the count shows here, with a reminder in the evening.',
+        ? 'Огоньков пока нет.\n\nОгонёк ведёт тот, у кого AstraGram: пусть откроет ваш профиль, нажмёт «Огонёк» и подключит бота. Как только его AstraGram пришлёт счёт, я сам напишу сюда.'
+        : 'No streaks yet.\n\nA streak is kept by someone with AstraGram: they open your profile, tap Streak and connect the bot. As soon as their AstraGram sends the count, I will write here myself.',
     };
   }
   const t = now();
   const lines = [];
   const buttons = [];
   for (const row of rows) {
+    row.owner_name = cleanName(row.owner_name);
     const shown = row.restorable_day !== null ? Math.max(row.count, row.lost_count) : row.count;
     lines.push(`🔥 ${plural(shown, ru)} — ${row.owner_name}`);
     lines.push(ru
@@ -182,7 +202,7 @@ async function handleMessage(env, message) {
     // One linked device per account: a new link replaces the old one.
     await env.DB.batch([
       env.DB.prepare('DELETE FROM owners WHERE tg_id = ?').bind(from.id),
-      env.DB.prepare('INSERT INTO owners (token_hash, tg_id, name, created_at) VALUES (?, ?, ?, ?)').bind(hash, from.id, (from.first_name || 'AstraGram').slice(0, 64), t),
+      env.DB.prepare('INSERT INTO owners (token_hash, tg_id, name, created_at) VALUES (?, ?, ?, ?)').bind(hash, from.id, cleanName(from.first_name), t),
     ]);
     await tg(env, 'sendMessage', {
       chat_id: from.id,
@@ -211,6 +231,22 @@ async function handleMessage(env, message) {
 
   // /start, /streaks or anything else: the list.
   await env.DB.prepare('INSERT INTO friends (tg_id, started_at, stopped) VALUES (?, ?, 0) ON CONFLICT (tg_id) DO UPDATE SET stopped = 0').bind(from.id, t).run();
+  const invite = text.match(/^\/start f(\d{1,20})$/);
+  if (invite) {
+    const ownerId = Number(invite[1]);
+    const pair = await env.DB.prepare('SELECT 1 FROM pairs WHERE owner_id = ? AND friend_id = ?').bind(ownerId, from.id).first();
+    if (!pair) {
+      const owner = await env.DB.prepare('SELECT name FROM owners WHERE tg_id = ?').bind(ownerId).first();
+      const who = owner ? cleanName(owner.name) : (ru ? 'собеседника' : 'the other person');
+      await tg(env, 'sendMessage', {
+        chat_id: from.id,
+        text: ru
+          ? `👋 Привет! Огонёк с ${who} появится здесь, как только AstraGram ${who} пришлёт счёт — обычно в течение пары минут, когда приложение открыто. Я сам напишу, ничего нажимать не нужно.\n\nОгонёк растёт, когда вы оба пишете друг другу хотя бы по 3 сообщения в день.`
+          : `👋 Hi! The streak with ${who} shows up here as soon as ${who}'s AstraGram sends the count, usually within a couple of minutes while the app is open. I will write by myself, nothing to press.\n\nThe streak grows when both of you write at least 3 messages to each other a day.`,
+      });
+      return;
+    }
+  }
   const reply = await streaksMessage(env, from.id, ru);
   await tg(env, 'sendMessage', { chat_id: from.id, ...reply });
 }
@@ -225,6 +261,7 @@ async function handleCallback(env, callback) {
     const pair = await env.DB.prepare('SELECT p.*, o.name AS owner_name FROM pairs p JOIN owners o ON o.tg_id = p.owner_id WHERE p.owner_id = ? AND p.friend_id = ?').bind(ownerId, from.id).first();
     if (pair && pair.restorable_day !== null && pair.restores_left > 0) {
       await env.DB.prepare('INSERT OR IGNORE INTO restore_requests (owner_id, friend_id, day, created_at) VALUES (?, ?, ?, ?)').bind(ownerId, from.id, pair.restorable_day, now()).run();
+      pair.owner_name = cleanName(pair.owner_name);
       answer = ru
         ? `Готово: вчерашний день засчитается, как только AstraGram у ${pair.owner_name} выйдет на связь`
         : `Done: yesterday counts as soon as ${pair.owner_name}'s AstraGram is online`;
@@ -266,6 +303,7 @@ async function remind(env) {
     const localHour = Math.floor(((t + row.tz) % 86400) / 3600);
     const localDay = Math.floor((t + row.tz) / 86400);
     if (localHour !== 19 || localDay !== row.day) continue;
+    row.owner_name = cleanName(row.owner_name);
     const left = row.need - row.theirs;
     const shown = row.restorable_day !== null ? Math.max(row.count, row.lost_count) : row.count;
     await tg(env, 'sendMessage', {
