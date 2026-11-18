@@ -21,6 +21,7 @@ swift_library(
         "//submodules/PresentationDataUtils:PresentationDataUtils",
         "//submodules/UndoUI:UndoUI",
         "//submodules/Pasteboard:Pasteboard",
+        "//submodules/AppBundle:AppBundle",
     ],
     visibility = [
         "//visibility:public",

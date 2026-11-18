@@ -128,6 +128,15 @@ public enum AstraStreakBot {
         }
         let token = bytes.map { String(format: "%02x", $0) }.joined()
         let account = context.account
+        // Called exactly once: with the bot found, or with false when it cannot be found (no network, the lookup
+        // ending without a result, or no answer in 10 s), so the caller always goes on (the invite is still sent).
+        var finished = false
+        let finish: (Bool) -> Void = { linked in
+            if !finished {
+                finished = true
+                completion(linked)
+            }
+        }
         let _ = (context.engine.peers.resolvePeerByName(name: AstraStreakBot.username, referrer: nil)
         |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
             guard case let .result(peer) = result else {
@@ -136,14 +145,17 @@ public enum AstraStreakBot {
             return .single(peer)
         }
         |> take(1)
+        |> timeout(10.0, queue: Queue.mainQueue(), alternate: .single(nil))
         |> deliverOnMainQueue).start(next: { peer in
             guard let peer = peer else {
-                completion(false)
+                finish(false)
                 return
             }
             AstraStreakBot.setToken(token, accountPeerId: account.peerId)
             let _ = enqueueMessages(account: account, peerId: peer.id, messages: [.message(text: "/start l\(token)", attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])]).startStandalone()
-            completion(true)
+            finish(true)
+        }, completed: {
+            finish(false)
         })
     }
 

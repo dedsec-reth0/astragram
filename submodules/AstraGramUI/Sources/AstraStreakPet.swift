@@ -4,6 +4,7 @@ import Display
 import SwiftSignalKit
 import TelegramCore
 import AccountContext
+import AppBundle
 
 // MARK: - The look
 
@@ -15,41 +16,132 @@ struct AstraStreakPetLook: Codable, Equatable {
     var face: String?
     var extra: String?
     var best: Int
+    var top: String?
+    var bottom: String?
+    var feet: String?
 
-    static let `default` = AstraStreakPetLook(name: "", head: nil, face: nil, extra: nil, best: 0)
+    static let `default` = AstraStreakPetLook(name: "", head: nil, face: nil, extra: nil, best: 0, top: nil, bottom: nil, feet: nil)
+
+    func item(in slot: AstraStreakPetSlot) -> String? {
+        switch slot {
+        case .head:
+            return self.head
+        case .face:
+            return self.face
+        case .top:
+            return self.top
+        case .bottom:
+            return self.bottom
+        case .feet:
+            return self.feet
+        case .extra:
+            return self.extra
+        }
+    }
+
+    mutating func setItem(_ id: String?, in slot: AstraStreakPetSlot) {
+        switch slot {
+        case .head:
+            self.head = id
+        case .face:
+            self.face = id
+        case .top:
+            self.top = id
+        case .bottom:
+            self.bottom = id
+        case .feet:
+            self.feet = id
+        case .extra:
+            self.extra = id
+        }
+    }
 }
 
 enum AstraStreakPetSlot: Int, CaseIterable {
     case head
     case face
+    case top
+    case bottom
+    case feet
     case extra
+}
+
+/// Where a thing sits on the pet, in the pet's 100 x 104 drawing box (y down; the feet stand on y = 100).
+struct AstraStreakPetPlacement {
+    enum Anchor {
+        case top
+        case center
+        case bottom
+    }
+
+    let x: CGFloat
+    let y: CGFloat
+    let width: CGFloat
+    /// nil keeps the picture's own proportions; clothes are given a height to sit on the round body.
+    let height: CGFloat?
+    let anchor: Anchor
+    /// Drawn under the face things and hats (a scarf), not over everything (a microphone in the hand).
+    let underFace: Bool
+
+    init(x: CGFloat = 50.0, y: CGFloat, width: CGFloat, height: CGFloat? = nil, anchor: Anchor, underFace: Bool = false) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.anchor = anchor
+        self.underFace = underFace
+    }
+
+    static func hat(width: CGFloat, bottom: CGFloat = 32.0, x: CGFloat = 50.0) -> AstraStreakPetPlacement {
+        return AstraStreakPetPlacement(x: x, y: bottom, width: width, anchor: .bottom)
+    }
+
+    static let glasses = AstraStreakPetPlacement(y: 45.0, width: 46.0, anchor: .center)
+    static let clothesTop = AstraStreakPetPlacement(y: 59.0, width: 70.0, height: 30.0, anchor: .top)
+    static let clothesBottom = AstraStreakPetPlacement(y: 84.0, width: 38.0, height: 16.0, anchor: .top)
+    static let shoes = AstraStreakPetPlacement(y: 103.0, width: 34.0, anchor: .bottom)
 }
 
 struct AstraStreakPetItem {
     let id: String
-    let emoji: String
     let slot: AstraStreakPetSlot
     /// The best streak (in days) that unlocks it.
     let unlockDays: Int
     let titleRu: String
     let titleEn: String
+    let placement: AstraStreakPetPlacement
+
+    var image: UIImage? {
+        return UIImage(bundleImageName: "Astra Pet/\(self.id)")
+    }
 }
 
 enum AstraStreakPetWardrobe {
     static let items: [AstraStreakPetItem] = [
-        AstraStreakPetItem(id: "bow", emoji: "🎀", slot: .head, unlockDays: 0, titleRu: "Бантик", titleEn: "Bow"),
-        AstraStreakPetItem(id: "cap", emoji: "🧢", slot: .head, unlockDays: 3, titleRu: "Кепка", titleEn: "Cap"),
-        AstraStreakPetItem(id: "tophat", emoji: "🎩", slot: .head, unlockDays: 7, titleRu: "Цилиндр", titleEn: "Top Hat"),
-        AstraStreakPetItem(id: "grad", emoji: "🎓", slot: .head, unlockDays: 14, titleRu: "Шапка выпускника", titleEn: "Grad Cap"),
-        AstraStreakPetItem(id: "crown", emoji: "👑", slot: .head, unlockDays: 30, titleRu: "Корона", titleEn: "Crown"),
-        AstraStreakPetItem(id: "glasses", emoji: "👓", slot: .face, unlockDays: 0, titleRu: "Очки", titleEn: "Glasses"),
-        AstraStreakPetItem(id: "shades", emoji: "🕶️", slot: .face, unlockDays: 5, titleRu: "Тёмные очки", titleEn: "Shades"),
-        AstraStreakPetItem(id: "mask", emoji: "🥽", slot: .face, unlockDays: 21, titleRu: "Маска", titleEn: "Goggles"),
-        AstraStreakPetItem(id: "flower", emoji: "🌸", slot: .extra, unlockDays: 0, titleRu: "Цветок", titleEn: "Flower"),
-        AstraStreakPetItem(id: "heart", emoji: "💖", slot: .extra, unlockDays: 2, titleRu: "Сердце", titleEn: "Heart"),
-        AstraStreakPetItem(id: "star", emoji: "⭐️", slot: .extra, unlockDays: 10, titleRu: "Звезда", titleEn: "Star"),
-        AstraStreakPetItem(id: "gem", emoji: "💎", slot: .extra, unlockDays: 50, titleRu: "Кристалл", titleEn: "Gem"),
-        AstraStreakPetItem(id: "rainbow", emoji: "🌈", slot: .extra, unlockDays: 100, titleRu: "Радуга", titleEn: "Rainbow")
+        AstraStreakPetItem(id: "beanie", slot: .head, unlockDays: 0, titleRu: "Шапка", titleEn: "Beanie", placement: .hat(width: 52.0, bottom: 30.0)),
+        AstraStreakPetItem(id: "cap", slot: .head, unlockDays: 3, titleRu: "Кепка", titleEn: "Cap", placement: .hat(width: 56.0, x: 54.0)),
+        AstraStreakPetItem(id: "flowers", slot: .head, unlockDays: 5, titleRu: "Венок", titleEn: "Flower Crown", placement: .hat(width: 56.0)),
+        AstraStreakPetItem(id: "fedora", slot: .head, unlockDays: 14, titleRu: "Шляпа", titleEn: "Fedora", placement: .hat(width: 62.0)),
+        AstraStreakPetItem(id: "pirate", slot: .head, unlockDays: 30, titleRu: "Пират", titleEn: "Pirate Hat", placement: .hat(width: 66.0, bottom: 31.0)),
+        AstraStreakPetItem(id: "sunglasses", slot: .face, unlockDays: 7, titleRu: "Очки", titleEn: "Sunglasses", placement: .glasses),
+        AstraStreakPetItem(id: "tshirt", slot: .top, unlockDays: 0, titleRu: "Футболка", titleEn: "T-Shirt", placement: .clothesTop),
+        AstraStreakPetItem(id: "hoodie", slot: .top, unlockDays: 2, titleRu: "Худи", titleEn: "Hoodie", placement: .clothesTop),
+        AstraStreakPetItem(id: "sweater", slot: .top, unlockDays: 10, titleRu: "Свитер", titleEn: "Sweater", placement: .clothesTop),
+        AstraStreakPetItem(id: "hawaii", slot: .top, unlockDays: 21, titleRu: "Гавайка", titleEn: "Hawaiian", placement: .clothesTop),
+        AstraStreakPetItem(id: "vest", slot: .top, unlockDays: 40, titleRu: "Жилетка", titleEn: "Denim Vest", placement: .clothesTop),
+        AstraStreakPetItem(id: "tuxedo", slot: .top, unlockDays: 100, titleRu: "Смокинг", titleEn: "Tuxedo", placement: .clothesTop),
+        AstraStreakPetItem(id: "jeans", slot: .bottom, unlockDays: 0, titleRu: "Шорты", titleEn: "Denim Shorts", placement: .clothesBottom),
+        AstraStreakPetItem(id: "cargo", slot: .bottom, unlockDays: 4, titleRu: "Карго", titleEn: "Cargo Shorts", placement: .clothesBottom),
+        AstraStreakPetItem(id: "pinkSkirt", slot: .bottom, unlockDays: 6, titleRu: "Юбка", titleEn: "Skirt", placement: .clothesBottom),
+        AstraStreakPetItem(id: "graySkirt", slot: .bottom, unlockDays: 12, titleRu: "Мини", titleEn: "Mini Skirt", placement: .clothesBottom),
+        AstraStreakPetItem(id: "plaid", slot: .bottom, unlockDays: 25, titleRu: "Пижама", titleEn: "Plaid Pants", placement: .clothesBottom),
+        AstraStreakPetItem(id: "sneakers", slot: .feet, unlockDays: 1, titleRu: "Кеды", titleEn: "Sneakers", placement: .shoes),
+        AstraStreakPetItem(id: "bag", slot: .extra, unlockDays: 3, titleRu: "Сумка", titleEn: "Bag", placement: AstraStreakPetPlacement(x: 12.0, y: 76.0, width: 22.0, anchor: .center)),
+        AstraStreakPetItem(id: "scarf", slot: .extra, unlockDays: 8, titleRu: "Шарф", titleEn: "Scarf", placement: AstraStreakPetPlacement(y: 57.0, width: 38.0, height: 30.0, anchor: .top, underFace: true)),
+        AstraStreakPetItem(id: "mic", slot: .extra, unlockDays: 15, titleRu: "Микрофон", titleEn: "Microphone", placement: AstraStreakPetPlacement(x: 92.0, y: 64.0, width: 14.0, anchor: .center)),
+        AstraStreakPetItem(id: "skateboard", slot: .extra, unlockDays: 30, titleRu: "Скейт", titleEn: "Skateboard", placement: AstraStreakPetPlacement(x: 88.0, y: 92.0, width: 34.0, anchor: .center)),
+        AstraStreakPetItem(id: "boombox", slot: .extra, unlockDays: 50, titleRu: "Магнитофон", titleEn: "Boombox", placement: AstraStreakPetPlacement(x: 10.0, y: 76.0, width: 30.0, anchor: .center)),
+        AstraStreakPetItem(id: "watch", slot: .extra, unlockDays: 70, titleRu: "Часы", titleEn: "Watch", placement: AstraStreakPetPlacement(x: 89.0, y: 71.0, width: 13.0, anchor: .center))
     ]
 
     static func item(_ id: String?) -> AstraStreakPetItem? {
@@ -104,21 +196,22 @@ struct AstraStreakPetStage {
     let nameEn: String
     let fromDays: Int
     let nextDays: Int?
-    let colors: (top: UIColor, bottom: UIColor, inner: UIColor)
+    /// The light core, the body and the rim (also the arms and legs).
+    let colors: (core: UIColor, body: UIColor, rim: UIColor)
     let scale: CGFloat
 
     static func forDays(_ days: Int) -> AstraStreakPetStage {
         switch days {
         case ..<3:
-            return AstraStreakPetStage(index: 0, nameRu: "Искорка", nameEn: "Spark", fromDays: 0, nextDays: 3, colors: (UIColor(rgb: 0xFFD54A), UIColor(rgb: 0xFF8A1F), UIColor(rgb: 0xFFF3B0)), scale: 0.78)
+            return AstraStreakPetStage(index: 0, nameRu: "Искорка", nameEn: "Spark", fromDays: 0, nextDays: 3, colors: (UIColor(rgb: 0xFFF3A0), UIColor(rgb: 0xFFB02E), UIColor(rgb: 0xFF6A13)), scale: 0.8)
         case ..<7:
-            return AstraStreakPetStage(index: 1, nameRu: "Огонёк", nameEn: "Flicker", fromDays: 3, nextDays: 7, colors: (UIColor(rgb: 0xFFC233), UIColor(rgb: 0xFF6A13), UIColor(rgb: 0xFFE89A)), scale: 0.86)
+            return AstraStreakPetStage(index: 1, nameRu: "Огонёк", nameEn: "Flicker", fromDays: 3, nextDays: 7, colors: (UIColor(rgb: 0xFFF0A0), UIColor(rgb: 0xFF9A22), UIColor(rgb: 0xF2470F)), scale: 0.87)
         case ..<30:
-            return AstraStreakPetStage(index: 2, nameRu: "Пламя", nameEn: "Flame", fromDays: 7, nextDays: 30, colors: (UIColor(rgb: 0xFFA41F), UIColor(rgb: 0xF2380F), UIColor(rgb: 0xFFD27A)), scale: 0.94)
+            return AstraStreakPetStage(index: 2, nameRu: "Пламя", nameEn: "Flame", fromDays: 7, nextDays: 30, colors: (UIColor(rgb: 0xFFE7A0), UIColor(rgb: 0xFF7F1E), UIColor(rgb: 0xE0300C)), scale: 0.94)
         case ..<100:
-            return AstraStreakPetStage(index: 3, nameRu: "Костёр", nameEn: "Blaze", fromDays: 30, nextDays: 100, colors: (UIColor(rgb: 0xFF7AB6), UIColor(rgb: 0xE0245E), UIColor(rgb: 0xFFC4DD)), scale: 1.0)
+            return AstraStreakPetStage(index: 3, nameRu: "Костёр", nameEn: "Blaze", fromDays: 30, nextDays: 100, colors: (UIColor(rgb: 0xFFD9EC), UIColor(rgb: 0xFF6FA8), UIColor(rgb: 0xD6245B)), scale: 1.0)
         default:
-            return AstraStreakPetStage(index: 4, nameRu: "Звезда", nameEn: "Star", fromDays: 100, nextDays: nil, colors: (UIColor(rgb: 0x7FE3FF), UIColor(rgb: 0x6A4DFF), UIColor(rgb: 0xD9F6FF)), scale: 1.0)
+            return AstraStreakPetStage(index: 4, nameRu: "Звезда", nameEn: "Star", fromDays: 100, nextDays: nil, colors: (UIColor(rgb: 0xE4FAFF), UIColor(rgb: 0x6FC8FF), UIColor(rgb: 0x5B3DF0)), scale: 1.0)
         }
     }
 }
@@ -148,59 +241,89 @@ enum AstraStreakPetMood {
 
 // MARK: - The pet itself
 
-/// The flame creature, drawn and animated with Core Animation: it breathes, sways, blinks and wears its things.
+/// The flame creature: a round glowing body with flame tongues on top, big eyes, little arms and legs. It breathes,
+/// sways, flickers and blinks, and wears its things (pictures placed on the body).
 final class AstraStreakPetView: UIView {
     private let bodyContainer = UIView()
+    private let legsLayer = CAShapeLayer()
+    private let armsLayer = CAShapeLayer()
     private let glowLayer = CAShapeLayer()
-    private let bodyGradient = CAGradientLayer()
-    private let bodyMask = CAShapeLayer()
-    private let innerLayer = CAShapeLayer()
-    private let leftEye = CAShapeLayer()
-    private let rightEye = CAShapeLayer()
-    private let leftPupil = CAShapeLayer()
-    private let rightPupil = CAShapeLayer()
-    private let eyesLayer = CALayer()
-    private let mouthLayer = CAShapeLayer()
+    private let bodyLayer = CALayer()
     private let cheeksLayer = CAShapeLayer()
+    private let eyesLayer = CALayer()
+    private let leftEye = CALayer()
+    private let rightEye = CALayer()
+    private let closedEyesLayer = CAShapeLayer()
+    private let browsLayer = CAShapeLayer()
+    private let mouthLayer = CAShapeLayer()
     private let tearLayer = CAShapeLayer()
-    private let headLabel = UILabel()
-    private let faceLabel = UILabel()
-    private let extraLabel = UILabel()
+    private var itemLayers: [AstraStreakPetSlot: CALayer] = [:]
 
     private var stage = AstraStreakPetStage.forDays(0)
     private var mood: AstraStreakPetMood = .waiting
     private var look = AstraStreakPetLook.default
+    private var renderedKey: String?
+
+    /// The order the pet is put together in, back to front.
+    private enum Part {
+        case item(AstraStreakPetSlot)
+        case legs
+        case arms
+        case body
+        case face
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         self.isUserInteractionEnabled = false
         self.addSubview(self.bodyContainer)
-        self.bodyContainer.layer.addSublayer(self.glowLayer)
-        self.bodyGradient.mask = self.bodyMask
-        self.bodyContainer.layer.addSublayer(self.bodyGradient)
-        self.bodyContainer.layer.addSublayer(self.innerLayer)
-        self.bodyContainer.layer.addSublayer(self.cheeksLayer)
-        self.eyesLayer.addSublayer(self.leftEye)
-        self.eyesLayer.addSublayer(self.rightEye)
-        self.eyesLayer.addSublayer(self.leftPupil)
-        self.eyesLayer.addSublayer(self.rightPupil)
-        self.bodyContainer.layer.addSublayer(self.eyesLayer)
-        self.bodyContainer.layer.addSublayer(self.mouthLayer)
-        self.bodyContainer.layer.addSublayer(self.tearLayer)
-        for label in [self.extraLabel, self.faceLabel, self.headLabel] {
-            label.textAlignment = .center
-            self.bodyContainer.addSubview(label)
+        let root = self.bodyContainer.layer
+
+        for slot in AstraStreakPetSlot.allCases {
+            let layer = CALayer()
+            layer.contentsGravity = .resize
+            layer.minificationFilter = .trilinear
+            self.itemLayers[slot] = layer
         }
-        self.leftEye.fillColor = UIColor.white.cgColor
-        self.rightEye.fillColor = UIColor.white.cgColor
-        self.leftPupil.fillColor = UIColor(rgb: 0x2A1A12).cgColor
-        self.rightPupil.fillColor = UIColor(rgb: 0x2A1A12).cgColor
-        self.mouthLayer.fillColor = UIColor.clear.cgColor
-        self.mouthLayer.strokeColor = UIColor(rgb: 0x5A2412).cgColor
+        let order: [Part] = [.legs, .item(.feet), .item(.bottom), .arms, .body, .face, .item(.top), .item(.face), .item(.head), .item(.extra)]
+        for part in order {
+            switch part {
+            case .legs:
+                root.addSublayer(self.legsLayer)
+            case .arms:
+                root.addSublayer(self.armsLayer)
+            case .body:
+                root.addSublayer(self.glowLayer)
+                root.addSublayer(self.bodyLayer)
+            case .face:
+                root.addSublayer(self.cheeksLayer)
+                self.eyesLayer.addSublayer(self.leftEye)
+                self.eyesLayer.addSublayer(self.rightEye)
+                root.addSublayer(self.eyesLayer)
+                root.addSublayer(self.closedEyesLayer)
+                root.addSublayer(self.browsLayer)
+                root.addSublayer(self.mouthLayer)
+                root.addSublayer(self.tearLayer)
+            case let .item(slot):
+                if let layer = self.itemLayers[slot] {
+                    root.addSublayer(layer)
+                }
+            }
+        }
+
+        self.armsLayer.fillColor = UIColor.clear.cgColor
+        self.armsLayer.lineCap = .round
+        self.glowLayer.shadowOffset = CGSize()
+        self.cheeksLayer.fillColor = UIColor(rgb: 0xFF5A6E).withAlphaComponent(0.38).cgColor
+        self.closedEyesLayer.fillColor = UIColor.clear.cgColor
+        self.closedEyesLayer.strokeColor = UIColor(rgb: 0x5A2412).cgColor
+        self.closedEyesLayer.lineCap = .round
+        self.browsLayer.fillColor = UIColor.clear.cgColor
+        self.browsLayer.strokeColor = UIColor(rgb: 0x9B3A10).cgColor
+        self.browsLayer.lineCap = .round
         self.mouthLayer.lineCap = .round
-        self.cheeksLayer.fillColor = UIColor(rgb: 0xFF5E7A).withAlphaComponent(0.45).cgColor
+        self.mouthLayer.lineJoin = .round
         self.tearLayer.fillColor = UIColor(rgb: 0x7CCBFF).cgColor
-        self.glowLayer.fillColor = UIColor.clear.cgColor
     }
 
     required init?(coder: NSCoder) {
@@ -216,140 +339,258 @@ final class AstraStreakPetView: UIView {
         self.startAnimations()
     }
 
-    /// The flame outline in a 30 x 30 box (the same shape as the Streak icon), y down.
-    private static func flamePath(in rect: CGRect) -> UIBezierPath {
-        let sx = rect.width / 30.0
-        let sy = rect.height / 30.0
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-            return CGPoint(x: rect.minX + x * sx, y: rect.minY + (30.0 - y) * sy)
-        }
+    /// The body in the 100 x 104 box: a round belly with three flame tongues on top.
+    private static func bodyPath(_ t: (CGFloat, CGFloat) -> CGPoint) -> UIBezierPath {
         let path = UIBezierPath()
-        path.move(to: p(15, 29.4))
-        path.addCurve(to: p(10.6, 20.4), controlPoint1: p(15.6, 25.6), controlPoint2: p(13.2, 23.0))
-        path.addCurve(to: p(5.2, 11.0), controlPoint1: p(8.0, 17.8), controlPoint2: p(5.2, 15.0))
-        path.addCurve(to: p(15, 1.2), controlPoint1: p(5.2, 5.4), controlPoint2: p(9.6, 1.2))
-        path.addCurve(to: p(24.8, 10.6), controlPoint1: p(20.4, 1.2), controlPoint2: p(24.8, 5.2))
-        path.addCurve(to: p(20.6, 19.4), controlPoint1: p(24.8, 14.2), controlPoint2: p(23.0, 17.2))
-        path.addCurve(to: p(18.4, 15.2), controlPoint1: p(20.6, 17.6), controlPoint2: p(19.8, 16.2))
-        path.addCurve(to: p(15, 29.4), controlPoint1: p(19.0, 19.8), controlPoint2: p(17.6, 24.0))
+        path.move(to: t(50, 4))
+        path.addCurve(to: t(70, 30), controlPoint1: t(56, 14), controlPoint2: t(66, 18))
+        path.addCurve(to: t(78, 17), controlPoint1: t(72, 24), controlPoint2: t(74, 20))
+        path.addCurve(to: t(86, 54), controlPoint1: t(80, 27), controlPoint2: t(86, 38))
+        path.addCurve(to: t(50, 86), controlPoint1: t(86, 74), controlPoint2: t(70, 86))
+        path.addCurve(to: t(14, 54), controlPoint1: t(30, 86), controlPoint2: t(14, 74))
+        path.addCurve(to: t(24, 22), controlPoint1: t(14, 40), controlPoint2: t(20, 30))
+        path.addCurve(to: t(31, 33), controlPoint1: t(27, 27), controlPoint2: t(29, 30))
+        path.addCurve(to: t(50, 4), controlPoint1: t(33, 22), controlPoint2: t(42, 14))
         path.close()
         return path
+    }
+
+    /// The body picture: a radial glow from a light core to the rim, and a lighter inner flame.
+    private static func renderBody(size: CGFloat, stage: AstraStreakPetStage) -> UIImage {
+        let unit = size / 100.0
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: size, height: size * 1.04), format: format).image { rendererContext in
+            let context = rendererContext.cgContext
+            let t: (CGFloat, CGFloat) -> CGPoint = { x, y in CGPoint(x: x * unit, y: y * unit) }
+            let body = AstraStreakPetView.bodyPath(t)
+            context.saveGState()
+            context.addPath(body.cgPath)
+            context.clip()
+            let colors = [stage.colors.core.cgColor, stage.colors.body.cgColor, stage.colors.rim.cgColor] as CFArray
+            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0.0, 0.55, 1.0]) {
+                context.drawRadialGradient(gradient, startCenter: t(50, 60), startRadius: 4.0 * unit, endCenter: t(50, 56), endRadius: 44.0 * unit, options: [.drawsAfterEndLocation])
+            }
+            let inner = UIBezierPath()
+            inner.move(to: t(50, 22))
+            inner.addCurve(to: t(62, 50), controlPoint1: t(56, 32), controlPoint2: t(62, 40))
+            inner.addCurve(to: t(50, 62), controlPoint1: t(62, 58), controlPoint2: t(56, 62))
+            inner.addCurve(to: t(38, 50), controlPoint1: t(44, 62), controlPoint2: t(38, 58))
+            inner.addCurve(to: t(50, 22), controlPoint1: t(38, 40), controlPoint2: t(44, 32))
+            inner.close()
+            context.setFillColor(stage.colors.core.withAlphaComponent(0.35).cgColor)
+            context.addPath(inner.cgPath)
+            context.fillPath()
+            context.restoreGState()
+        }
+    }
+
+    /// One eye: white, a warm brown iris, the pupil and two highlights.
+    private static func renderEye(size: CGSize) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: size, format: format).image { rendererContext in
+            let context = rendererContext.cgContext
+            let w = size.width
+            let h = size.height
+            context.setFillColor(UIColor.white.cgColor)
+            context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
+            let iris = CGRect(x: w * 0.125, y: h * 0.195, width: w * 0.75, height: h * 0.756)
+            context.saveGState()
+            context.addEllipse(in: iris)
+            context.clip()
+            let colors = [UIColor(rgb: 0x8A4A22).cgColor, UIColor(rgb: 0x3B1A0C).cgColor] as CFArray
+            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0.0, 1.0]) {
+                context.drawRadialGradient(gradient, startCenter: CGPoint(x: iris.midX, y: iris.midY + h * 0.03), startRadius: 0.0, endCenter: CGPoint(x: iris.midX, y: iris.midY), endRadius: iris.width * 0.56, options: [.drawsAfterEndLocation])
+            }
+            context.restoreGState()
+            context.setFillColor(UIColor(rgb: 0x1D0C05).cgColor)
+            context.fillEllipse(in: CGRect(x: w * 0.5 - w * 0.195, y: h * 0.598 - h * 0.195, width: w * 0.39, height: h * 0.39))
+            context.setFillColor(UIColor.white.cgColor)
+            context.fillEllipse(in: CGRect(x: w * 0.5 - w * 0.4, y: h * 0.4 - h * 0.13, width: w * 0.26, height: h * 0.26))
+            context.fillEllipse(in: CGRect(x: w * 0.65, y: h * 0.65, width: w * 0.125, height: w * 0.125))
+        }
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         let side = min(self.bounds.width, self.bounds.height)
-        let size = side * self.stage.scale
+        guard side > 0.0 else {
+            return
+        }
         self.bodyContainer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
         self.bodyContainer.center = CGPoint(x: self.bounds.midX, y: self.bounds.midY)
-        let bodyRect = CGRect(x: (side - size) / 2.0, y: side - size, width: size, height: size)
+
+        // The 100 x 104 drawing box, standing on the bottom with room above it for a hat.
+        let unit = side * self.stage.scale / 118.0
+        let originX = (side - 100.0 * unit) / 2.0
+        let originY = side - 104.0 * unit
+        let t: (CGFloat, CGFloat) -> CGPoint = { x, y in CGPoint(x: originX + x * unit, y: originY + y * unit) }
+        let full = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
 
-        let flame = AstraStreakPetView.flamePath(in: bodyRect)
-        self.glowLayer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
-        self.glowLayer.position = CGPoint(x: side / 2.0, y: side / 2.0)
-        self.glowLayer.path = flame.cgPath
-        self.glowLayer.shadowPath = flame.cgPath
-        self.glowLayer.shadowColor = self.stage.colors.bottom.cgColor
-        self.glowLayer.shadowOpacity = 0.75
-        self.glowLayer.shadowRadius = size * 0.12
-        self.glowLayer.shadowOffset = CGSize()
+        for layer in [self.legsLayer, self.armsLayer, self.glowLayer, self.cheeksLayer, self.closedEyesLayer, self.browsLayer, self.mouthLayer, self.tearLayer] {
+            layer.frame = full
+        }
 
-        self.bodyGradient.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
-        self.bodyGradient.position = CGPoint(x: side / 2.0, y: side / 2.0)
-        self.bodyGradient.colors = [self.stage.colors.top.cgColor, self.stage.colors.bottom.cgColor]
-        self.bodyGradient.startPoint = CGPoint(x: 0.5, y: 0.0)
-        self.bodyGradient.endPoint = CGPoint(x: 0.5, y: 1.0)
-        self.bodyMask.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
-        self.bodyMask.position = CGPoint(x: side / 2.0, y: side / 2.0)
-        self.bodyMask.path = flame.cgPath
+        let rim = self.stage.colors.rim
+        let legs = UIBezierPath()
+        for x: CGFloat in [41.0, 59.0] {
+            let top = t(x - 3.6, 78.0)
+            legs.append(UIBezierPath(roundedRect: CGRect(x: top.x, y: top.y, width: 7.2 * unit, height: 18.0 * unit), cornerRadius: 3.6 * unit))
+            let foot = t(x + (x < 50.0 ? -1.5 : 1.5), 96.0)
+            legs.append(UIBezierPath(ovalIn: CGRect(x: foot.x - 5.2 * unit, y: foot.y - 3.0 * unit, width: 10.4 * unit, height: 6.0 * unit)))
+        }
+        self.legsLayer.path = legs.cgPath
+        self.legsLayer.fillColor = rim.cgColor
 
-        // A lighter belly.
-        let innerRect = CGRect(x: bodyRect.minX + size * 0.3, y: bodyRect.minY + size * 0.5, width: size * 0.4, height: size * 0.42)
-        self.innerLayer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
-        self.innerLayer.position = CGPoint(x: side / 2.0, y: side / 2.0)
-        self.innerLayer.path = UIBezierPath(ovalIn: innerRect).cgPath
-        self.innerLayer.fillColor = self.stage.colors.inner.withAlphaComponent(0.55).cgColor
+        let arms = UIBezierPath()
+        arms.move(to: t(18, 58))
+        arms.addQuadCurve(to: t(11, 75), controlPoint: t(10, 66))
+        arms.move(to: t(82, 58))
+        arms.addQuadCurve(to: t(89, 75), controlPoint: t(90, 66))
+        self.armsLayer.path = arms.cgPath
+        self.armsLayer.strokeColor = rim.cgColor
+        self.armsLayer.lineWidth = 6.0 * unit
+
+        let body = AstraStreakPetView.bodyPath(t)
+        self.glowLayer.path = body.cgPath
+        self.glowLayer.fillColor = self.stage.colors.body.cgColor
+        self.glowLayer.shadowPath = body.cgPath
+        self.glowLayer.shadowColor = rim.cgColor
+        self.glowLayer.shadowOpacity = 0.8
+        self.glowLayer.shadowRadius = 9.0 * unit
+
+        let bodySize = 100.0 * unit
+        let key = "\(self.stage.index)-\(Int(bodySize * 10.0))"
+        if self.renderedKey != key {
+            self.renderedKey = key
+            self.bodyLayer.contents = AstraStreakPetView.renderBody(size: bodySize, stage: self.stage).cgImage
+            let eye = AstraStreakPetView.renderEye(size: CGSize(width: 14.4 * unit, height: 16.4 * unit)).cgImage
+            self.leftEye.contents = eye
+            self.rightEye.contents = eye
+        }
+        self.bodyLayer.frame = CGRect(origin: t(0, 0), size: CGSize(width: bodySize, height: bodySize * 1.04))
 
         // The face.
-        let eyeY = bodyRect.minY + size * 0.56
-        let eyeSize = CGSize(width: size * 0.15, height: size * 0.19)
-        let leftEyeRect = CGRect(x: bodyRect.midX - size * 0.17 - eyeSize.width / 2.0, y: eyeY - eyeSize.height / 2.0, width: eyeSize.width, height: eyeSize.height)
-        let rightEyeRect = CGRect(x: bodyRect.midX + size * 0.17 - eyeSize.width / 2.0, y: eyeY - eyeSize.height / 2.0, width: eyeSize.width, height: eyeSize.height)
+        let eyeY: CGFloat = 45.0
         self.eyesLayer.transform = CATransform3DIdentity
-        self.eyesLayer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
-        self.eyesLayer.anchorPoint = CGPoint(x: 0.5, y: side > 0.0 ? eyeY / side : 0.5)
-        self.eyesLayer.position = CGPoint(x: side / 2.0, y: eyeY)
-        self.leftEye.path = UIBezierPath(ovalIn: leftEyeRect).cgPath
-        self.rightEye.path = UIBezierPath(ovalIn: rightEyeRect).cgPath
-        let pupilSize = eyeSize.width * 0.58
-        let pupilOffsetY: CGFloat = self.mood == .sad ? eyeSize.height * 0.12 : 0.0
-        self.leftPupil.path = UIBezierPath(ovalIn: CGRect(x: leftEyeRect.midX - pupilSize / 2.0 + eyeSize.width * 0.08, y: leftEyeRect.midY - pupilSize / 2.0 + pupilOffsetY, width: pupilSize, height: pupilSize)).cgPath
-        self.rightPupil.path = UIBezierPath(ovalIn: CGRect(x: rightEyeRect.midX - pupilSize / 2.0 + eyeSize.width * 0.08, y: rightEyeRect.midY - pupilSize / 2.0 + pupilOffsetY, width: pupilSize, height: pupilSize)).cgPath
-        self.eyesLayer.transform = self.mood == .sleepy ? CATransform3DMakeScale(1.0, 0.3, 1.0) : CATransform3DIdentity
+        let eyesOrigin = t(0, eyeY)
+        self.eyesLayer.anchorPoint = CGPoint(x: 0.5, y: eyesOrigin.y / side)
+        self.eyesLayer.frame = full
+        let eyeSize = CGSize(width: 14.4 * unit, height: 16.4 * unit)
+        for (layer, x) in [(self.leftEye, CGFloat(38.0)), (self.rightEye, CGFloat(62.0))] {
+            let center = t(x, eyeY)
+            layer.frame = CGRect(x: center.x - eyeSize.width / 2.0, y: center.y - eyeSize.height / 2.0, width: eyeSize.width, height: eyeSize.height)
+        }
+        self.eyesLayer.isHidden = self.mood == .sleepy
+        let closed = UIBezierPath()
+        for x: CGFloat in [38.0, 62.0] {
+            closed.move(to: t(x - 5.5, eyeY + 0.5))
+            closed.addQuadCurve(to: t(x + 5.5, eyeY + 0.5), controlPoint: t(x, eyeY + 4.0))
+        }
+        self.closedEyesLayer.path = closed.cgPath
+        self.closedEyesLayer.lineWidth = 1.8 * unit
+        self.closedEyesLayer.isHidden = self.mood != .sleepy
 
-        let cheekSize = size * 0.09
-        let cheeks = UIBezierPath(ovalIn: CGRect(x: leftEyeRect.minX - cheekSize * 0.6, y: eyeY + eyeSize.height * 0.55, width: cheekSize * 1.3, height: cheekSize * 0.8))
-        cheeks.append(UIBezierPath(ovalIn: CGRect(x: rightEyeRect.maxX - cheekSize * 0.7, y: eyeY + eyeSize.height * 0.55, width: cheekSize * 1.3, height: cheekSize * 0.8)))
-        self.cheeksLayer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
-        self.cheeksLayer.position = CGPoint(x: side / 2.0, y: side / 2.0)
+        let brows = UIBezierPath()
+        if self.mood == .sad {
+            brows.move(to: t(33, 33.5))
+            brows.addQuadCurve(to: t(42.5, 31.0), controlPoint: t(38, 33.5))
+            brows.move(to: t(57.5, 31.0))
+            brows.addQuadCurve(to: t(67, 33.5), controlPoint: t(62, 33.5))
+        } else {
+            brows.move(to: t(33, 33.5))
+            brows.addQuadCurve(to: t(42.5, 33.0), controlPoint: t(38, 31.0))
+            brows.move(to: t(57.5, 33.0))
+            brows.addQuadCurve(to: t(67, 33.5), controlPoint: t(62, 31.0))
+        }
+        self.browsLayer.path = brows.cgPath
+        self.browsLayer.lineWidth = 1.8 * unit
+
+        let cheeks = UIBezierPath()
+        for x: CGFloat in [31.0, 69.0] {
+            let center = t(x, 54.5)
+            cheeks.append(UIBezierPath(ovalIn: CGRect(x: center.x - 6.0 * unit, y: center.y - 3.6 * unit, width: 12.0 * unit, height: 7.2 * unit)))
+        }
         self.cheeksLayer.path = cheeks.cgPath
-        self.cheeksLayer.isHidden = self.mood == .sad || self.mood == .sleepy
+        self.cheeksLayer.isHidden = self.mood == .sad
 
-        let mouthY = eyeY + size * 0.17
-        let mouthWidth = size * 0.16
         let mouth = UIBezierPath()
+        let mouthColor = UIColor(rgb: 0x7A2412)
         switch self.mood {
         case .happy:
-            mouth.move(to: CGPoint(x: bodyRect.midX - mouthWidth / 2.0, y: mouthY))
-            mouth.addQuadCurve(to: CGPoint(x: bodyRect.midX + mouthWidth / 2.0, y: mouthY), controlPoint: CGPoint(x: bodyRect.midX, y: mouthY + size * 0.1))
-        case .waiting, .sleepy:
-            mouth.move(to: CGPoint(x: bodyRect.midX - mouthWidth * 0.3, y: mouthY + size * 0.02))
-            mouth.addQuadCurve(to: CGPoint(x: bodyRect.midX + mouthWidth * 0.3, y: mouthY + size * 0.02), controlPoint: CGPoint(x: bodyRect.midX, y: mouthY + size * 0.04))
+            mouth.move(to: t(45, 56))
+            mouth.addQuadCurve(to: t(55, 56), controlPoint: t(50, 63))
+            mouth.close()
+            self.mouthLayer.fillColor = mouthColor.cgColor
+        case .waiting:
+            mouth.move(to: t(46, 57))
+            mouth.addQuadCurve(to: t(54, 57), controlPoint: t(50, 60))
+            self.mouthLayer.fillColor = UIColor.clear.cgColor
+        case .sleepy:
+            mouth.append(UIBezierPath(ovalIn: CGRect(origin: t(48.5, 56.5), size: CGSize(width: 3.0 * unit, height: 3.4 * unit))))
+            self.mouthLayer.fillColor = mouthColor.cgColor
         case .sad:
-            mouth.move(to: CGPoint(x: bodyRect.midX - mouthWidth * 0.4, y: mouthY + size * 0.05))
-            mouth.addQuadCurve(to: CGPoint(x: bodyRect.midX + mouthWidth * 0.4, y: mouthY + size * 0.05), controlPoint: CGPoint(x: bodyRect.midX, y: mouthY - size * 0.03))
+            mouth.move(to: t(46, 60))
+            mouth.addQuadCurve(to: t(54, 60), controlPoint: t(50, 56))
+            self.mouthLayer.fillColor = UIColor.clear.cgColor
         }
-        self.mouthLayer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
-        self.mouthLayer.position = CGPoint(x: side / 2.0, y: side / 2.0)
         self.mouthLayer.path = mouth.cgPath
-        self.mouthLayer.lineWidth = max(1.2, size * 0.035)
+        self.mouthLayer.strokeColor = mouthColor.cgColor
+        self.mouthLayer.lineWidth = 2.0 * unit
 
-        let tearRect = CGRect(x: rightEyeRect.midX - size * 0.03, y: rightEyeRect.maxY + size * 0.01, width: size * 0.06, height: size * 0.09)
-        self.tearLayer.bounds = CGRect(origin: CGPoint(), size: CGSize(width: side, height: side))
-        self.tearLayer.position = CGPoint(x: side / 2.0, y: side / 2.0)
-        self.tearLayer.path = UIBezierPath(ovalIn: tearRect).cgPath
+        let tearCenter = t(64.5, 54.5)
+        self.tearLayer.path = UIBezierPath(ovalIn: CGRect(x: tearCenter.x - 2.0 * unit, y: tearCenter.y - 2.6 * unit, width: 4.0 * unit, height: 5.6 * unit)).cgPath
         self.tearLayer.isHidden = self.mood != .sad
 
-        CATransaction.commit()
-
         // The things it wears.
-        let head = AstraStreakPetWardrobe.item(self.look.head)
-        let face = AstraStreakPetWardrobe.item(self.look.face)
-        let extra = AstraStreakPetWardrobe.item(self.look.extra)
-        self.headLabel.text = head?.emoji
-        self.headLabel.font = UIFont.systemFont(ofSize: size * 0.36)
-        self.headLabel.sizeToFit()
-        self.headLabel.center = CGPoint(x: bodyRect.midX + size * 0.04, y: bodyRect.minY + size * 0.24)
-        self.faceLabel.text = face?.emoji
-        self.faceLabel.font = UIFont.systemFont(ofSize: size * 0.34)
-        self.faceLabel.sizeToFit()
-        self.faceLabel.center = CGPoint(x: bodyRect.midX, y: eyeY + size * 0.01)
-        self.eyesLayer.isHidden = face != nil
-        self.extraLabel.text = extra?.emoji
-        self.extraLabel.font = UIFont.systemFont(ofSize: size * 0.24)
-        self.extraLabel.sizeToFit()
-        self.extraLabel.center = CGPoint(x: bodyRect.maxX - size * 0.08, y: bodyRect.maxY - size * 0.2)
+        for slot in AstraStreakPetSlot.allCases {
+            guard let layer = self.itemLayers[slot] else {
+                continue
+            }
+            guard let item = AstraStreakPetWardrobe.item(self.look.item(in: slot)), let image = item.image else {
+                layer.contents = nil
+                layer.isHidden = true
+                continue
+            }
+            let placement = item.placement
+            let width = placement.width * unit
+            let height = (placement.height ?? (placement.width * image.size.height / max(1.0, image.size.width))) * unit
+            let anchor = t(placement.x, placement.y)
+            let y: CGFloat
+            switch placement.anchor {
+            case .top:
+                y = anchor.y
+            case .center:
+                y = anchor.y - height / 2.0
+            case .bottom:
+                y = anchor.y - height
+            }
+            layer.contents = image.cgImage
+            layer.frame = CGRect(x: anchor.x - width / 2.0, y: y, width: width, height: height)
+            layer.isHidden = false
+            if slot == .extra, let face = self.itemLayers[.face] {
+                // A scarf goes over the shirt, under the glasses and hats; a thing in the hand goes over everything.
+                if placement.underFace {
+                    self.bodyContainer.layer.insertSublayer(layer, below: face)
+                } else if layer !== self.bodyContainer.layer.sublayers?.last {
+                    self.bodyContainer.layer.addSublayer(layer)
+                }
+            }
+        }
+
+        CATransaction.commit()
     }
 
     private func startAnimations() {
         let layer = self.bodyContainer.layer
         if layer.animation(forKey: "astraBreath") == nil {
             let breath = CABasicAnimation(keyPath: "transform.scale.y")
-            breath.fromValue = 0.96
-            breath.toValue = 1.05
+            breath.fromValue = 0.97
+            breath.toValue = 1.04
             breath.duration = 1.1
             breath.autoreverses = true
             breath.repeatCount = .infinity
@@ -357,8 +598,8 @@ final class AstraStreakPetView: UIView {
             layer.add(breath, forKey: "astraBreath")
 
             let sway = CABasicAnimation(keyPath: "transform.rotation.z")
-            sway.fromValue = -0.05
-            sway.toValue = 0.05
+            sway.fromValue = -0.04
+            sway.toValue = 0.04
             sway.duration = 1.7
             sway.autoreverses = true
             sway.repeatCount = .infinity
@@ -366,10 +607,18 @@ final class AstraStreakPetView: UIView {
             layer.add(sway, forKey: "astraSway")
 
             let flicker = CAKeyframeAnimation(keyPath: "shadowOpacity")
-            flicker.values = [0.55, 0.9, 0.6, 0.85, 0.55]
+            flicker.values = [0.6, 0.95, 0.7, 0.9, 0.6]
             flicker.duration = 1.3
             flicker.repeatCount = .infinity
             self.glowLayer.add(flicker, forKey: "astraFlicker")
+
+            // The arms wave a little now and then.
+            let wave = CAKeyframeAnimation(keyPath: "transform.translation.y")
+            wave.values = [0.0, 0.0, -1.5, 0.5, -1.0, 0.0, 0.0]
+            wave.keyTimes = [0.0, 0.6, 0.68, 0.76, 0.84, 0.92, 1.0]
+            wave.duration = 4.2
+            wave.repeatCount = .infinity
+            self.armsLayer.add(wave, forKey: "astraWave")
         }
         self.eyesLayer.removeAnimation(forKey: "astraBlink")
         if self.mood != .sleepy {
@@ -457,7 +706,7 @@ public final class AstraStreakPetAttachment {
         } else {
             let context = self.context
             let peerId = self.peerId
-            view = AstraStreakPetFloatingView(frame: CGRect(x: 0.0, y: 0.0, width: 64.0, height: 80.0))
+            view = AstraStreakPetFloatingView(frame: CGRect(x: 0.0, y: 0.0, width: 72.0, height: 88.0))
             view.tapped = {
                 guard let top = astraTopViewController() else {
                     return
@@ -856,8 +1105,14 @@ final class AstraStreakPetController: UIViewController {
                 title.text = self.text("На голову", "Head")
             case .face:
                 title.text = self.text("На лицо", "Face")
+            case .top:
+                title.text = self.text("Верх", "Top")
+            case .bottom:
+                title.text = self.text("Низ", "Bottom")
+            case .feet:
+                title.text = self.text("Обувь", "Shoes")
             case .extra:
-                title.text = self.text("Украшение", "Extra")
+                title.text = self.text("Аксессуар", "Accessory")
             }
             title.font = UIFont.systemFont(ofSize: 13.0, weight: .semibold)
             title.textColor = UIColor(white: 1.0, alpha: 0.6)
@@ -868,19 +1123,11 @@ final class AstraStreakPetController: UIViewController {
             row.spacing = 8.0
             row.distribution = .fill
             row.alignment = .center
-            let current: String?
-            switch slot {
-            case .head:
-                current = self.look.head
-            case .face:
-                current = self.look.face
-            case .extra:
-                current = self.look.extra
-            }
-            row.addArrangedSubview(self.wardrobeButton(emoji: "∅", caption: self.text("Нет", "None"), selected: current == nil, locked: false, tag: slot.rawValue * 100 + 99))
+            let current = self.look.item(in: slot)
+            row.addArrangedSubview(self.wardrobeButton(image: nil, caption: self.text("Нет", "None"), selected: current == nil, locked: false, tag: slot.rawValue * 100 + 99))
             for (index, item) in AstraStreakPetWardrobe.items.enumerated() where item.slot == slot {
                 let locked = self.look.best < item.unlockDays
-                row.addArrangedSubview(self.wardrobeButton(emoji: item.emoji, caption: locked ? "🔒 \(item.unlockDays)" : (self.isRussian ? item.titleRu : item.titleEn), selected: current == item.id, locked: locked, tag: slot.rawValue * 100 + index))
+                row.addArrangedSubview(self.wardrobeButton(image: item.image, caption: locked ? "🔒 \(item.unlockDays)" : (self.isRussian ? item.titleRu : item.titleEn), selected: current == item.id, locked: locked, tag: slot.rawValue * 100 + index))
             }
             let rowScroll = UIScrollView()
             rowScroll.showsHorizontalScrollIndicator = false
@@ -898,7 +1145,7 @@ final class AstraStreakPetController: UIViewController {
         }
     }
 
-    private func wardrobeButton(emoji: String, caption: String, selected: Bool, locked: Bool, tag: Int) -> UIView {
+    private func wardrobeButton(image: UIImage?, caption: String, selected: Bool, locked: Bool, tag: Int) -> UIView {
         let button = UIButton(type: .custom)
         button.tag = tag
         button.backgroundColor = selected ? UIColor(rgb: 0xFF8A1F).withAlphaComponent(0.35) : UIColor(white: 1.0, alpha: 0.06)
@@ -907,11 +1154,24 @@ final class AstraStreakPetController: UIViewController {
         button.layer.borderColor = UIColor(rgb: 0xFFB13D).cgColor
         button.alpha = locked ? 0.4 : 1.0
         button.addTarget(self, action: #selector(self.wardrobePressed(_:)), for: .touchUpInside)
-        let emojiLabel = UILabel()
-        emojiLabel.text = emoji
-        emojiLabel.font = UIFont.systemFont(ofSize: 24.0)
-        emojiLabel.textAlignment = .center
-        emojiLabel.textColor = .white
+        let picture: UIView
+        if let image = image {
+            let imageView = UIImageView(image: image)
+            imageView.contentMode = .scaleAspectFit
+            imageView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                imageView.widthAnchor.constraint(equalToConstant: 40.0),
+                imageView.heightAnchor.constraint(equalToConstant: 34.0)
+            ])
+            picture = imageView
+        } else {
+            let noneLabel = UILabel()
+            noneLabel.text = "∅"
+            noneLabel.font = UIFont.systemFont(ofSize: 24.0)
+            noneLabel.textAlignment = .center
+            noneLabel.textColor = .white
+            picture = noneLabel
+        }
         let captionLabel = UILabel()
         captionLabel.text = caption
         captionLabel.font = UIFont.systemFont(ofSize: 9.0, weight: .medium)
@@ -919,8 +1179,9 @@ final class AstraStreakPetController: UIViewController {
         captionLabel.textAlignment = .center
         captionLabel.adjustsFontSizeToFitWidth = true
         captionLabel.minimumScaleFactor = 0.7
-        let stack = UIStackView(arrangedSubviews: [emojiLabel, captionLabel])
+        let stack = UIStackView(arrangedSubviews: [picture, captionLabel])
         stack.axis = .vertical
+        stack.alignment = .center
         stack.spacing = 2.0
         stack.isUserInteractionEnabled = false
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -930,8 +1191,8 @@ final class AstraStreakPetController: UIViewController {
             stack.centerYAnchor.constraint(equalTo: button.centerYAnchor),
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: button.leadingAnchor, constant: 2.0),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: button.trailingAnchor, constant: -2.0),
-            button.heightAnchor.constraint(equalToConstant: 58.0),
-            button.widthAnchor.constraint(equalToConstant: 60.0)
+            button.heightAnchor.constraint(equalToConstant: 64.0),
+            button.widthAnchor.constraint(equalToConstant: 64.0)
         ])
         return button
     }
@@ -953,21 +1214,14 @@ final class AstraStreakPetController: UIViewController {
             let item = AstraStreakPetWardrobe.items[index]
             if self.look.best < item.unlockDays {
                 AstraHaptics.warning()
-                let alert = UIAlertController(title: item.emoji, message: self.text("Откроется, когда огонёк дойдёт до \(item.unlockDays) дн.", "Unlocks when the streak reaches \(item.unlockDays) days."), preferredStyle: .alert)
+                let alert = UIAlertController(title: self.isRussian ? item.titleRu : item.titleEn, message: self.text("Откроется, когда огонёк дойдёт до \(item.unlockDays) дн.", "Unlocks when the streak reaches \(item.unlockDays) days."), preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
                 self.present(alert, animated: true)
                 return
             }
             id = item.id
         }
-        switch slot {
-        case .head:
-            self.look.head = id
-        case .face:
-            self.look.face = id
-        case .extra:
-            self.look.extra = id
-        }
+        self.look.setItem(id, in: slot)
         self.saveLook()
         AstraHaptics.success()
         self.reload()
