@@ -118,6 +118,35 @@ public enum AstraStreakBot {
         context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: "\(AstraStreakBot.link)?start=l\(token)", forceExternal: false, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
     }
 
+    /// Connects the bot without leaving the app: AstraGram itself sends the bot "/start l<token>" from this account,
+    /// which is what pressing Start on the link would send. The bot's reply stays in the bot's chat.
+    static func linkSilently(context: AccountContext, completion: @escaping (Bool) -> Void) {
+        var bytes = [UInt8](repeating: 0, count: 24)
+        guard AstraStreakBot.isAvailable, SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
+            completion(false)
+            return
+        }
+        let token = bytes.map { String(format: "%02x", $0) }.joined()
+        let account = context.account
+        let _ = (context.engine.peers.resolvePeerByName(name: AstraStreakBot.username, referrer: nil)
+        |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
+            guard case let .result(peer) = result else {
+                return .complete()
+            }
+            return .single(peer)
+        }
+        |> take(1)
+        |> deliverOnMainQueue).start(next: { peer in
+            guard let peer = peer else {
+                completion(false)
+                return
+            }
+            AstraStreakBot.setToken(token, accountPeerId: account.peerId)
+            let _ = enqueueMessages(account: account, peerId: peer.id, messages: [.message(text: "/start l\(token)", attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])]).startStandalone()
+            completion(true)
+        })
+    }
+
     static func unlink(accountPeerId: EnginePeer.Id) {
         if let token = AstraStreakBot.token(accountPeerId: accountPeerId) {
             AstraStreakBot.request(path: "/api/unlink", token: token, body: [:], completion: { _ in })
@@ -455,8 +484,52 @@ public func astraStreakController(context: AccountContext, peerId: EnginePeer.Id
 
     let arguments = AstraStreakArguments(
         start: {
-            store.setStreak(peerId: peerId, startDay: AstraStreak.today())
-            AstraHaptics.success()
+            let isRussian = astraIsRussian(context)
+            let _ = (peer |> take(1) |> deliverOnMainQueue).start(next: { peer in
+                guard let peer = peer, AstraStreakBot.isAvailable, !peer.astraUsesAstraGram else {
+                    // Both on AstraGram: each phone counts the streak by itself, no bot is needed.
+                    store.setStreak(peerId: peerId, startDay: AstraStreak.today())
+                    AstraHaptics.success()
+                    return
+                }
+                guard let top = astraTopViewController() else {
+                    return
+                }
+                let name = peer.compactDisplayTitle
+                let alert = UIAlertController(
+                    title: isRussian ? "Начать огонёк с \(name)?" : "Start a streak with \(name)?",
+                    message: isRussian
+                        ? "У \(name) обычный Telegram, поэтому счёт \(name) увидит в боте @\(AstraStreakBot.username). AstraGram сам подключит бота с вашей стороны и отправит \(name) ссылку на бота — \(name) достаточно один раз нажать в нём «Старт». Боту уходят только числа: счёт и сколько сообщений написано сегодня, тексты — никогда."
+                        : "\(name) uses plain Telegram, so \(name) sees the count in the bot @\(AstraStreakBot.username). AstraGram connects the bot on your side and sends \(name) a link to it; \(name) only presses Start in it once. The bot gets only numbers: the count and how many messages were written today, never texts.",
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: isRussian ? "Начать и пригласить" : "Start and Invite", style: .default, handler: { _ in
+                    store.setStreak(peerId: peerId, startDay: AstraStreak.today())
+                    AstraHaptics.success()
+                    let finish = {
+                        let inviteLink = "\(AstraStreakBot.link)?start=f\(accountPeerId.id._internalGetInt64Value())"
+                        send(isRussian ? "Давай держать огонёк 🔥 Каждый день по \(AstraStreak.messagesPerDay) сообщения друг другу. Счёт и напоминания — в боте, нажми «Старт»: \(inviteLink)" : "Let's keep a streak 🔥 \(AstraStreak.messagesPerDay) messages to each other every day. The count and reminders are in the bot, press Start: \(inviteLink)")
+                        toast(isRussian ? "Огонёк начат, приглашение отправлено" : "Streak started, invitation sent")
+                        AstraStreakManager.forAccount(accountPeerId)?.refresh()
+                    }
+                    if AstraStreakBot.isLinked(accountPeerId: accountPeerId) {
+                        finish()
+                    } else {
+                        AstraStreakBot.linkSilently(context: context, completion: { linked in
+                            if linked {
+                                botLinked.set(true)
+                            }
+                            finish()
+                        })
+                    }
+                }))
+                alert.addAction(UIAlertAction(title: isRussian ? "Только начать" : "Just Start", style: .default, handler: { _ in
+                    store.setStreak(peerId: peerId, startDay: AstraStreak.today())
+                    AstraHaptics.success()
+                }))
+                alert.addAction(UIAlertAction(title: isRussian ? "Отмена" : "Cancel", style: .cancel, handler: nil))
+                top.present(alert, animated: true)
+            })
         },
         stop: {
             let isRussian = astraIsRussian(context)
@@ -479,10 +552,18 @@ public func astraStreakController(context: AccountContext, peerId: EnginePeer.Id
         },
         linkBot: {
             let isRussian = astraIsRussian(context)
-            showAlert(title: isRussian ? "Подключить бота огоньков?" : "Connect the streak bot?", text: isRussian ? "Бот покажет огонёк тем, у кого нет AstraGram, напомнит им написать и примет их восстановления. Для этого AstraGram будет отправлять на сервер бота ID собеседников с огоньком, счёт и сколько сообщений написано сегодня. Тексты сообщений не отправляются. Откроется бот — нажмите в нём «Старт»." : "The bot shows the streak to people without AstraGram, reminds them to write, and takes their restores. For this AstraGram sends the bot's server the IDs of people you have a streak with, the count, and how many messages were written today. Message texts are not sent. The bot opens: press Start in it.", actionTitle: isRussian ? "Подключить" : "Connect", action: {
-                AstraStreakBot.link(context: context, navigationController: navigationControllerImpl?())
-                botLinked.set(true)
-                AstraStreakManager.forAccount(accountPeerId)?.refresh()
+            showAlert(title: isRussian ? "Подключить бота огоньков?" : "Connect the streak bot?", text: isRussian ? "Бот покажет огонёк тем, у кого нет AstraGram, напомнит им написать и примет их восстановления. Для этого AstraGram будет отправлять на сервер бота ID собеседников с огоньком, счёт и сколько сообщений написано сегодня. Тексты сообщений не отправляются." : "The bot shows the streak to people without AstraGram, reminds them to write, and takes their restores. For this AstraGram sends the bot's server the IDs of people you have a streak with, the count, and how many messages were written today. Message texts are not sent.", actionTitle: isRussian ? "Подключить" : "Connect", action: {
+                AstraStreakBot.linkSilently(context: context, completion: { linked in
+                    if linked {
+                        botLinked.set(true)
+                        toast(isRussian ? "Бот огоньков подключён" : "Streak bot connected")
+                        AstraStreakManager.forAccount(accountPeerId)?.refresh()
+                    } else {
+                        AstraStreakBot.link(context: context, navigationController: navigationControllerImpl?())
+                        botLinked.set(true)
+                        AstraStreakManager.forAccount(accountPeerId)?.refresh()
+                    }
+                })
             })
         },
         unlinkBot: {
