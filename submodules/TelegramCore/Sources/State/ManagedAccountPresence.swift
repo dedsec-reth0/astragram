@@ -22,7 +22,6 @@ private final class AccountPresenceManagerImpl {
     private var astraMarkDisposable: Disposable?
     private var astraOwnPresenceDisposable: Disposable?
     private var astraSettingsDisposable: Disposable?
-    private let astraOfflineRequestDisposable = MetaDisposable()
     private var astraOfflineTimer: SignalKitTimer?
     private var astraLastImmediateOffline: Double = 0.0
     private var astraLastOwnPresenceMark: Double = 0.0
@@ -88,13 +87,15 @@ private final class AccountPresenceManagerImpl {
 
     /// AstraGram ghost mode, as AyuGram's worker does it: the server has just shown the account online (a message was
     /// sent, a chat was read, another device came online), so it is told the account is offline: at once, and again
-    /// 3 seconds after the last such event, when everything the event caused has reached the server.
+    /// 3 seconds after the last such event, when everything the event caused has reached the server. A request that
+    /// shows the account online marks twice, as it goes out and when it is done, and both answers go out: the first
+    /// right behind the request, the second once the server has applied it.
     private func astraMarkAsOnline() {
         guard AstraGramSettings.current.hideOnlineStatus else {
             return
         }
         let now = CFAbsoluteTimeGetCurrent()
-        if now - self.astraLastImmediateOffline >= 1.5 {
+        if now - self.astraLastImmediateOffline >= 0.25 {
             self.astraLastImmediateOffline = now
             self.astraSendOffline()
         }
@@ -114,10 +115,11 @@ private final class AccountPresenceManagerImpl {
         guard AstraGramSettings.current.hideOnlineStatus else {
             return
         }
-        self.astraOfflineRequestDisposable.set((self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
+        // Not cancelled by the next one: each "offline" is answering its own event and must reach the server.
+        let _ = (self.network.request(Api.functions.account.updateStatus(offline: .boolTrue))
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .single(.boolFalse)
-        }).start())
+        }).start()
     }
     
     deinit {
@@ -128,7 +130,6 @@ private final class AccountPresenceManagerImpl {
         self.astraMarkDisposable?.dispose()
         self.astraOwnPresenceDisposable?.dispose()
         self.astraSettingsDisposable?.dispose()
-        self.astraOfflineRequestDisposable.dispose()
         self.astraOfflineTimer?.invalidate()
     }
     

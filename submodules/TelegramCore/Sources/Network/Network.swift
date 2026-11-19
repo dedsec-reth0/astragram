@@ -1419,7 +1419,13 @@ public final class Network: NSObject {
                 }
             )
             
-            return requestService.add(request)
+            let disposable = requestService.add(request)
+            if astraMarksOnline {
+                // AstraGram ghost mode: "offline" goes out right behind the request, so the server shows the
+                // account online for as short a time as possible (and again once the request is done).
+                AstraGhostMode.markAsOnline()
+            }
+            return disposable
         }
     }
     
@@ -1462,7 +1468,13 @@ public final class Network: NSObject {
                 }
             )
             
-            return requestService.add(request)
+            let disposable = requestService.add(request)
+            if astraMarksOnline {
+                // AstraGram ghost mode: "offline" goes out right behind the request, so the server shows the
+                // account online for as short a time as possible (and again once the request is done).
+                AstraGhostMode.markAsOnline()
+            }
+            return disposable
         }
     }
     

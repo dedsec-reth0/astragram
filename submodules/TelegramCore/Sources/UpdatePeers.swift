@@ -325,6 +325,10 @@ public func updatePeersCustom(transaction: Transaction, peers: [Peer], update: (
         if let previous = previous as? TelegramUser, let updatedUser = updated as? TelegramUser {
             updated = TelegramUser.merge(lhs: previous, rhs: updatedUser)
         }
+        // AstraGram: with Local Premium the emoji status picked on this device replaces the server's.
+        if let updatedUser = updated as? TelegramUser {
+            updated = AstraLocalPremium.applyingEmojiStatus(updatedUser)
+        }
         
         if let updatedChannel = updated as? TelegramChannel {
             var wasMember = false

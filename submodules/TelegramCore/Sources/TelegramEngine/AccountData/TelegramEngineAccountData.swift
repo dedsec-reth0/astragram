@@ -16,6 +16,39 @@ private final class AccountEmojiStatusRequestDependencyTag: NetworkRequestDepend
 private func _internal_setAccountEmojiStatus(account: Account, apiEmojiStatus: Api.EmojiStatus, emojiStatus: PeerEmojiStatus?, files: [TelegramMediaFile], recentFile: TelegramMediaFile?) -> Signal<Never, SetEmojiStatusError> {
     let peerId = account.peerId
     let postbox = account.postbox
+    let storeLocally: (Transaction) -> Void = { transaction in
+        for file in files {
+            transaction.storeMediaIfNotPresent(media: file)
+        }
+        if let recentFile, let entry = CodableEntry(RecentMediaItem(recentFile)) {
+            let itemEntry = OrderedItemListEntry(id: RecentMediaItemId(recentFile.fileId).rawValue, contents: entry)
+            transaction.addOrMoveToFirstPositionOrderedItemListItem(collectionId: Namespaces.OrderedItemList.CloudRecentStatusEmoji, item: itemEntry, removeTailIfCountExceeds: 32)
+        }
+        if let peer = transaction.getPeer(peerId) as? TelegramUser {
+            updatePeersCustom(transaction: transaction, peers: [peer.withUpdatedEmojiStatus(emojiStatus)], update: { _, updated in updated })
+        }
+    }
+    // AstraGram: with Local Premium (and no real Premium) the server refuses the status, so it is kept on this device.
+    let keptLocally = postbox.transaction { transaction -> Bool in
+        guard let peer = transaction.getPeer(peerId) as? TelegramUser, AstraLocalPremium.isLocalOnly(peer) else {
+            return false
+        }
+        AstraLocalPremium.setEmojiStatus(emojiStatus, accountPeerId: peerId)
+        storeLocally(transaction)
+        return true
+    }
+    |> castError(SetEmojiStatusError.self)
+    return keptLocally
+    |> mapToSignal { keptLocally -> Signal<Never, SetEmojiStatusError> in
+        if keptLocally {
+            return .complete()
+        }
+        return _internal_setServerAccountEmojiStatus(account: account, apiEmojiStatus: apiEmojiStatus, storeLocally: storeLocally)
+    }
+}
+
+private func _internal_setServerAccountEmojiStatus(account: Account, apiEmojiStatus: Api.EmojiStatus, storeLocally: @escaping (Transaction) -> Void) -> Signal<Never, SetEmojiStatusError> {
+    let postbox = account.postbox
     return account.network.request(Api.functions.account.updateEmojiStatus(emojiStatus: apiEmojiStatus), tag: AccountEmojiStatusRequestDependencyTag())
     |> mapError { _ in SetEmojiStatusError.generic }
     |> then(.fail(.generic))
@@ -25,16 +58,7 @@ private func _internal_setAccountEmojiStatus(account: Account, apiEmojiStatus: A
             return .fail(.generic)
         }
         return postbox.transaction { transaction -> Void in
-            for file in files {
-                transaction.storeMediaIfNotPresent(media: file)
-            }
-            if let recentFile, let entry = CodableEntry(RecentMediaItem(recentFile)) {
-                let itemEntry = OrderedItemListEntry(id: RecentMediaItemId(recentFile.fileId).rawValue, contents: entry)
-                transaction.addOrMoveToFirstPositionOrderedItemListItem(collectionId: Namespaces.OrderedItemList.CloudRecentStatusEmoji, item: itemEntry, removeTailIfCountExceeds: 32)
-            }
-            if let peer = transaction.getPeer(peerId) as? TelegramUser {
-                updatePeersCustom(transaction: transaction, peers: [peer.withUpdatedEmojiStatus(emojiStatus)], update: { _, updated in updated })
-            }
+            storeLocally(transaction)
         }
         |> castError(SetEmojiStatusError.self)
         |> ignoreValues

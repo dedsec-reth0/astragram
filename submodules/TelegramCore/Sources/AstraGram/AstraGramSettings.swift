@@ -653,4 +653,61 @@ public enum AstraLocalPremium {
         }
         return AstraLocalPremium.accountPeerIds.with { $0.contains(peerId) }
     }
+
+    // MARK: The emoji status
+
+    /// The server takes an emoji status only from real Premium, so with Local Premium the status picked is kept here,
+    /// on this device, and shown in place of the one the server sends (`updatePeersCustom`). Others do not see it.
+    private struct StoredEmojiStatus: Codable {
+        let status: PeerEmojiStatus?
+    }
+
+    /// Per account, once read from the disk: nil = nothing picked locally; a status of nil = removed locally.
+    private static let emojiStatuses = Atomic<[PeerId: StoredEmojiStatus?]>(value: [:])
+
+    private static func emojiStatusKey(_ accountPeerId: PeerId) -> String {
+        return "astragram.localPremium.emojiStatus.\(accountPeerId.toInt64())"
+    }
+
+    private static func loadedEmojiStatus(accountPeerId: PeerId) -> StoredEmojiStatus? {
+        if let cached = AstraLocalPremium.emojiStatuses.with({ $0[accountPeerId] }) {
+            return cached
+        }
+        var stored: StoredEmojiStatus?
+        if let data = UserDefaults.standard.data(forKey: AstraLocalPremium.emojiStatusKey(accountPeerId)) {
+            stored = try? JSONDecoder().decode(StoredEmojiStatus.self, from: data)
+        }
+        let _ = AstraLocalPremium.emojiStatuses.modify { current in
+            var current = current
+            current[accountPeerId] = .some(stored)
+            return current
+        }
+        return stored
+    }
+
+    /// Whether `user` is an account of this device shown as Premium by Local Premium only.
+    static func isLocalOnly(_ user: TelegramUser) -> Bool {
+        return !user.flags.contains(.isPremium) && AstraLocalPremium.applies(to: user.id)
+    }
+
+    /// Keeps `status` as the account's emoji status on this device.
+    static func setEmojiStatus(_ status: PeerEmojiStatus?, accountPeerId: PeerId) {
+        let stored = StoredEmojiStatus(status: status)
+        if let data = try? JSONEncoder().encode(stored) {
+            UserDefaults.standard.set(data, forKey: AstraLocalPremium.emojiStatusKey(accountPeerId))
+        }
+        let _ = AstraLocalPremium.emojiStatuses.modify { current in
+            var current = current
+            current[accountPeerId] = .some(stored)
+            return current
+        }
+    }
+
+    /// `user` with the emoji status picked on this device, when Local Premium shows it as Premium.
+    static func applyingEmojiStatus(_ user: TelegramUser) -> TelegramUser {
+        guard AstraLocalPremium.isLocalOnly(user), let stored = AstraLocalPremium.loadedEmojiStatus(accountPeerId: user.id), stored.status != user.emojiStatus else {
+            return user
+        }
+        return user.withUpdatedEmojiStatus(stored.status)
+    }
 }
