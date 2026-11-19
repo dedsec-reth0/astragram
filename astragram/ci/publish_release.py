@@ -11,7 +11,8 @@ The IPA has no API credentials in it (every user enters their own in the app), s
 * The AltStore/SideStore source (source.json) lives as an asset of the pre-release `sidestore-source`, so its URL never
   changes: https://github.com/<repo>/releases/download/sidestore-source/source.json
   AltStore shows "Update" when the source lists a newer build than the installed one.
-* What a build brings is written in astragram/WHATSNEW.md; the release and the source show it.
+* What a build brings is written in astragram/WHATSNEW.md; the release and the source show only its lines that the
+  latest release does not have yet, so an update never repeats what came before.
 * The source lists every released build, newest first, so AltStore can offer any of them. The list is read from
   the releases themselves each time, so it cannot lose a build.
 * `--refresh-source` writes the source again (after its look or texts change), and `--notes` puts the text of
@@ -102,6 +103,17 @@ def read_notes(path, fallback):
     except OSError:
         text = ''
     return text or fallback
+
+
+def only_new(notes, repo):
+    """The lines of `notes` that the latest published release does not have yet: WHATSNEW.md keeps growing, and an
+    update shows only what this build adds. Empty when every line is already published."""
+    result = gh('api', 'repos/{}/releases/latest'.format(repo), '--jq', '.body', check=False)
+    if result.returncode != 0:
+        return notes
+    published = {line.strip() for line in result.stdout.replace('\r\n', '\n').split('\n') if line.strip()}
+    lines = [line for line in notes.split('\n') if line.strip() and line.strip() not in published]
+    return '\n'.join(lines).strip()
 
 
 def load_source(repo, workdir):
@@ -268,7 +280,8 @@ def main():
     download_url = 'https://github.com/{}/releases/download/{}/{}'.format(repo, tag, asset_name)
     source_url = 'https://github.com/{}/releases/download/{}/source.json'.format(repo, SOURCE_TAG)
     commit_title = subprocess.run(['git', 'log', '-1', '--pretty=%s'], capture_output=True, text=True).stdout.strip()
-    whats_new = read_notes(WHATSNEW_PATH, commit_title)
+    # Only what is new since the latest release; the commit title when nothing in WHATSNEW.md is.
+    whats_new = only_new(read_notes(WHATSNEW_PATH, ''), repo) or commit_title
 
     # The app's update alert shows the first line of the release text, so what is new comes first.
     notes = '''{whats_new}
