@@ -785,7 +785,17 @@ private func astraEnqueuePreparedMessages(account: Account, peerId: PeerId, mess
     if astraMessages.isEmpty {
         return .single([])
     }
-    AstraGhostMode.didSendMessage(account: account, peerId: peerId)
+    let astraScheduled = astraMessages.allSatisfy { message -> Bool in
+        let attributes: [MessageAttribute]
+        switch message {
+        case let .message(_, messageAttributes, _, _, _, _, _, _, _, _):
+            attributes = messageAttributes
+        case let .forward(_, _, _, messageAttributes, _):
+            attributes = messageAttributes
+        }
+        return attributes.contains(where: { $0 is OutgoingScheduleInfoMessageAttribute })
+    }
+    AstraGhostMode.didSendMessage(account: account, peerId: peerId, scheduled: astraScheduled)
     let signal: Signal<[(Bool, EnqueueMessage)], NoError>
     if let transformOutgoingMessageMedia = account.transformOutgoingMessageMedia {
         signal = opportunisticallyTransformOutgoingMedia(network: account.network, postbox: account.postbox, transformOutgoingMessageMedia: transformOutgoingMessageMedia, messages: astraMessages, userInteractive: true)

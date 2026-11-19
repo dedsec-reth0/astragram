@@ -172,7 +172,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         saveDeletedInChannels: true,
         keepSelfDestructingMedia: true,
         markReadAfterReaction: true,
-        sendViaSchedule: false,
+        sendViaSchedule: true,
         hideBlockedUsersMessages: false,
         removeCopyRestrictions: true,
         allowScreenshots: true,
@@ -572,6 +572,16 @@ public final class AstraGramSettings {
                 let key = AstraSecretStore.read() ?? ""
                 let _ = AstraGramSettings.storedApiKey.swap(key)
                 value.aiApiKey = key
+            }
+            // "Send via schedule" is on by default since 1.0.11: without it ghost mode shows the account online after
+            // every message. Turned on once for settings saved before; the user can turn it off again.
+            let sendViaScheduleMigrationKey = "astragram.migration.sendViaScheduleOn"
+            if !AstraGramSettings.defaults.bool(forKey: sendViaScheduleMigrationKey) {
+                value.sendViaSchedule = true
+                if let migratedData = AstraGramSettings.encodeForStorage(value) {
+                    AstraGramSettings.defaults.set(migratedData, forKey: AstraGramSettings.defaultsKey)
+                }
+                AstraGramSettings.defaults.set(true, forKey: sendViaScheduleMigrationKey)
             }
             return value
         }

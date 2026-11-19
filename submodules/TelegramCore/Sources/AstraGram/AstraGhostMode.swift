@@ -125,9 +125,14 @@ public enum AstraGhostMode {
     }
 
     /// Called when the user sends a message: with "mark read after send" on, the chat's read state is pushed once.
-    static func didSendMessage(account: Account, peerId: PeerId) {
+    /// Not for a message sent via schedule while the online status is hidden: reading a chat shows the account online,
+    /// which is what sending via schedule avoids.
+    static func didSendMessage(account: Account, peerId: PeerId, scheduled: Bool) {
         let settings = AstraGramSettings.current
         guard settings.hideReadReceipts && settings.markReadAfterSend else {
+            return
+        }
+        if scheduled && settings.hideOnlineStatus {
             return
         }
         AstraGhostMode.pushReadStateOnce(account: account, peerId: peerId)
