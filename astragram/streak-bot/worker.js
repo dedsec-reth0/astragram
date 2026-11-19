@@ -138,6 +138,34 @@ async function handleSync(request, env) {
   return json({ restores: (restores.results || []).map((r) => ({ friend: r.friend_id, day: r.day })) });
 }
 
+// The AstraGram badge. Telegram drops invisible characters from names, so the badge cannot ride in the name: an app
+// with the badge on says so here, and every AstraGram with the badge on gets the whole list back (no contacts are
+// sent). A badge nobody refreshed in BADGE_DAYS is dropped.
+const BADGE_DAYS = 45;
+const MAX_BADGES = 50000;
+
+async function handleBadge(request, env) {
+  const owner = await ownerFromRequest(request, env);
+  if (!owner) return json({ error: 'not linked' }, 401);
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'bad json' }, 400);
+  }
+  const t = now();
+  if (!body.show) {
+    await env.DB.prepare('DELETE FROM badges WHERE tg_id = ?').bind(owner.tg_id).run();
+    return json({ users: [] });
+  }
+  // A badge-only owner never syncs streaks: this keeps it from being taken for stale.
+  await env.DB.prepare('UPDATE owners SET last_sync = ? WHERE token_hash = ? AND last_sync < ?').bind(t, owner.token_hash, t - 86400).run();
+  await env.DB.prepare('INSERT INTO badges (tg_id, updated_at) VALUES (?, ?) ON CONFLICT (tg_id) DO UPDATE SET updated_at = excluded.updated_at')
+    .bind(owner.tg_id, t).run();
+  const rows = (await env.DB.prepare('SELECT tg_id FROM badges WHERE updated_at >= ? LIMIT ?').bind(t - BADGE_DAYS * 86400, MAX_BADGES).all()).results || [];
+  return json({ users: rows.map((r) => r.tg_id) });
+}
+
 async function handleUnlink(request, env) {
   const owner = await ownerFromRequest(request, env);
   if (!owner) return json({ ok: true });
@@ -145,6 +173,7 @@ async function handleUnlink(request, env) {
     env.DB.prepare('DELETE FROM owners WHERE tg_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM pairs WHERE owner_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM restore_requests WHERE owner_id = ?').bind(owner.tg_id),
+    env.DB.prepare('DELETE FROM badges WHERE tg_id = ?').bind(owner.tg_id),
   ]);
   return json({ ok: true });
 }
@@ -318,6 +347,7 @@ async function remind(env) {
     env.DB.prepare('DELETE FROM pairs WHERE updated_at < ?').bind(stale),
     env.DB.prepare('DELETE FROM restore_requests WHERE created_at < ?').bind(t - 3 * 86400),
     env.DB.prepare('DELETE FROM owners WHERE last_sync < ? AND created_at < ?').bind(stale, stale),
+    env.DB.prepare('DELETE FROM badges WHERE updated_at < ?').bind(t - BADGE_DAYS * 86400),
   ]);
 }
 
@@ -346,6 +376,7 @@ export default {
     const url = new URL(request.url);
     if (request.method === 'POST' && url.pathname === '/tg') return handleTelegram(request, env);
     if (request.method === 'POST' && url.pathname === '/api/sync') return handleSync(request, env);
+    if (request.method === 'POST' && url.pathname === '/api/badge') return handleBadge(request, env);
     if (request.method === 'POST' && url.pathname === '/api/unlink') return handleUnlink(request, env);
     if (url.pathname === '/setup') return handleSetup(url, env);
     if (url.pathname === '/') return new Response('AstraGram streak bot', { headers: { 'content-type': 'text/plain; charset=utf-8' } });

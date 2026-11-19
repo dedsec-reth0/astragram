@@ -40,3 +40,9 @@ CREATE TABLE IF NOT EXISTS restore_requests (
   created_at INTEGER NOT NULL,
   PRIMARY KEY (owner_id, friend_id, day)
 );
+
+-- AstraGram users who show the AstraGram badge: other AstraGram users draw it beside their names.
+CREATE TABLE IF NOT EXISTS badges (
+  tg_id INTEGER PRIMARY KEY,
+  updated_at INTEGER NOT NULL
+);

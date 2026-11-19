@@ -167,12 +167,19 @@ public enum AstraStreakBot {
     }
 
     private static func request(path: String, token: String, body: [String: Any], completion: @escaping ([String: Any]?) -> Void) {
+        AstraStreakBot.request(path: path, token: token, body: body, statusCompletion: { object, _ in
+            completion(object)
+        })
+    }
+
+    /// `statusCompletion` also gets the HTTP status (0 without an answer).
+    private static func request(path: String, token: String, body: [String: Any], statusCompletion completion: @escaping ([String: Any]?, Int) -> Void) {
         var base = AstraStreakBot.serverURL
         while base.hasSuffix("/") {
             base.removeLast()
         }
         guard base.hasPrefix("https://"), let url = URL(string: base + path), let data = try? JSONSerialization.data(withJSONObject: body) else {
-            completion(nil)
+            completion(nil, 0)
             return
         }
         var request = URLRequest(url: url, timeoutInterval: 30.0)
@@ -183,11 +190,38 @@ public enum AstraStreakBot {
         URLSession.shared.dataTask(with: request, completionHandler: { data, response, _ in
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             if status == 200, let data = data, let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
-                completion(object)
+                completion(object, status)
             } else {
-                completion(nil)
+                completion(nil, status)
             }
         }).resume()
+    }
+
+    enum BadgeResult {
+        /// The Telegram IDs of everyone who shows the badge.
+        case users(Set<Int64>)
+        /// The server does not know the token (Start not pressed yet, or the link expired).
+        case notLinked
+        case failed
+    }
+
+    /// Tells the server whether this account shows the AstraGram badge; with it on, gets back everyone who shows it.
+    static func badge(accountPeerId: EnginePeer.Id, show: Bool, completion: @escaping (BadgeResult) -> Void) {
+        guard AstraStreakBot.isAvailable, let token = AstraStreakBot.token(accountPeerId: accountPeerId) else {
+            completion(.notLinked)
+            return
+        }
+        AstraStreakBot.request(path: "/api/badge", token: token, body: ["show": show], statusCompletion: { object, status in
+            if status == 401 {
+                completion(.notLinked)
+                return
+            }
+            guard let object = object, let users = object["users"] as? [NSNumber] else {
+                completion(.failed)
+                return
+            }
+            completion(.users(Set(users.map { $0.int64Value })))
+        })
     }
 
     /// Sends the numbers of the streaks; returns the days the other people asked to restore in the bot, or nil when the
@@ -580,7 +614,9 @@ public func astraStreakController(context: AccountContext, peerId: EnginePeer.Id
         },
         unlinkBot: {
             let isRussian = astraIsRussian(context)
-            showAlert(title: isRussian ? "Отключить бота?" : "Disconnect the bot?", text: isRussian ? "AstraGram перестанет отправлять боту числа огоньков, а бот удалит то, что о вас хранил." : "AstraGram stops sending the bot the numbers of your streaks, and the bot deletes what it kept about you.", actionTitle: isRussian ? "Отключить" : "Disconnect", destructive: true, action: {
+            showAlert(title: isRussian ? "Отключить бота?" : "Disconnect the bot?", text: isRussian ? "AstraGram перестанет отправлять боту числа огоньков, а бот удалит то, что о вас хранил. Значок AstraGram работает через бота, поэтому тоже выключится." : "AstraGram stops sending the bot the numbers of your streaks, and the bot deletes what it kept about you. The AstraGram badge works through the bot, so it is turned off too.", actionTitle: isRussian ? "Отключить" : "Disconnect", destructive: true, action: {
+                // The badge needs the bot: left on, it would connect the bot again.
+                AstraGramSettings.update { $0.astraBadge = false }
                 AstraStreakBot.unlink(accountPeerId: accountPeerId)
                 botLinked.set(false)
             })
