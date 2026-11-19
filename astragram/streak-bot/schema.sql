@@ -51,6 +51,31 @@ CREATE TABLE IF NOT EXISTS app_state (
   updated_at INTEGER NOT NULL DEFAULT 0
 );
 
+-- Small key/value store for the admin's state (awaiting a post, the pending post reference).
+CREATE TABLE IF NOT EXISTS kv (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+-- Tech support. A user's message is forwarded to the admin; this maps the forwarded message to the user, so the
+-- admin's reply to it is relayed back. One row per forwarded message.
+CREATE TABLE IF NOT EXISTS support (
+  admin_msg_id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+-- Broadcast queue: the admin's post is copied to each recipient. Drained in batches (webhook + the cron), so a large
+-- broadcast never exceeds a single invocation's limits.
+CREATE TABLE IF NOT EXISTS broadcast_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  chat_id INTEGER NOT NULL,
+  from_chat INTEGER NOT NULL,
+  msg_id INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
 -- AstraGram users who show the AstraGram badge: other AstraGram users draw it beside their names.
 CREATE TABLE IF NOT EXISTS badges (
   tg_id INTEGER PRIMARY KEY,
