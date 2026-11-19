@@ -359,6 +359,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // AstraGram: the remote availability check (covers the screen while blocked). Idempotent.
+        AstraGate.start()
         // AstraGram: nothing starts until the user has entered their API ID and hash.
         if !BuildConfig.astraHasApiCredentials(baseAppBundleId: Bundle.main.bundleIdentifier!) && !CommandLine.arguments.contains("--ui-test") {
             let window = UIWindow(frame: UIScreen.main.bounds)

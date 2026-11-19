@@ -166,6 +166,51 @@ async function handleBadge(request, env) {
   return json({ users: rows.map((r) => r.tg_id) });
 }
 
+// The app's launch gate. The app reads this at launch; when blocked it refuses to run and shows the message. The
+// state is set only through /api/control, which needs the owner token (APP_CONTROL_TOKEN, a Worker secret). Without
+// that secret the control endpoint does not exist and the app is never blocked.
+async function handleStatus(env) {
+  const row = await env.DB.prepare('SELECT blocked, message, message_en, url FROM app_state WHERE id = 1').first();
+  if (!row || !row.blocked) {
+    return json({ blocked: false });
+  }
+  return json({ blocked: true, message: row.message || '', messageEn: row.message_en || '', url: row.url || '' });
+}
+
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return out === 0;
+}
+
+async function handleControl(request, env) {
+  if (!env.APP_CONTROL_TOKEN) {
+    return json({ error: 'not found' }, 404);
+  }
+  const auth = request.headers.get('authorization') || '';
+  const match = auth.match(/^Bearer (.+)$/);
+  if (!match || !timingSafeEqual(match[1], env.APP_CONTROL_TOKEN)) {
+    return json({ error: 'forbidden' }, 403);
+  }
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'bad json' }, 400);
+  }
+  const blocked = body.blocked ? 1 : 0;
+  const message = String(body.message || '').slice(0, 2000);
+  const messageEn = String(body.messageEn || '').slice(0, 2000);
+  const url = String(body.url || '').slice(0, 500);
+  await env.DB.prepare(
+    `INSERT INTO app_state (id, blocked, message, message_en, url, updated_at) VALUES (1, ?, ?, ?, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET blocked = excluded.blocked, message = excluded.message,
+       message_en = excluded.message_en, url = excluded.url, updated_at = excluded.updated_at`
+  ).bind(blocked, message, messageEn, url, now()).run();
+  return json({ ok: true, blocked: !!blocked });
+}
+
 async function handleUnlink(request, env) {
   const owner = await ownerFromRequest(request, env);
   if (!owner) return json({ ok: true });
@@ -375,6 +420,8 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === 'POST' && url.pathname === '/tg') return handleTelegram(request, env);
+    if (request.method === 'GET' && url.pathname === '/api/status') return handleStatus(env);
+    if (request.method === 'POST' && url.pathname === '/api/control') return handleControl(request, env);
     if (request.method === 'POST' && url.pathname === '/api/sync') return handleSync(request, env);
     if (request.method === 'POST' && url.pathname === '/api/badge') return handleBadge(request, env);
     if (request.method === 'POST' && url.pathname === '/api/unlink') return handleUnlink(request, env);

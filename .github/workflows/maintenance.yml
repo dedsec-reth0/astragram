@@ -1,0 +1,68 @@
+# Flips the app's remote availability on the streak-bot server. Run from the Actions tab ("Run workflow"), or Claude
+# triggers it on request. Needs the repository secret APP_CONTROL_TOKEN (any strong random string); the same secret is
+# deployed to the Worker by the Streak Bot workflow. Without it this fails and the app stays allowed.
+name: Maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      state:
+        description: 'App state for everyone'
+        type: choice
+        required: true
+        default: 'allow'
+        options:
+          - allow
+          - block
+      message_ru:
+        description: 'Message shown while blocked (Russian)'
+        type: string
+        required: false
+        default: 'Приложение больше недоступно. Следите за новостями.'
+      message_en:
+        description: 'Message shown while blocked (English)'
+        type: string
+        required: false
+        default: 'This app is no longer available. Watch for news.'
+      url:
+        description: 'Optional link opened by the button (e.g. a news channel)'
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  group: maintenance
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  set:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      APP_CONTROL_TOKEN: ${{ secrets.APP_CONTROL_TOKEN }}
+      SERVER: https://astragram-streak-bot.dedsec-reth0.workers.dev
+    steps:
+      - name: Apply
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_CONTROL_TOKEN:-}" ]; then
+            echo "::error::APP_CONTROL_TOKEN secret is not set; add it in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          if [ "${{ inputs.state }}" = "block" ]; then BLOCKED=true; else BLOCKED=false; fi
+          BODY=$(jq -nc --argjson blocked "$BLOCKED" \
+            --arg message "${{ inputs.message_ru }}" \
+            --arg messageEn "${{ inputs.message_en }}" \
+            --arg url "${{ inputs.url }}" \
+            '{blocked:$blocked, message:$message, messageEn:$messageEn, url:$url}')
+          CODE=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X POST "$SERVER/api/control" \
+            -H "Authorization: Bearer $APP_CONTROL_TOKEN" -H 'content-type: application/json' \
+            --data "$BODY")
+          echo "HTTP $CODE"
+          cat /tmp/resp.json
+          echo
+          [ "$CODE" = "200" ] || { echo "::error::Control request failed (HTTP $CODE)"; exit 1; }
+          echo "### App is now: ${{ inputs.state }}" >> "$GITHUB_STEP_SUMMARY"

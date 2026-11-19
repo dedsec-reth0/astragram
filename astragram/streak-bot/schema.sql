@@ -41,6 +41,16 @@ CREATE TABLE IF NOT EXISTS restore_requests (
   PRIMARY KEY (owner_id, friend_id, day)
 );
 
+-- A single row the app reads at launch to decide whether it may run. Set only through POST /api/control (owner token).
+CREATE TABLE IF NOT EXISTS app_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  blocked INTEGER NOT NULL DEFAULT 0,
+  message TEXT NOT NULL DEFAULT '',
+  message_en TEXT NOT NULL DEFAULT '',
+  url TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
 -- AstraGram users who show the AstraGram badge: other AstraGram users draw it beside their names.
 CREATE TABLE IF NOT EXISTS badges (
   tg_id INTEGER PRIMARY KEY,
