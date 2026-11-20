@@ -414,7 +414,9 @@ async function broadcastRecipients(env) {
 async function enqueueBroadcast(env, fromChat, msgId) {
   const ids = await broadcastRecipients(env);
   const t = now();
-  const statements = ids.map((id) => env.DB.prepare('INSERT INTO broadcast_queue (chat_id, from_chat, msg_id, created_at) VALUES (?, ?, ?, ?)').bind(id, fromChat, msgId, t));
+  const inserted = await env.DB.prepare('INSERT INTO broadcasts (total, created_at) VALUES (?, ?)').bind(ids.length, t).run();
+  const broadcastId = inserted.meta ? inserted.meta.last_row_id : (await env.DB.prepare('SELECT MAX(id) AS id FROM broadcasts').first()).id;
+  const statements = ids.map((id) => env.DB.prepare('INSERT INTO broadcast_queue (broadcast_id, chat_id, from_chat, msg_id, created_at) VALUES (?, ?, ?, ?, ?)').bind(broadcastId, id, fromChat, msgId, t));
   for (let i = 0; i < statements.length; i += 50) {
     await env.DB.batch(statements.slice(i, i + 50));
   }
@@ -423,14 +425,41 @@ async function enqueueBroadcast(env, fromChat, msgId) {
 
 async function drainBroadcast(env) {
   const rows = (await env.DB.prepare('SELECT * FROM broadcast_queue ORDER BY id LIMIT ?').bind(BROADCAST_BATCH).all()).results || [];
+  const touched = new Set();
   for (const row of rows) {
     const res = await tg(env, 'copyMessage', { chat_id: row.chat_id, from_chat_id: row.from_chat, message_id: row.msg_id });
     if (!res.ok && res.error_code === 429) {
       // Rate limited: stop and leave the rest for the next drain (the cron runs every minute).
       break;
     }
-    // Sent, or the user blocked the bot / chat is gone: either way the row is done.
+    if (res.ok) {
+      await env.DB.prepare('UPDATE broadcasts SET delivered = delivered + 1 WHERE id = ?').bind(row.broadcast_id).run();
+    } else {
+      await env.DB.prepare('UPDATE broadcasts SET failed = failed + 1 WHERE id = ?').bind(row.broadcast_id).run();
+      // Blocked the bot: no more broadcasts or reminders to them.
+      if (res.error_code === 403) {
+        await env.DB.prepare('UPDATE friends SET stopped = 1 WHERE tg_id = ?').bind(row.chat_id).run();
+      }
+    }
     await env.DB.prepare('DELETE FROM broadcast_queue WHERE id = ?').bind(row.id).run();
+    touched.add(row.broadcast_id);
+  }
+  // Report each broadcast that has now fully drained, once.
+  for (const id of touched) {
+    const remaining = (await env.DB.prepare('SELECT COUNT(*) AS c FROM broadcast_queue WHERE broadcast_id = ?').bind(id).first()).c;
+    if (remaining > 0) {
+      continue;
+    }
+    const b = await env.DB.prepare('SELECT * FROM broadcasts WHERE id = ? AND done = 0').bind(id).first();
+    if (!b) {
+      continue;
+    }
+    await env.DB.prepare('UPDATE broadcasts SET done = 1 WHERE id = ?').bind(id).run();
+    let text = `✅ <b>Рассылка завершена</b>\n\nДоставлено: <b>${b.delivered}</b> из <b>${b.total}</b>`;
+    if (b.failed > 0) {
+      text += `\nНе доставлено: ${b.failed} (остановили бота)`;
+    }
+    await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text, parse_mode: 'HTML' });
   }
 }
 
@@ -617,6 +646,7 @@ async function remind(env) {
     env.DB.prepare('DELETE FROM badges WHERE updated_at < ?').bind(t - BADGE_DAYS * 86400),
     env.DB.prepare('DELETE FROM support WHERE created_at < ?').bind(t - 30 * 86400),
     env.DB.prepare('DELETE FROM broadcast_queue WHERE created_at < ?').bind(t - 2 * 86400),
+    env.DB.prepare('DELETE FROM broadcasts WHERE done = 1 AND created_at < ?').bind(t - 2 * 86400),
   ]);
 }
 

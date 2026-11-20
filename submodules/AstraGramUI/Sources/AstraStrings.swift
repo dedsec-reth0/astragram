@@ -27,7 +27,7 @@ public struct AstraStrings {
     public var hideTyping: String { t("Не отправлять «печатает»", "Don't send typing status") }
     public var hideContents: String { t("Не отмечать прослушивание голосовых и кружков", "Don't mark voice and video messages as played") }
     public var markReadAfterSend: String { t("Прочитать при отправке ответа", "Mark as read when replying") }
-    public var markReadAfterSendFooter: String { t("Когда вы отправляете сообщение в чат, его входящие сообщения отмечаются прочитанными у собеседника, даже если прочтение скрыто.", "When you send a message to a chat, its incoming messages are marked as read for the other side, even with read receipts hidden.") }
+    public var markReadAfterSendFooter: String { t("Когда вы отправляете сообщение в чат, его входящие сообщения отмечаются прочитанными у собеседника, даже если прочтение скрыто. Не работает вместе с «Отправлять через отложку»: прочтение показало бы вас «в сети».", "When you send a message to a chat, its incoming messages are marked as read for the other side, even with read receipts hidden. Not used with \"Send via schedule\": reading would show you online.") }
 
     // Anti-delete
     public var antiDeleteHeader: String { t("ИСТОРИЯ СООБЩЕНИЙ", "MESSAGE HISTORY") }
@@ -148,7 +148,7 @@ public struct AstraStrings {
     public var ghostButtonHint: String { t("Кнопка с призраком в шапке экрана «Чаты» включает и выключает весь режим призрака.", "The ghost button at the top of the Chats screen turns the whole Ghost Mode on and off.") }
     public var markReadAfterReaction: String { t("Прочитать при реакции и голосовании", "Mark as read when reacting or voting") }
     public var sendViaSchedule: String { t("Отправлять через отложку", "Send via schedule") }
-    public var sendViaScheduleFooter: String { t("Сообщения отправляются как отложенные на несколько секунд вперёд, поэтому отправка не показывает вас «в сети»: сообщение появится в чате через 12 секунд. Без этого Telegram показывает вас «в сети» после каждого сообщения. Работает, когда включено «Не отправлять «в сети»»; тогда же не отправляется и «печатает…».", "Messages are sent as scheduled a few seconds ahead, so sending does not show you online: a message appears in the chat after 12 seconds. Without it Telegram shows you online after every message. Works while \"Don't send online status\" is on; typing is not sent then either.") }
+    public var sendViaScheduleFooter: String { t("Сообщения отправляются как отложенные на несколько секунд вперёд, поэтому отправка не показывает вас «в сети»: сообщение появится в чате через 12 секунд (с медиа — дольше). Без этого Telegram показывает вас «в сети» после каждого сообщения. Работает, когда включено «Не отправлять «в сети»»; тогда же не отправляется и «печатает…».", "Messages are sent as scheduled a few seconds ahead, so sending does not show you online: a message appears in the chat after 12 seconds (longer with media). Without it Telegram shows you online after every message. Works while \"Don't send online status\" is on; typing is not sent then either.") }
     public var privacyHeader: String { t("ОГРАНИЧЕНИЯ И ПРИВАТНОСТЬ", "RESTRICTIONS AND PRIVACY") }
     public var removeCopyRestrictions: String { t("Снять запрет копирования", "Remove copy restrictions") }
     public var allowScreenshots: String { t("Разрешить скриншоты", "Allow screenshots") }

@@ -70,9 +70,20 @@ CREATE TABLE IF NOT EXISTS support (
 -- broadcast never exceeds a single invocation's limits.
 CREATE TABLE IF NOT EXISTS broadcast_queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  broadcast_id INTEGER NOT NULL DEFAULT 0,
   chat_id INTEGER NOT NULL,
   from_chat INTEGER NOT NULL,
   msg_id INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+-- One row per broadcast, so the admin gets a delivered/failed report once it has drained.
+CREATE TABLE IF NOT EXISTS broadcasts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  total INTEGER NOT NULL,
+  delivered INTEGER NOT NULL DEFAULT 0,
+  failed INTEGER NOT NULL DEFAULT 0,
+  done INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
 

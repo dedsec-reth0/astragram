@@ -3998,6 +3998,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 if message.adAttribute != nil {
                     return .none
                 }
+                // A message kept after deletion is gone on the server; the context menu already blocks reply to it.
+                if message.astraDeletedAt != nil {
+                    return .none
+                }
                 if !message.flags.contains(.Incoming) {
                     if !message.flags.intersection([.Failed, .Sending, .Unsent]).isEmpty {
                         return .none
@@ -9316,7 +9320,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
     /// AstraGram ghost mode: whether "Send via schedule" turns a regular send from this chat into a scheduled one.
     func astraSendsViaSchedule(scheduleTime: Int32?, postpone: Bool) -> Bool {
-        guard scheduleTime == nil, !postpone, AstraGramSettings.current.sendViaSchedule, AstraGramSettings.current.hideOnlineStatus, case let .peer(peerId) = self.chatLocation, peerId.namespace != Namespaces.Peer.SecretChat, peerId != self.context.account.peerId else {
+        // Not in paid-message chats: Telegram disables scheduling there (see `hasSchedule`), and scheduling would turn
+        // every send into a scheduled paid message.
+        guard scheduleTime == nil, !postpone, AstraGramSettings.current.sendViaSchedule, AstraGramSettings.current.hideOnlineStatus, self.presentationInterfaceState.sendPaidMessageStars == nil, case let .peer(peerId) = self.chatLocation, peerId.namespace != Namespaces.Peer.SecretChat, peerId != self.context.account.peerId else {
             return false
         }
         if case .scheduledMessages = self.presentationInterfaceState.subject {
