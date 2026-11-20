@@ -282,6 +282,10 @@ public func messageIsEligibleForLargeCustomEmoji(_ message: EngineMessage) -> Bo
 }
 
 public func canAddMessageReactions(message: EngineMessage) -> Bool {
+    // A message kept after deletion is gone on the server; a reaction to it would fail.
+    if message.astraDeletedAt != nil {
+        return false
+    }
     if message.id.namespace != Namespaces.Message.Cloud {
         return false
     }

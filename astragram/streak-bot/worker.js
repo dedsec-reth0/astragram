@@ -10,6 +10,26 @@
 const MAX_PAIRS = 300;
 const STALE_DAYS = 30;
 
+// The bot's admin: their private chat is the control panel and the support inbox. A plain Telegram user id (not a
+// secret): messaging someone needs them to have started the bot.
+const ADMIN_ID = 887825713;
+// How many messages one invocation sends, kept well under the Workers subrequest limit.
+const BROADCAST_BATCH = 25;
+
+function isAdmin(id) {
+  return id === ADMIN_ID;
+}
+
+async function kvGet(env, key) {
+  const row = await env.DB.prepare('SELECT value FROM kv WHERE key = ?').bind(key).first();
+  return row ? row.value : '';
+}
+
+async function kvSet(env, key, value) {
+  await env.DB.prepare('INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at')
+    .bind(key, String(value), now()).run();
+}
+
 async function sha256Hex(text) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -166,6 +186,51 @@ async function handleBadge(request, env) {
   return json({ users: rows.map((r) => r.tg_id) });
 }
 
+// The app's launch gate. The app reads this at launch; when blocked it refuses to run and shows the message. The
+// state is set only through /api/control, which needs the owner token (APP_CONTROL_TOKEN, a Worker secret). Without
+// that secret the control endpoint does not exist and the app is never blocked.
+async function handleStatus(env) {
+  const row = await env.DB.prepare('SELECT blocked, message, message_en, url FROM app_state WHERE id = 1').first();
+  if (!row || !row.blocked) {
+    return json({ blocked: false });
+  }
+  return json({ blocked: true, message: row.message || '', messageEn: row.message_en || '', url: row.url || '' });
+}
+
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return out === 0;
+}
+
+async function handleControl(request, env) {
+  if (!env.APP_CONTROL_TOKEN) {
+    return json({ error: 'not found' }, 404);
+  }
+  const auth = request.headers.get('authorization') || '';
+  const match = auth.match(/^Bearer (.+)$/);
+  if (!match || !timingSafeEqual(match[1], env.APP_CONTROL_TOKEN)) {
+    return json({ error: 'forbidden' }, 403);
+  }
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'bad json' }, 400);
+  }
+  const blocked = body.blocked ? 1 : 0;
+  const message = String(body.message || '').slice(0, 2000);
+  const messageEn = String(body.messageEn || '').slice(0, 2000);
+  const url = String(body.url || '').slice(0, 500);
+  await env.DB.prepare(
+    `INSERT INTO app_state (id, blocked, message, message_en, url, updated_at) VALUES (1, ?, ?, ?, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET blocked = excluded.blocked, message = excluded.message,
+       message_en = excluded.message_en, url = excluded.url, updated_at = excluded.updated_at`
+  ).bind(blocked, message, messageEn, url, now()).run();
+  return json({ ok: true, blocked: !!blocked });
+}
+
 async function handleUnlink(request, env) {
   const owner = await ownerFromRequest(request, env);
   if (!owner) return json({ ok: true });
@@ -242,6 +307,11 @@ async function handleMessage(env, message) {
     return;
   }
 
+  // The admin's chat is the control panel and the support inbox.
+  if (isAdmin(from.id)) {
+    if (await handleAdminMessage(env, message)) return;
+  }
+
   if (text === '/stop') {
     await env.DB.prepare('INSERT INTO friends (tg_id, started_at, stopped) VALUES (?, ?, 1) ON CONFLICT (tg_id) DO UPDATE SET stopped = 1').bind(from.id, t).run();
     await tg(env, 'sendMessage', { chat_id: from.id, text: ru ? 'Напоминания выключены. Включить снова: /start' : 'Reminders are off. Turn them on again: /start' });
@@ -252,13 +322,19 @@ async function handleMessage(env, message) {
     await tg(env, 'sendMessage', {
       chat_id: from.id,
       text: ru
-        ? 'Огонёк растёт, когда вы с собеседником каждый день пишете друг другу хотя бы по 3 сообщения. Пропущенный день можно восстановить на следующий день — до 5 раз в неделю. Если огонёк погаснет, всё начнётся заново.\n\n/streaks — мои огоньки\n/stop — выключить напоминания'
-        : 'A streak grows when you and the other person write at least 3 messages to each other every day. A missed day can be restored the next day — up to 5 times a week. If the streak goes out, it starts over.\n\n/streaks — my streaks\n/stop — turn reminders off',
+        ? 'Огонёк растёт, когда вы с собеседником каждый день пишете друг другу хотя бы по 3 сообщения. Пропущенный день можно восстановить на следующий день — до 5 раз в неделю. Если огонёк погаснет, всё начнётся заново.\n\n/streaks — мои огоньки\n/stop — выключить напоминания\n\nНужна помощь? Просто напишите сюда — сообщение попадёт в поддержку AstraGram, и вам ответят здесь.'
+        : 'A streak grows when you and the other person write at least 3 messages to each other every day. A missed day can be restored the next day — up to 5 times a week. If the streak goes out, it starts over.\n\n/streaks — my streaks\n/stop — turn reminders off\n\nNeed help? Just write here — your message reaches AstraGram support and they reply here.',
     });
     return;
   }
 
-  // /start, /streaks or anything else: the list.
+  // /start, /start f<id> and /streaks open the streak list; any other free-form message goes to support.
+  const isStreakEntry = text === '/streaks' || text === '/start' || /^\/start f\d{1,20}$/.test(text);
+  if (!isStreakEntry && !isAdmin(from.id)) {
+    await handleSupport(env, message);
+    return;
+  }
+
   await env.DB.prepare('INSERT INTO friends (tg_id, started_at, stopped) VALUES (?, ?, 0) ON CONFLICT (tg_id) DO UPDATE SET stopped = 0').bind(from.id, t).run();
   const invite = text.match(/^\/start f(\d{1,20})$/);
   if (invite) {
@@ -283,6 +359,9 @@ async function handleMessage(env, message) {
 async function handleCallback(env, callback) {
   const from = callback.from;
   const ru = isRussian(from);
+  if (isAdmin(from.id) && (callback.data || '').startsWith('bc:')) {
+    if (await handleAdminCallback(env, callback)) return;
+  }
   const match = (callback.data || '').match(/^r:(\d+)$/);
   let answer = ru ? 'Не получилось' : 'Could not do that';
   if (match) {
@@ -299,6 +378,223 @@ async function handleCallback(env, callback) {
     }
   }
   await tg(env, 'answerCallbackQuery', { callback_query_id: callback.id, text: answer, show_alert: true });
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Tech support and broadcasts
+
+// A user's message, forwarded to the admin once. Receipt is shown as a reaction on the user's message, not a reply,
+// so the chat stays clean. The admin answers by replying to the forwarded message (see handleAdminMessage).
+async function handleSupport(env, message) {
+  const from = message.from;
+  // Anyone who writes is reachable for broadcasts; never un-stop someone who used /stop.
+  await env.DB.prepare('INSERT INTO friends (tg_id, started_at, stopped) VALUES (?, ?, 0) ON CONFLICT (tg_id) DO NOTHING').bind(from.id, now()).run();
+  const fwd = await tg(env, 'forwardMessage', { chat_id: ADMIN_ID, from_chat_id: from.id, message_id: message.message_id });
+  let adminMsgId = fwd.ok && fwd.result ? fwd.result.message_id : null;
+  if (!adminMsgId) {
+    // Forwarding can be refused (privacy); fall back to a header plus a copy of the content.
+    const uname = from.username ? ` @${from.username}` : '';
+    await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text: `💬 ${cleanName(from.first_name)}${uname} (id ${from.id}):` });
+    const copied = await tg(env, 'copyMessage', { chat_id: ADMIN_ID, from_chat_id: from.id, message_id: message.message_id });
+    adminMsgId = copied.ok && copied.result ? copied.result.message_id : null;
+  }
+  if (!adminMsgId) {
+    return;
+  }
+  await env.DB.prepare('INSERT OR REPLACE INTO support (admin_msg_id, user_id, created_at) VALUES (?, ?, ?)').bind(adminMsgId, from.id, now()).run();
+  await tg(env, 'setMessageReaction', { chat_id: from.id, message_id: message.message_id, reaction: [{ type: 'emoji', emoji: '👀' }] });
+}
+
+// Everyone the bot can reach: people who started it and AstraGram users who linked it (the admin excluded).
+async function broadcastRecipients(env) {
+  const rows = (await env.DB.prepare('SELECT tg_id FROM friends WHERE stopped = 0 UNION SELECT tg_id FROM owners').all()).results || [];
+  return rows.map((r) => r.tg_id).filter((id) => id !== ADMIN_ID);
+}
+
+async function enqueueBroadcast(env, fromChat, msgId) {
+  const ids = await broadcastRecipients(env);
+  const t = now();
+  const inserted = await env.DB.prepare('INSERT INTO broadcasts (total, created_at) VALUES (?, ?)').bind(ids.length, t).run();
+  const broadcastId = inserted.meta ? inserted.meta.last_row_id : (await env.DB.prepare('SELECT MAX(id) AS id FROM broadcasts').first()).id;
+  const statements = ids.map((id) => env.DB.prepare('INSERT INTO broadcast_queue (broadcast_id, chat_id, from_chat, msg_id, created_at) VALUES (?, ?, ?, ?, ?)').bind(broadcastId, id, fromChat, msgId, t));
+  for (let i = 0; i < statements.length; i += 50) {
+    await env.DB.batch(statements.slice(i, i + 50));
+  }
+  return ids.length;
+}
+
+async function drainBroadcast(env) {
+  const rows = (await env.DB.prepare('SELECT * FROM broadcast_queue ORDER BY id LIMIT ?').bind(BROADCAST_BATCH).all()).results || [];
+  const touched = new Set();
+  for (const row of rows) {
+    const res = await tg(env, 'copyMessage', { chat_id: row.chat_id, from_chat_id: row.from_chat, message_id: row.msg_id });
+    if (!res.ok && res.error_code === 429) {
+      // Rate limited: stop and leave the rest for the next drain (the cron runs every minute).
+      break;
+    }
+    if (res.ok) {
+      await env.DB.prepare('UPDATE broadcasts SET delivered = delivered + 1 WHERE id = ?').bind(row.broadcast_id).run();
+    } else {
+      await env.DB.prepare('UPDATE broadcasts SET failed = failed + 1 WHERE id = ?').bind(row.broadcast_id).run();
+      // Blocked the bot: no more broadcasts or reminders to them.
+      if (res.error_code === 403) {
+        await env.DB.prepare('UPDATE friends SET stopped = 1 WHERE tg_id = ?').bind(row.chat_id).run();
+      }
+    }
+    await env.DB.prepare('DELETE FROM broadcast_queue WHERE id = ?').bind(row.id).run();
+    touched.add(row.broadcast_id);
+  }
+  // Report each broadcast that has now fully drained, once.
+  for (const id of touched) {
+    const remaining = (await env.DB.prepare('SELECT COUNT(*) AS c FROM broadcast_queue WHERE broadcast_id = ?').bind(id).first()).c;
+    if (remaining > 0) {
+      continue;
+    }
+    const b = await env.DB.prepare('SELECT * FROM broadcasts WHERE id = ? AND done = 0').bind(id).first();
+    if (!b) {
+      continue;
+    }
+    await env.DB.prepare('UPDATE broadcasts SET done = 1 WHERE id = ?').bind(id).run();
+    let text = `✅ <b>Рассылка завершена</b>\n\nДоставлено: <b>${b.delivered}</b> из <b>${b.total}</b>`;
+    if (b.failed > 0) {
+      text += `\nНе доставлено: ${b.failed} (остановили бота)`;
+    }
+    await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text, parse_mode: 'HTML' });
+  }
+}
+
+function adminPanel() {
+  return {
+    text: '🛠 <b>Панель администратора</b>\n\n• Ответьте <b>reply</b> на пересланное сообщение пользователя, чтобы написать ему.\n• «Новый пост» — рассылка всем.',
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: [
+      [{ text: '📢 Новый пост', callback_data: 'bc:new' }],
+      [{ text: '📊 Статистика', callback_data: 'bc:stats' }],
+    ] },
+  };
+}
+
+async function adminStats(env) {
+  const reach = (await broadcastRecipients(env)).length;
+  const owners = (await env.DB.prepare('SELECT COUNT(*) AS c FROM owners').first()).c;
+  const pairs = (await env.DB.prepare('SELECT COUNT(*) AS c FROM pairs').first()).c;
+  const queued = (await env.DB.prepare('SELECT COUNT(*) AS c FROM broadcast_queue').first()).c;
+  let text = `📊 <b>Статистика</b>\n\n👥 Подписчиков бота: <b>${reach}</b>\n🔥 Пользователей AstraGram: <b>${owners}</b>\n💬 Активных огоньков: <b>${pairs}</b>`;
+  if (queued) {
+    text += `\n\n📤 В очереди рассылки: <b>${queued}</b>`;
+  }
+  return { text, parse_mode: 'HTML' };
+}
+
+async function promptForPost(env) {
+  await kvSet(env, 'admin_state', 'await_post');
+  await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text: '📢 Пришлите пост одним сообщением — текст, фото, видео, что угодно. Покажу предпросмотр перед отправкой.\n\n/cancel — отмена.' });
+}
+
+async function confirmPost(env, message) {
+  await kvSet(env, 'admin_state', '');
+  await kvSet(env, 'pending_post', JSON.stringify({ from_chat: ADMIN_ID, msg_id: message.message_id }));
+  const count = (await broadcastRecipients(env)).length;
+  await tg(env, 'sendMessage', {
+    chat_id: ADMIN_ID,
+    text: `Отправить этот пост? Получателей: <b>${count}</b>.`,
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: [[
+      { text: `✅ Разослать`, callback_data: 'bc:send' },
+      { text: '✖️ Отмена', callback_data: 'bc:cancel' },
+    ]] },
+  });
+}
+
+// The admin's chat. Returns true when the message was handled (so no streak/support processing follows).
+async function handleAdminMessage(env, message) {
+  const text = (message.text || '').trim();
+
+  // A reply to a forwarded support message → relay it to that user.
+  if (message.reply_to_message) {
+    const row = await env.DB.prepare('SELECT user_id FROM support WHERE admin_msg_id = ?').bind(message.reply_to_message.message_id).first();
+    if (row) {
+      const res = await tg(env, 'copyMessage', { chat_id: row.user_id, from_chat_id: ADMIN_ID, message_id: message.message_id });
+      await tg(env, 'setMessageReaction', { chat_id: ADMIN_ID, message_id: message.message_id, reaction: res.ok ? [{ type: 'emoji', emoji: '👍' }] : [] });
+      if (!res.ok) {
+        await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text: '⚠️ Не доставлено — пользователь мог остановить бота.' });
+      }
+      return true;
+    }
+  }
+
+  if (text === '/start' || text === '/menu') {
+    await tg(env, 'setMyCommands', { scope: { type: 'chat', chat_id: ADMIN_ID }, commands: [
+      { command: 'post', description: '📢 Новый пост (рассылка)' },
+      { command: 'stats', description: '📊 Статистика' },
+      { command: 'menu', description: 'Панель администратора' },
+    ] });
+    await tg(env, 'sendMessage', { chat_id: ADMIN_ID, ...adminPanel() });
+    return true;
+  }
+  if (text === '/cancel') {
+    await kvSet(env, 'admin_state', '');
+    await kvSet(env, 'pending_post', '');
+    await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text: 'Отменено.' });
+    return true;
+  }
+  if (text === '/stats') {
+    await tg(env, 'sendMessage', { chat_id: ADMIN_ID, ...(await adminStats(env)) });
+    return true;
+  }
+  if (text === '/post') {
+    await promptForPost(env);
+    return true;
+  }
+
+  // Awaiting the post content.
+  if ((await kvGet(env, 'admin_state')) === 'await_post' && !text.startsWith('/')) {
+    await confirmPost(env, message);
+    return true;
+  }
+
+  // Let the shared commands run as usual for the admin too.
+  if (text === '/streaks' || text === '/help' || text === '/stop' || text.startsWith('/start ')) {
+    return false;
+  }
+
+  await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text: 'Ответьте (reply) на пересланное сообщение, чтобы написать пользователю.\n\n/post — рассылка\n/stats — статистика\n/menu — панель' });
+  return true;
+}
+
+async function handleAdminCallback(env, callback) {
+  const data = callback.data || '';
+  if (data === 'bc:new') {
+    await tg(env, 'answerCallbackQuery', { callback_query_id: callback.id });
+    await promptForPost(env);
+    return true;
+  }
+  if (data === 'bc:stats') {
+    await tg(env, 'answerCallbackQuery', { callback_query_id: callback.id });
+    await tg(env, 'sendMessage', { chat_id: ADMIN_ID, ...(await adminStats(env)) });
+    return true;
+  }
+  if (data === 'bc:cancel') {
+    await kvSet(env, 'pending_post', '');
+    await tg(env, 'answerCallbackQuery', { callback_query_id: callback.id, text: 'Отменено' });
+    await tg(env, 'editMessageText', { chat_id: ADMIN_ID, message_id: callback.message.message_id, text: '✖️ Рассылка отменена.' });
+    return true;
+  }
+  if (data === 'bc:send') {
+    const pendingRaw = await kvGet(env, 'pending_post');
+    if (!pendingRaw) {
+      await tg(env, 'answerCallbackQuery', { callback_query_id: callback.id, text: 'Пост не найден' });
+      return true;
+    }
+    const pending = JSON.parse(pendingRaw);
+    await kvSet(env, 'pending_post', '');
+    const count = await enqueueBroadcast(env, pending.from_chat, pending.msg_id);
+    await tg(env, 'answerCallbackQuery', { callback_query_id: callback.id, text: `Рассылаю: ${count}` });
+    await tg(env, 'editMessageText', { chat_id: ADMIN_ID, message_id: callback.message.message_id, text: `📢 Рассылка запущена. Получателей: ${count}.` });
+    await drainBroadcast(env);
+    return true;
+  }
+  return false;
 }
 
 async function handleTelegram(request, env) {
@@ -348,6 +644,9 @@ async function remind(env) {
     env.DB.prepare('DELETE FROM restore_requests WHERE created_at < ?').bind(t - 3 * 86400),
     env.DB.prepare('DELETE FROM owners WHERE last_sync < ? AND created_at < ?').bind(stale, stale),
     env.DB.prepare('DELETE FROM badges WHERE updated_at < ?').bind(t - BADGE_DAYS * 86400),
+    env.DB.prepare('DELETE FROM support WHERE created_at < ?').bind(t - 30 * 86400),
+    env.DB.prepare('DELETE FROM broadcast_queue WHERE created_at < ?').bind(t - 2 * 86400),
+    env.DB.prepare('DELETE FROM broadcasts WHERE done = 1 AND created_at < ?').bind(t - 2 * 86400),
   ]);
 }
 
@@ -375,6 +674,8 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === 'POST' && url.pathname === '/tg') return handleTelegram(request, env);
+    if (request.method === 'GET' && url.pathname === '/api/status') return handleStatus(env);
+    if (request.method === 'POST' && url.pathname === '/api/control') return handleControl(request, env);
     if (request.method === 'POST' && url.pathname === '/api/sync') return handleSync(request, env);
     if (request.method === 'POST' && url.pathname === '/api/badge') return handleBadge(request, env);
     if (request.method === 'POST' && url.pathname === '/api/unlink') return handleUnlink(request, env);
@@ -383,6 +684,12 @@ export default {
     return new Response('not found', { status: 404 });
   },
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(remind(env));
+    ctx.waitUntil((async () => {
+      // Every minute: move the broadcast queue along. Reminders and cleanup stay hourly (at minute 5, as before).
+      await drainBroadcast(env);
+      if (new Date(event.scheduledTime).getUTCMinutes() === 5) {
+        await remind(env);
+      }
+    })());
   },
 };

@@ -1450,7 +1450,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         })
                     })))
                 }
-                if astraMessage.flags.contains(.Incoming) && astraMessage.containsSecretMedia && AstraGramSettings.current.keepSelfDestructingMedia {
+                if astraMessage.flags.contains(.Incoming) && astraMessage.containsSecretMedia && AstraGramSettings.current.keepSelfDestructingMedia && astraMessage.id.peerId.namespace != Namespaces.Peer.SecretChat {
                     subItems.append(.action(ContextMenuActionItem(text: astraStrings.burnNow, textColor: .destructive, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Timer"), color: theme.actionSheet.destructiveActionTextColor)
                     }, action: { _, f in

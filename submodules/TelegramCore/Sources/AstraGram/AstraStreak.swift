@@ -168,6 +168,11 @@ public enum AstraStreak {
                 if message.flags.contains(.Failed) || message.flags.contains(.Unsent) {
                     continue
                 }
+                // A message kept in the chat after deletion is gone for everyone else, so it must not count, or this
+                // device's streak diverges from the other side's and from the bot.
+                if message.astraDeletedAt != nil {
+                    continue
+                }
                 if let day = AstraStreak.restoredDay(in: message.text) {
                     restored.insert(day)
                     continue
@@ -315,7 +320,10 @@ extension AstraMessageStore {
                 return EmptyDisposable
             }
         }
+        // Saving a deleted message or an edit fires changesPipe; the start days rarely change, so only re-emit (and
+        // re-run the per-streak compute downstream) when they actually do.
         return (read() |> then(self.changesPipe.signal() |> mapToSignal { _ in read() }))
+        |> distinctUntilChanged
     }
 
     /// Turns a streak on (from `startDay`) or off (nil). Turning it off forgets its restores.

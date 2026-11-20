@@ -10,6 +10,7 @@ binding = "DB"
 database_name = "astragram-streaks"
 database_id = "0ad7ab57-a36d-4672-92f2-0f9c86564334"
 
-# Every hour: evening reminders (by each AstraGram user's time zone) and removal of stale data.
+# Every minute: drain the broadcast queue. Evening reminders (by each AstraGram user's time zone) and removal of
+# stale data still run once an hour, at minute 5 (see the scheduled handler).
 [triggers]
-crons = ["5 * * * *"]
+crons = ["* * * * *"]
