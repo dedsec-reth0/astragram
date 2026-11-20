@@ -173,6 +173,8 @@ public struct AstraStrings {
     public var pluginsEmpty: String { t("Плагинов пока нет. Плагин — это файл .js с описанием в начале. Пример есть в документации AstraGram для iOS.", "No plugins yet. A plugin is a .js file with a header. See the AstraGram for iOS docs for an example.") }
     public var pluginsDelete: String { t("Удалить", "Delete") }
     public var pluginsInvalid: String { t("Не удалось загрузить плагин", "Could not load the plugin") }
+    public var pluginsNoSource: String { t("Буфер обмена пуст или iOS не дала его прочитать. Скопируйте код плагина и при запросе разрешите вставку.", "The clipboard is empty or iOS did not let AstraGram read it. Copy the plugin's code and allow pasting when asked.") }
+    public var pluginsNoHeader: String { t("Это не плагин AstraGram: в первых строках нет «// @id …». Пример — в разделе «Как писать плагины».", "This is not an AstraGram plugin: its first lines have no \"// @id …\". See Writing Plugins for an example.") }
     public var pluginsInstalledDone: String { t("Плагин установлен", "Plugin installed") }
     public var pluginsHelp: String { t("Как писать плагины", "Writing Plugins") }
     public var burnNow: String { t("Сжечь сейчас", "Burn Now") }

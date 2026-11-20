@@ -727,12 +727,15 @@ public func astraGramSettingsController(context: AccountContext, makeLinked: @es
 
     let statistics: Signal<AstraMessageStoreStatistics?, NoError> = .single(nil) |> then(store.statistics() |> map(Optional.init))
 
+    // The plugin list is part of the state, so the Plugins row's counter follows installs and switches made on the
+    // Plugins screen.
     let signal = combineLatest(queue: .mainQueue(),
         context.sharedContext.presentationData,
         AstraGramSettings.signal,
-        statistics
+        statistics,
+        AstraPluginManager.shared.plugins
     )
-    |> map { presentationData, settings, statistics -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, settings, statistics, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let strings = AstraStrings(presentationData.strings)
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(strings.title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: astraGramSettingsEntries(strings: strings, settings: settings, statistics: statistics), style: .blocks, animateChanges: true)
