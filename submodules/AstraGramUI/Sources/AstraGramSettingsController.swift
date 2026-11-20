@@ -231,8 +231,31 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         }
     }
 
+    // The list must be sorted by `<` (ItemListControllerNode diffs it that way and asserts it in debug builds), but newer
+    // options got ids out of display order. So `<` follows the display order below; an id missing from it goes last.
+    private static let displayOrder: [Int32: Int] = {
+        let ids: [Int32] = [
+            0, 1, 2, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 3, 4, 5,
+            20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 36, 37,
+            40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
+            60, 61, 62, 63, 64, 65, 73, 74, 75, 76, 77, 78, 66, 67, 68, 69, 70, 71, 72,
+            80, 81, 82, 85, 90, 91, 92, 100, 101, 102, 103, 104, 105, 106,
+            130, 139, 134, 133, 131, 132, 135, 136, 137, 138, 140, 141,
+            110, 111, 121, 112, 113, 114, 115, 119, 120, 122, 123, 124, 116, 117, 118, 199, 200
+        ]
+        var order: [Int32: Int] = [:]
+        for (index, id) in ids.enumerated() {
+            order[id] = index
+        }
+        return order
+    }()
+
+    private var displayIndex: Int {
+        return AstraGramSettingsEntry.displayOrder[self.stableId] ?? (100000 + Int(self.stableId))
+    }
+
     static func <(lhs: AstraGramSettingsEntry, rhs: AstraGramSettingsEntry) -> Bool {
-        return lhs.stableId < rhs.stableId
+        return lhs.displayIndex < rhs.displayIndex
     }
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
@@ -474,11 +497,11 @@ private func astraGramSettingsEntries(strings: AstraStrings, settings: AstraGram
 
     entries.append(.flag(id: 76, section: .extra, title: strings.showRegistrationDate, value: settings.showRegistrationDate, enabled: true, keyPath: \.showRegistrationDate))
     entries.append(.flag(id: 77, section: .extra, title: strings.localPremium, value: settings.localPremium, enabled: true, keyPath: \.localPremium))
+    entries.append(.footer(id: 78, section: .extra, text: strings.localPremiumFooter))
     entries.append(.header(id: 66, section: .notifications, text: strings.notificationsHeader))
     entries.append(.flag(id: 67, section: .notifications, title: strings.backgroundNotifications, value: settings.backgroundNotifications, enabled: true, keyPath: \.backgroundNotifications))
     entries.append(.flag(id: 68, section: .notifications, title: strings.keepAliveInBackground, value: settings.keepAliveInBackground, enabled: settings.backgroundNotifications, keyPath: \.keepAliveInBackground))
     entries.append(.footer(id: 69, section: .notifications, text: strings.backgroundNotificationsFooter))
-    entries.append(.footer(id: 78, section: .extra, text: strings.localPremiumFooter))
 
     entries.append(.translatorHeader(strings.translatorHeader))
     entries.append(.translator(strings.translatorSettings))

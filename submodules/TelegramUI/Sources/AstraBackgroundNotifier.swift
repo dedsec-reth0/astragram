@@ -147,7 +147,9 @@ final class AstraBackgroundNotifier {
         do {
             try BGTaskScheduler.shared.submit(request)
         } catch let error {
-            Logger.shared.log("AstraGram", "Could not schedule background refresh: \(error)")
+            // NSLog, not Logger.shared: this also runs when the app goes to the background before launch has set
+            // up the shared logger (for example on the API ID screen), where Logger.shared asserts.
+            NSLog("[AstraGram] Could not schedule background refresh: \(error)")
         }
     }
 
