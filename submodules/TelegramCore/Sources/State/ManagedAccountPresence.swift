@@ -23,6 +23,10 @@ private final class AccountPresenceManagerImpl {
     private var astraOwnPresenceDisposable: Disposable?
     private var astraSettingsDisposable: Disposable?
     private var astraOfflineTimer: SignalKitTimer?
+    // A safety net: while the online status is hidden and the app is in use, "offline" is repeated every 30 seconds,
+    // so an activity the server counts but the app does not answer cannot show the account online for longer.
+    private var astraKeepOfflineTimer: SignalKitTimer?
+    private var astraInUseDisposable: Disposable?
     private var astraLastImmediateOffline: Double = 0.0
     private var astraLastOwnPresenceMark: Double = 0.0
 
@@ -71,6 +75,31 @@ private final class AccountPresenceManagerImpl {
             }
             self.astraLastOwnPresenceMark = now
             self.astraMarkAsOnline()
+        })
+        self.astraInUseDisposable = (combineLatest(
+            shouldKeepOnlinePresence,
+            AstraGramSettings.signal
+            |> map { settings -> Bool in
+                return settings.hideOnlineStatus
+            }
+        )
+        |> map { inUse, hideOnline -> Bool in
+            return inUse && hideOnline
+        }
+        |> distinctUntilChanged
+        |> deliverOn(self.queue)).start(next: { [weak self] keepOffline in
+            guard let self else {
+                return
+            }
+            self.astraKeepOfflineTimer?.invalidate()
+            self.astraKeepOfflineTimer = nil
+            if keepOffline {
+                let timer = SignalKitTimer(timeout: 30.0, repeat: true, completion: { [weak self] in
+                    self?.astraSendOffline()
+                }, queue: self.queue)
+                self.astraKeepOfflineTimer = timer
+                timer.start()
+            }
         })
         // At launch with the online status hidden, and whenever hiding it is turned on.
         self.astraSettingsDisposable = (AstraGramSettings.signal
@@ -131,6 +160,8 @@ private final class AccountPresenceManagerImpl {
         self.astraOwnPresenceDisposable?.dispose()
         self.astraSettingsDisposable?.dispose()
         self.astraOfflineTimer?.invalidate()
+        self.astraKeepOfflineTimer?.invalidate()
+        self.astraInUseDisposable?.dispose()
     }
     
     private func updatePresence(_ isOnline: Bool) {

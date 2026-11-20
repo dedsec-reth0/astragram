@@ -24,13 +24,14 @@ public enum AstraGhostMode {
 
     private static let onlinePipe = ValuePipe<Void>()
 
-    /// Parts of the names of the requests after which the server shows the account online.
-    private static let onlineRequestParts: [String] = [
-        "messages.send", "messages.forward", "messages.read", "channels.read", "messages.startBot",
-        "messages.setTyping", "messages.setEncryptedTyping", "messages.editMessage", "messages.deleteMessages",
-        "channels.deleteMessages", "messages.getBotCallbackAnswer", "stories.send", "stories.readStories",
-        "stories.incrementStoryViews"
-    ]
+    /// Requests that only read: the server does not show the account online for them. Every other request (sending,
+    /// reading a chat, reacting, voting, reading mentions or reactions, editing, joining, viewing stories...) is
+    /// answered with "offline" while the online status is hidden. A list of the requests that show the account online
+    /// always missed some, so it is the other way round: what is not known to be a read counts as activity.
+    private static let readOnlyMethodPrefixes: [String] = ["get", "search", "check", "resolve", "export", "fetch", "received"]
+    private static let readOnlyNamespaces: [String] = ["help.", "langpack.", "updates.", "upload.", "auth.", "payments.get", "stats."]
+    /// Reads that the server still counts as activity.
+    private static let activeReads: [String] = ["messages.getMessagesViews", "messages.getBotCallbackAnswer", "stories.incrementStoryViews"]
 
     /// Whether the server shows the account online once the request named `name` is done.
     static func requestMarksOnline(_ name: String) -> Bool {
@@ -38,12 +39,21 @@ public enum AstraGhostMode {
         if name.contains("updateStatus") {
             return false
         }
-        for part in AstraGhostMode.onlineRequestParts {
-            if name.contains(part) {
-                return true
-            }
+        for active in AstraGhostMode.activeReads where name.hasPrefix(active) {
+            return true
         }
-        return false
+        for namespace in AstraGhostMode.readOnlyNamespaces where name.hasPrefix(namespace) {
+            return false
+        }
+        guard let dot = name.lastIndex(of: ".") else {
+            // Service messages (ping, msgs_ack, invokeWithLayer, initConnection...) are not activity.
+            return false
+        }
+        let method = name[name.index(after: dot)...].lowercased()
+        for prefix in AstraGhostMode.readOnlyMethodPrefixes where method.hasPrefix(prefix) {
+            return false
+        }
+        return true
     }
 
     /// Something has just made the server show the account online. With the online status hidden, the presence
