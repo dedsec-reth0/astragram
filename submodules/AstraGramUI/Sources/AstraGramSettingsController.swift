@@ -10,6 +10,7 @@ import AccountContext
 import UndoUI
 import BuildConfig
 import UniformTypeIdentifiers
+import AppBundle
 
 /// Sections of Telegram's own settings that the AstraGram screen links to.
 public enum AstraLinkedTelegramSettings {
@@ -53,6 +54,7 @@ private final class AstraGramSettingsArguments {
     let openApiCredentials: () -> Void
     let checkUpdates: () -> Void
     let openTool: (AstraGramSettingsButtonKind) -> Void
+    let openPage: (AstraGramSettingsPage) -> Void
 
     init(
         update: @escaping ((inout AstraGramSettingsValues) -> Void) -> Void,
@@ -65,7 +67,8 @@ private final class AstraGramSettingsArguments {
         unhideMessages: @escaping () -> Void,
         openApiCredentials: @escaping () -> Void,
         checkUpdates: @escaping () -> Void,
-        openTool: @escaping (AstraGramSettingsButtonKind) -> Void
+        openTool: @escaping (AstraGramSettingsButtonKind) -> Void,
+        openPage: @escaping (AstraGramSettingsPage) -> Void
     ) {
         self.update = update
         self.openDeletedMessages = openDeletedMessages
@@ -78,6 +81,7 @@ private final class AstraGramSettingsArguments {
         self.openApiCredentials = openApiCredentials
         self.checkUpdates = checkUpdates
         self.openTool = openTool
+        self.openPage = openPage
     }
 }
 
@@ -104,6 +108,109 @@ private enum AstraGramSettingsSection: Int32 {
     case tools
     case security
     case footerSection
+    // The main page.
+    case rootPrivacy
+    case rootLook
+    case rootExtras
+    case rootAbout
+    // The security page, in groups.
+    case securityLock
+    case securityInput
+    case securityTelegram
+    case backup
+
+    /// The page of the AstraGram settings this section is on.
+    var page: AstraGramSettingsPage {
+        switch self {
+        case .ghostMaster, .ghost, .ghostExtra:
+            return .ghost
+        case .antiDelete, .storage:
+            return .history
+        case .privacy, .dedsec:
+            return .privacy
+        case .security, .securityLock, .securityInput, .securityTelegram:
+            return .security
+        case .appearance, .view, .look, .extra:
+            return .appearance
+        case .chats, .filters, .media:
+            return .chats
+        case .notifications:
+            return .notifications
+        case .plugins, .tools, .translator:
+            return .tools
+        case .about, .backup, .onlineExceptions, .footerSection:
+            return .about
+        case .rootPrivacy, .rootLook, .rootExtras, .rootAbout:
+            return .root
+        }
+    }
+}
+
+/// The AstraGram settings are a main page that lists the parts, as Telegram's own Settings do, and a page per part.
+public enum AstraGramSettingsPage: Equatable {
+    case root
+    case ghost
+    case history
+    case privacy
+    case security
+    case appearance
+    case chats
+    case notifications
+    case tools
+    case about
+}
+
+/// What a row of the main page opens.
+private enum AstraGramSettingsRootTarget: Equatable {
+    case page(AstraGramSettingsPage)
+    case streaks
+    case plugins
+}
+
+/// The icons of the main page, drawn the way Telegram draws its settings icons: a white glyph on a colored rounded
+/// square with the same light gradient on top.
+private enum AstraGramSettingsIcons {
+    private static func render(glyph: UIImage?, color: UIColor) -> UIImage? {
+        let size = CGSize(width: 30.0, height: 30.0)
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            let bounds = CGRect(origin: CGPoint(), size: size)
+            let path = UIBezierPath(roundedRect: bounds, cornerRadius: 8.0)
+            path.addClip()
+            color.setFill()
+            path.fill()
+            UIImage(bundleImageName: "Item List/Icons/Gradient")?.draw(in: bounds, blendMode: .plusLighter, alpha: 1.0)
+            UIImage(bundleImageName: "Item List/Icons/Backdrop")?.draw(in: bounds, blendMode: .overlay, alpha: 1.0)
+            if let glyph {
+                let tinted = glyph.withTintColor(.white, renderingMode: .alwaysOriginal)
+                let glyphSize = glyph.size
+                tinted.draw(in: CGRect(x: floor((size.width - glyphSize.width) / 2.0), y: floor((size.height - glyphSize.height) / 2.0), width: glyphSize.width, height: glyphSize.height))
+            }
+        }
+    }
+
+    private static func bundled(_ name: String, _ color: UIColor) -> UIImage? {
+        return render(glyph: UIImage(bundleImageName: "Item List/Icons/\(name)"), color: color)
+    }
+
+    private static func symbol(_ name: String, _ color: UIColor) -> UIImage? {
+        let configuration = UIImage.SymbolConfiguration(pointSize: 16.0, weight: .semibold)
+        return render(glyph: UIImage(systemName: name, withConfiguration: configuration), color: color)
+    }
+
+    // Telegram's settings palette.
+    static let ghost = bundled("NoForward", UIColor(rgb: 0x5E5CE6))
+    static let history = bundled("Delete", UIColor(rgb: 0xFF9F0A))
+    static let privacy = bundled("Privacy", UIColor(rgb: 0x8E8E93))
+    static let security = bundled("FaceId", UIColor(rgb: 0x34C759))
+    static let appearance = bundled("Brush", UIColor(rgb: 0x32ADE6))
+    static let chats = bundled("Chat", UIColor(rgb: 0x0A84FF))
+    static let notifications = bundled("Notifications", UIColor(rgb: 0xFF453A))
+    static let streaks = symbol("flame.fill", UIColor(rgb: 0xFF6A00))
+    static let tools = bundled("AITools", UIColor(rgb: 0xAF52DE))
+    static let plugins = bundled("Bot", UIColor(rgb: 0x00C7BE))
+    static let about = bundled("Settings", UIColor(rgb: 0x8E8E93))
 }
 
 private enum AstraGramSettingsEntry: ItemListNodeEntry {
@@ -159,6 +266,8 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
     case header(id: Int32, section: AstraGramSettingsSection, text: String)
     case footer(id: Int32, section: AstraGramSettingsSection, text: String)
     case button(id: Int32, section: AstraGramSettingsSection, title: String, label: String, kind: AstraGramSettingsButtonKind)
+    // A row of the main page: an icon, a title and a value, opening a page or a tool.
+    case rootRow(id: Int32, section: AstraGramSettingsSection, icon: UIImage?, title: String, label: String, target: AstraGramSettingsRootTarget)
 
     var section: ItemListSectionId {
         switch self {
@@ -170,8 +279,10 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
             return AstraGramSettingsSection.antiDelete.rawValue
         case .deletedMessages, .storageSize, .clearHistory:
             return AstraGramSettingsSection.storage.rawValue
-        case .appearanceHeader, .deletedMark, .editedMark, .showSeconds, .showPeerId, .hideSponsored, .hideStoriesInList, .confirmSticker, .haptics, .openAppearance, .appearanceFooter:
+        case .appearanceHeader, .deletedMark, .editedMark, .showSeconds, .showPeerId, .haptics, .openAppearance, .appearanceFooter:
             return AstraGramSettingsSection.appearance.rawValue
+        case .hideSponsored, .hideStoriesInList, .confirmSticker:
+            return AstraGramSettingsSection.chats.rawValue
         case .filtersHeader, .filters:
             return AstraGramSettingsSection.filters.rawValue
         case .translatorHeader, .translator, .translatorFooter:
@@ -180,7 +291,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
             return AstraGramSettingsSection.about.rawValue
         case .reset, .version:
             return AstraGramSettingsSection.footerSection.rawValue
-        case let .flag(_, section, _, _, _, _), let .header(_, section, _), let .footer(_, section, _), let .button(_, section, _, _, _):
+        case let .flag(_, section, _, _, _, _), let .header(_, section, _), let .footer(_, section, _), let .button(_, section, _, _, _), let .rootRow(_, section, _, _, _, _):
             return section.rawValue
         }
     }
@@ -226,7 +337,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         case .aboutHeader: return 80
         case .reset: return 199
         case .version: return 200
-        case let .flag(id, _, _, _, _, _), let .header(id, _, _), let .footer(id, _, _), let .button(id, _, _, _, _):
+        case let .flag(id, _, _, _, _, _), let .header(id, _, _), let .footer(id, _, _), let .button(id, _, _, _, _), let .rootRow(id, _, _, _, _, _):
             return id
         }
     }
@@ -235,11 +346,11 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
     // options got ids out of display order. So `<` follows the display order below; an id missing from it goes last.
     private static let displayOrder: [Int32: Int] = {
         let ids: [Int32] = [
-            0, 1, 2, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 3, 4, 5,
-            20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 36, 37,
-            40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
-            60, 61, 62, 63, 64, 65, 73, 74, 75, 76, 77, 78, 66, 67, 68, 69, 70, 71, 72,
-            80, 81, 82, 85, 90, 91, 92, 100, 101, 102, 103, 104, 105, 106,
+            0, 1, 2, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+            20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 36, 37, 3, 4, 5,
+            40, 41, 42, 43, 44, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 45, 46, 47,
+            60, 61, 62, 63, 64, 65, 73, 74, 75, 76, 77, 78, 66, 67, 68, 69, 100, 101, 102, 103, 104, 70, 71, 72,
+            80, 81, 82, 85, 105, 106, 90, 91, 92,
             130, 139, 134, 133, 131, 132, 135, 136, 137, 138, 140, 141,
             110, 111, 121, 112, 113, 114, 115, 119, 120, 122, 123, 124, 116, 117, 118, 199, 200
         ]
@@ -358,6 +469,17 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: section)
         case let .footer(_, _, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: section)
+        case let .rootRow(_, _, icon, title, label, target):
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, title: title, label: label, sectionId: section, style: .blocks, action: {
+                switch target {
+                case let .page(page):
+                    arguments.openPage(page)
+                case .streaks:
+                    arguments.openTool(.streaks)
+                case .plugins:
+                    arguments.openPlugins()
+                }
+            })
         case let .button(_, _, title, label, kind):
             switch kind {
             case .plugins:
@@ -419,12 +541,66 @@ private func formatFileSize(_ size: Int64) -> String {
     return formatter.string(fromByteCount: size)
 }
 
-private func astraGramSettingsEntries(strings: AstraStrings, settings: AstraGramSettingsValues, statistics: AstraMessageStoreStatistics?) -> [AstraGramSettingsEntry] {
+/// The main page: one row per part, grouped like Telegram's Settings.
+private func astraGramSettingsRootEntries(strings: AstraStrings, settings: AstraGramSettingsValues, statistics: AstraMessageStoreStatistics?) -> [AstraGramSettingsEntry] {
+    var entries: [AstraGramSettingsEntry] = []
+    let ghostLabel = settings.isGhostModeFullyEnabled ? strings.valueOn : (settings.isGhostModePartiallyEnabled ? strings.valuePartial : strings.valueOff)
+    let deletedLabel = statistics.flatMap { $0.deletedCount > 0 ? "\($0.deletedCount)" : nil } ?? ""
+    let pluginCount = AstraPluginManager.shared.enabledCount
+
+    entries.append(.rootRow(id: 1000, section: .rootPrivacy, icon: AstraGramSettingsIcons.ghost, title: strings.pageGhost, label: ghostLabel, target: .page(.ghost)))
+    entries.append(.rootRow(id: 1001, section: .rootPrivacy, icon: AstraGramSettingsIcons.history, title: strings.pageHistory, label: deletedLabel, target: .page(.history)))
+    entries.append(.rootRow(id: 1002, section: .rootPrivacy, icon: AstraGramSettingsIcons.privacy, title: strings.pagePrivacy, label: "", target: .page(.privacy)))
+    entries.append(.rootRow(id: 1003, section: .rootPrivacy, icon: AstraGramSettingsIcons.security, title: strings.pageSecurity, label: "", target: .page(.security)))
+
+    entries.append(.rootRow(id: 1010, section: .rootLook, icon: AstraGramSettingsIcons.appearance, title: strings.pageAppearance, label: "", target: .page(.appearance)))
+    entries.append(.rootRow(id: 1011, section: .rootLook, icon: AstraGramSettingsIcons.chats, title: strings.pageChats, label: "", target: .page(.chats)))
+    entries.append(.rootRow(id: 1012, section: .rootLook, icon: AstraGramSettingsIcons.notifications, title: strings.pageNotifications, label: settings.backgroundNotifications ? strings.valueOn : strings.valueOff, target: .page(.notifications)))
+
+    entries.append(.rootRow(id: 1020, section: .rootExtras, icon: AstraGramSettingsIcons.streaks, title: strings.pageStreaks, label: "", target: .streaks))
+    entries.append(.rootRow(id: 1021, section: .rootExtras, icon: AstraGramSettingsIcons.tools, title: strings.pageTools, label: "", target: .page(.tools)))
+    entries.append(.rootRow(id: 1022, section: .rootExtras, icon: AstraGramSettingsIcons.plugins, title: strings.plugins, label: pluginCount > 0 ? "\(pluginCount)" : "", target: .plugins))
+
+    entries.append(.rootRow(id: 1030, section: .rootAbout, icon: AstraGramSettingsIcons.about, title: strings.pageAbout, label: "", target: .page(.about)))
+    entries.append(.footer(id: 1031, section: .rootAbout, text: strings.rootFooter))
+    return entries
+}
+
+private func astraGramSettingsEntries(page: AstraGramSettingsPage, strings: AstraStrings, settings: AstraGramSettingsValues, statistics: AstraMessageStoreStatistics?) -> [AstraGramSettingsEntry] {
+    if page == .root {
+        return astraGramSettingsRootEntries(strings: strings, settings: settings, statistics: statistics)
+    }
+    // A part's page: the rows of its sections. The Plugins and Streaks rows are on the main page.
+    return astraGramAllSettingsEntries(strings: strings, settings: settings, statistics: statistics).filter { entry in
+        if case let .button(_, _, _, _, kind) = entry, kind == .streaks || kind == .plugins {
+            return false
+        }
+        // A header that only repeats the page's title is left out, as Telegram's own pages do.
+        switch entry {
+        case .ghostHeader:
+            return false
+        case let .header(id, _, _) where id == 130 || id == 66 || id == 73:
+            return false
+        case let .footer(id, _, _) where id == 75:
+            return false
+        case .aboutHeader:
+            return false
+        default:
+            break
+        }
+        guard let section = AstraGramSettingsSection(rawValue: entry.section) else {
+            return false
+        }
+        return section.page == page
+    }.sorted(by: <)
+}
+
+private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraGramSettingsValues, statistics: AstraMessageStoreStatistics?) -> [AstraGramSettingsEntry] {
     var entries: [AstraGramSettingsEntry] = []
 
     entries.append(.ghostHeader(strings.ghostHeader))
     entries.append(.ghostMaster(strings.ghostMode, settings.isGhostModeFullyEnabled))
-    entries.append(.ghostMasterFooter(strings.ghostFooter + " " + strings.ghostButtonHint))
+    entries.append(.ghostMasterFooter(strings.ghostFooter))
 
     entries.append(.hideOnline(strings.hideOnline, settings.hideOnlineStatus))
     entries.append(.hideRead(strings.hideRead, settings.hideReadReceipts))
@@ -521,22 +697,22 @@ private func astraGramSettingsEntries(strings: AstraStrings, settings: AstraGram
     entries.append(.button(id: 102, section: .tools, title: strings.templates, label: settings.messageTemplates.isEmpty ? "" : "\(settings.messageTemplates.count)", kind: .templates))
     entries.append(.button(id: 103, section: .tools, title: strings.keywordAlerts, label: settings.keywordAlerts.isEmpty ? "" : "\(settings.keywordAlerts.count)", kind: .keywordAlerts))
     entries.append(.button(id: 104, section: .tools, title: strings.bookmarks, label: "", kind: .bookmarks))
-    entries.append(.button(id: 105, section: .tools, title: strings.backupExport, label: "", kind: .backupExport))
-    entries.append(.button(id: 106, section: .tools, title: strings.backupImport, label: "", kind: .backupImport))
+    entries.append(.button(id: 105, section: .backup, title: strings.backupExport, label: "", kind: .backupExport))
+    entries.append(.button(id: 106, section: .backup, title: strings.backupImport, label: "", kind: .backupImport))
 
     // The look: every part has its own switch.
     entries.append(.header(id: 130, section: .security, text: strings.securityHeader))
     entries.append(.button(id: 139, section: .security, title: strings.securityCheck, label: "", kind: .securityCheck))
-    entries.append(.button(id: 134, section: .security, title: strings.lockedChats, label: settings.lockedChats.isEmpty ? strings.lockedChatsNone : "\(settings.lockedChats.count)", kind: .lockedChats))
-    entries.append(.flag(id: 133, section: .security, title: strings.biometricForAstraGram, value: settings.biometricForAstraGram, enabled: true, keyPath: \.biometricForAstraGram))
-    entries.append(.flag(id: 131, section: .security, title: strings.hideInAppSwitcher, value: settings.hideInAppSwitcher, enabled: true, keyPath: \.hideInAppSwitcher))
-    entries.append(.flag(id: 132, section: .security, title: strings.blockThirdPartyKeyboards, value: settings.blockThirdPartyKeyboards, enabled: true, keyPath: \.blockThirdPartyKeyboards))
-    entries.append(.flag(id: 135, section: .security, title: strings.warnSuspiciousLinks, value: settings.warnSuspiciousLinks, enabled: true, keyPath: \.warnSuspiciousLinks))
-    entries.append(.flag(id: 136, section: .security, title: strings.stripLinkTrackers, value: settings.stripLinkTrackers, enabled: true, keyPath: \.stripLinkTrackers))
-    entries.append(.flag(id: 137, section: .security, title: strings.clipboardExpire, value: settings.clipboardExpire, enabled: true, keyPath: \.clipboardExpire))
-    entries.append(.flag(id: 138, section: .security, title: strings.clipboardLocalOnly, value: settings.clipboardLocalOnly, enabled: true, keyPath: \.clipboardLocalOnly))
-    entries.append(.button(id: 140, section: .security, title: strings.telegramPrivacy, label: "", kind: .telegramPrivacy))
-    entries.append(.footer(id: 141, section: .security, text: strings.securityFooter))
+    entries.append(.button(id: 134, section: .securityLock, title: strings.lockedChats, label: settings.lockedChats.isEmpty ? strings.lockedChatsNone : "\(settings.lockedChats.count)", kind: .lockedChats))
+    entries.append(.flag(id: 133, section: .securityLock, title: strings.biometricForAstraGram, value: settings.biometricForAstraGram, enabled: true, keyPath: \.biometricForAstraGram))
+    entries.append(.flag(id: 131, section: .securityLock, title: strings.hideInAppSwitcher, value: settings.hideInAppSwitcher, enabled: true, keyPath: \.hideInAppSwitcher))
+    entries.append(.flag(id: 132, section: .securityInput, title: strings.blockThirdPartyKeyboards, value: settings.blockThirdPartyKeyboards, enabled: true, keyPath: \.blockThirdPartyKeyboards))
+    entries.append(.flag(id: 135, section: .securityInput, title: strings.warnSuspiciousLinks, value: settings.warnSuspiciousLinks, enabled: true, keyPath: \.warnSuspiciousLinks))
+    entries.append(.flag(id: 136, section: .securityInput, title: strings.stripLinkTrackers, value: settings.stripLinkTrackers, enabled: true, keyPath: \.stripLinkTrackers))
+    entries.append(.flag(id: 137, section: .securityInput, title: strings.clipboardExpire, value: settings.clipboardExpire, enabled: true, keyPath: \.clipboardExpire))
+    entries.append(.flag(id: 138, section: .securityInput, title: strings.clipboardLocalOnly, value: settings.clipboardLocalOnly, enabled: true, keyPath: \.clipboardLocalOnly))
+    entries.append(.button(id: 140, section: .securityTelegram, title: strings.telegramPrivacy, label: "", kind: .telegramPrivacy))
+    entries.append(.footer(id: 141, section: .securityTelegram, text: strings.securityFooter))
     entries.append(.header(id: 110, section: .look, text: strings.lookHeader))
     entries.append(.flag(id: 111, section: .look, title: strings.monochrome, value: settings.monochrome, enabled: true, keyPath: \.monochrome))
     if settings.monochrome {
@@ -566,7 +742,7 @@ private func astraGramSettingsEntries(strings: AstraStrings, settings: AstraGram
 }
 
 /// The "AstraGram" section of Settings.
-public func astraGramSettingsController(context: AccountContext, makeLinked: @escaping (AstraLinkedTelegramSettings) -> ViewController) -> ViewController {
+public func astraGramSettingsController(context: AccountContext, page: AstraGramSettingsPage = .root, makeLinked: @escaping (AstraLinkedTelegramSettings) -> ViewController) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
     var presentControllerImpl: ((ViewController) -> Void)?
     var presentNativeControllerImpl: ((UIViewController) -> Void)?
@@ -722,6 +898,9 @@ public func astraGramSettingsController(context: AccountContext, makeLinked: @es
             default:
                 break
             }
+        },
+        openPage: { page in
+            pushControllerImpl?(astraGramSettingsController(context: context, page: page, makeLinked: makeLinked))
         }
     )
 
@@ -737,8 +916,31 @@ public func astraGramSettingsController(context: AccountContext, makeLinked: @es
     )
     |> map { presentationData, settings, statistics, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let strings = AstraStrings(presentationData.strings)
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(strings.title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: astraGramSettingsEntries(strings: strings, settings: settings, statistics: statistics), style: .blocks, animateChanges: true)
+        let title: String
+        switch page {
+        case .root:
+            title = strings.title
+        case .ghost:
+            title = strings.pageGhost
+        case .history:
+            title = strings.pageHistory
+        case .privacy:
+            title = strings.pagePrivacy
+        case .security:
+            title = strings.pageSecurity
+        case .appearance:
+            title = strings.pageAppearance
+        case .chats:
+            title = strings.pageChats
+        case .notifications:
+            title = strings.pageNotifications
+        case .tools:
+            title = strings.pageTools
+        case .about:
+            title = strings.pageAbout
+        }
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: astraGramSettingsEntries(page: page, strings: strings, settings: settings, statistics: statistics), style: .blocks, animateChanges: true)
         return (controllerState, (listState, arguments))
     }
 
