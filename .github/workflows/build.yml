@@ -200,6 +200,33 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # Simulator builds: the .app goes into an artifact so it can be installed in the iOS Simulator on a Mac.
+      - name: Collect simulator app
+        if: steps.build.outcome == 'success' && env.CONFIGURATION != 'release_arm64'
+        run: |
+          set -euo pipefail
+          cd "$SOURCE_DIR"
+          mkdir -p "$GITHUB_WORKSPACE/sim-out"
+          ls -la bazel-bin/Telegram/ || true
+          IPA=$(find -L bazel-bin/Telegram -maxdepth 1 -name 'Telegram.ipa' -type f 2>/dev/null | head -1)
+          if [ -n "$IPA" ]; then
+            cp -L "$IPA" "$GITHUB_WORKSPACE/sim-out/AstraGram-sim.ipa"
+          else
+            APP=$(find -L bazel-bin/Telegram -maxdepth 3 -name 'Telegram.app' -type d 2>/dev/null | head -1)
+            [ -n "$APP" ] || { echo "::error::simulator app not found"; exit 1; }
+            (cd "$(dirname "$APP")" && ditto -c -k --keepParent Telegram.app "$GITHUB_WORKSPACE/sim-out/AstraGram-sim.zip")
+          fi
+          ls -la "$GITHUB_WORKSPACE/sim-out"
+
+      - name: Upload simulator app
+        if: steps.build.outcome == 'success' && env.CONFIGURATION != 'release_arm64'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: AstraGram-simulator-${{ env.BUILD_NUMBER }}
+          path: sim-out/
+          if-no-files-found: error
+          retention-days: 30
+
   # A GitHub release with the IPA (the app checks it for updates) and the SideStore source that lists it.
   publish:
     needs: build
