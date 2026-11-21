@@ -124,3 +124,16 @@ CREATE TABLE IF NOT EXISTS badges (
   tg_id INTEGER PRIMARY KEY,
   updated_at INTEGER NOT NULL
 );
+
+-- Bug reports and ideas sent from AstraGram's settings. Forwarded to the admin at once; kept here for the record.
+CREATE TABLE IF NOT EXISTS feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,                     -- bug | idea
+  text TEXT NOT NULL,
+  tg_id INTEGER,                          -- set only when the sender let AstraGram name them
+  verified INTEGER NOT NULL DEFAULT 0,    -- 1: the account was proven by its streak-bot token
+  ip TEXT NOT NULL DEFAULT '',
+  app TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS feedback_ip ON feedback(ip, created_at);

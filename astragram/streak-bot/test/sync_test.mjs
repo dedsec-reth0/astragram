@@ -30,8 +30,12 @@ globalThis.Response = class {
   }
 };
 const sent = [];
+let nextMessageId = 1000;
 globalThis.fetch = async (url, init) => {
-  sent.push(JSON.parse(init.body));
+  const body = JSON.parse(init.body);
+  sent.push({ method: url.split('/').pop(), ...body });
+  if (url.endsWith('/createInvoiceLink')) return { json: async () => ({ ok: true, result: 'https://t.me/$invoice' }) };
+  if (url.endsWith('/sendMessage')) return { json: async () => ({ ok: true, result: { message_id: nextMessageId++ } }) };
   return { json: async () => ({ ok: true, result: {} }) };
 };
 function statement(sql, args) {
@@ -168,6 +172,33 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   for (let i = 0; i < 20; i++) await gifts('A', { send: { to: 200, gift: '1' } });
   r = await gifts('A', { send: { to: 200, gift: '1' } });
   check('daily limit', r.status, 429);
+
+  // 9d. Feedback and donations (no streak-bot link needed).
+  const post = async (path, body, headers = {}) => {
+    const response = await worker.fetch({
+      url: 'https://bot.example' + path, method: 'POST',
+      headers: { get: (k) => headers[k] || null },
+      json: async () => body,
+    }, env);
+    return { status: response.status, body: JSON.parse(response.body) };
+  };
+  sent.length = 0;
+  r = await post('/api/feedback', { kind: 'bug', text: 'Crash when opening the gift shop', version: '1.0.27', os: 'iOS 26.3' }, { 'cf-connecting-ip': '1.2.3.4' });
+  check('anonymous feedback accepted', r.body.ok, true);
+  check('admin gets the report', sent.some((m) => m.method === 'sendMessage' && /Ошибка/.test(m.text) && /аноним/.test(m.text)), true);
+  r = await post('/api/feedback', { kind: 'idea', text: 'Dark theme for the shop', userId: 200, name: 'C' }, { 'cf-connecting-ip': '1.2.3.4', authorization: 'Bearer ' + TOKENS.C });
+  check('verified sender named', sent.some((m) => /Идея/.test(m.text) && /id 200\)/.test(m.text)), true);
+  check('reply mapping kept', q('SELECT user_id FROM support ORDER BY admin_msg_id DESC LIMIT 1')[0].user_id, 200);
+  r = await post('/api/feedback', { kind: 'bug', text: 'x' }, { 'cf-connecting-ip': '1.2.3.4' });
+  check('too short refused', r.status, 400);
+  for (let i = 0; i < 3; i++) await post('/api/feedback', { kind: 'bug', text: 'again ' + i }, { 'cf-connecting-ip': '1.2.3.4' });
+  r = await post('/api/feedback', { kind: 'bug', text: 'one too many' }, { 'cf-connecting-ip': '1.2.3.4' });
+  check('rate limited per address', r.status, 429);
+  r = await post('/api/donate', { stars: 100 });
+  check('donation link', r.body.link, 'https://t.me/$invoice');
+  check('invoice in stars', sent.filter((m) => m.method === 'createInvoiceLink').map((m) => [m.currency, m.prices[0].amount, m.payload]), [['XTR', 100, 'donate:100']]);
+  r = await post('/api/donate', { stars: 0 });
+  check('bad amount refused', r.status, 400);
 
   // 10. Unlink forgets the list.
   call({ op: 'reset' });

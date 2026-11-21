@@ -423,6 +423,103 @@ async function handleGifts(request, env) {
   return json(reply);
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Feedback (bug reports, ideas) and donations, both from AstraGram's settings.
+
+const FEEDBACK_PER_HOUR = 5;
+const FEEDBACK_MAX_LENGTH = 4000;
+const DONATION_MIN = 1;
+const DONATION_MAX = 10000;
+
+function clip(value, max) {
+  return String(value || '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').slice(0, max).trim();
+}
+
+// No streak-bot link is needed to send feedback; at most FEEDBACK_PER_HOUR an hour from one address. The sender's account
+// is named only when they let the app do so, and marked unproven unless their streak-bot token came with it.
+async function handleFeedback(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'bad json' }, 400);
+  }
+  const text = clip(body.text, FEEDBACK_MAX_LENGTH);
+  if (text.length < 3) return json({ error: 'empty' }, 400);
+  const kind = body.kind === 'idea' ? 'idea' : 'bug';
+  const t = now();
+  const ip = request.headers.get('cf-connecting-ip') || '';
+  const recent = (await env.DB.prepare('SELECT COUNT(*) AS c FROM feedback WHERE ip = ? AND created_at > ?').bind(ip, t - 3600).first()).c;
+  if (recent >= FEEDBACK_PER_HOUR) return json({ error: 'too often' }, 429);
+
+  const owner = request.headers.get('authorization') ? await ownerFromRequest(request, env) : null;
+  const claimedId = int(body.userId, 1, Number.MAX_SAFE_INTEGER, 0);
+  const tgId = owner ? owner.tg_id : (claimedId || null);
+  const verified = owner ? 1 : 0;
+  const app = clip([body.version, body.build && `(${body.build})`, body.os, body.device].filter(Boolean).join(' · '), 200);
+  const inserted = await env.DB.prepare('INSERT INTO feedback (kind, text, tg_id, verified, ip, app, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(kind, text, tgId, verified, ip, app, t).run();
+  const id = inserted.meta ? inserted.meta.last_row_id : 0;
+
+  const name = clip(body.name, 64);
+  const username = clip(body.username, 64).replace(/[^A-Za-z0-9_]/g, '');
+  let who = 'аноним';
+  if (tgId) {
+    who = `${name || 'пользователь'}${username ? ' @' + username : ''} (id ${tgId}${verified ? '' : ', не подтверждён'})`;
+  }
+  const header = kind === 'idea' ? '💡 Идея' : '🐞 Ошибка';
+  const reply = tgId ? '\n\nОтветьте на это сообщение — ответ уйдёт автору в чат с ботом (если он его запускал).' : '';
+  const sent = await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text: `${header} #${id}\nОт: ${who}\n${app}\n\n${text}${reply}` });
+  if (tgId && sent.ok && sent.result) {
+    await env.DB.prepare('INSERT OR REPLACE INTO support (admin_msg_id, user_id, created_at) VALUES (?, ?, ?)').bind(sent.result.message_id, tgId, t).run();
+  }
+  return json({ ok: true, id });
+}
+
+// A Stars invoice link for a donation: the app opens it and Telegram shows its own payment sheet, with no chat.
+async function handleDonate(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'bad json' }, 400);
+  }
+  const stars = Number(body.stars);
+  if (!Number.isInteger(stars) || stars < DONATION_MIN || stars > DONATION_MAX) return json({ error: 'bad amount' }, 400);
+  const ru = body.lang !== 'en';
+  const reply = await tg(env, 'createInvoiceLink', {
+    title: ru ? 'Поддержать AstraGram' : 'Support AstraGram',
+    description: ru ? 'Спасибо, что помогаете AstraGram развиваться!' : 'Thank you for helping AstraGram grow!',
+    payload: `donate:${stars}`,
+    currency: 'XTR',
+    prices: [{ label: ru ? 'Поддержка AstraGram' : 'AstraGram support', amount: stars }],
+  });
+  if (!reply.ok || typeof reply.result !== 'string') return json({ error: 'telegram' }, 502);
+  return json({ link: reply.result });
+}
+
+async function handlePreCheckout(env, query) {
+  const match = String(query.invoice_payload || '').match(/^donate:(\d+)$/);
+  const ok = Boolean(match && query.currency === 'XTR' && Number(match[1]) === query.total_amount);
+  await tg(env, 'answerPreCheckoutQuery', ok
+    ? { pre_checkout_query_id: query.id, ok: true }
+    : { pre_checkout_query_id: query.id, ok: false, error_message: 'Счёт устарел, попробуйте ещё раз' });
+}
+
+async function handleSuccessfulPayment(env, message) {
+  const payment = message.successful_payment;
+  const match = String(payment.invoice_payload || '').match(/^donate:(\d+)$/);
+  if (!match || payment.currency !== 'XTR') return;
+  const from = message.from;
+  const ru = isRussian(from);
+  await tg(env, 'sendMessage', {
+    chat_id: from.id,
+    text: ru ? `💛 Спасибо за поддержку AstraGram — ${payment.total_amount} ⭐!` : `💛 Thank you for supporting AstraGram — ${payment.total_amount} ⭐!`,
+  });
+  const uname = from.username ? ` @${from.username}` : '';
+  await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text: `💛 Донат ${payment.total_amount} ⭐ от ${cleanName(from.first_name)}${uname} (id ${from.id})` });
+}
+
 async function handleUnlink(request, env) {
   const owner = await ownerFromRequest(request, env);
   if (!owner) return json({ ok: true });
@@ -505,6 +602,21 @@ async function handleMessage(env, message) {
   // The admin's chat is the control panel and the support inbox.
   if (isAdmin(from.id)) {
     if (await handleAdminMessage(env, message)) return;
+  }
+
+  if (message.successful_payment) {
+    await handleSuccessfulPayment(env, message);
+    return;
+  }
+
+  if (text === '/paysupport') {
+    await tg(env, 'sendMessage', {
+      chat_id: from.id,
+      text: ru
+        ? 'Вопрос по оплате? Напишите его сюда одним сообщением (сумму и когда платили) — оно попадёт в поддержку AstraGram, и вам ответят здесь.'
+        : 'A question about a payment? Write it here in one message (the amount and when you paid): it reaches AstraGram support and they reply here.',
+    });
+    return;
   }
 
   if (text === '/stop') {
@@ -801,6 +913,7 @@ async function handleTelegram(request, env) {
     try {
       if (update.message) await handleMessage(env, update.message);
       else if (update.callback_query) await handleCallback(env, update.callback_query);
+      else if (update.pre_checkout_query) await handlePreCheckout(env, update.pre_checkout_query);
     } catch (error) {
       console.error('update failed', error && error.message);
     }
@@ -857,12 +970,13 @@ async function handleSetup(url, env) {
   const hook = await tg(env, 'setWebhook', {
     url: `${url.origin}/tg`,
     secret_token: await webhookSecret(env),
-    allowed_updates: ['message', 'callback_query'],
+    allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
   });
   await tg(env, 'setMyCommands', { commands: [
     { command: 'streaks', description: 'Мои огоньки' },
     { command: 'help', description: 'Как работает огонёк' },
     { command: 'stop', description: 'Выключить напоминания' },
+    { command: 'paysupport', description: 'Помощь с оплатой' },
   ] });
   await tg(env, 'setMyDescription', { description: '🔥 Огоньки AstraGram для тех, у кого нет AstraGram: счёт, напоминание вечером и восстановление пропущенного дня. Боту приходят только числа, тексты сообщений — никогда.' });
   return json({ ok: hook.ok === true, username: me.result.username, server: url.origin });
@@ -877,6 +991,8 @@ export default {
     if (request.method === 'POST' && url.pathname === '/api/sync') return handleSync(request, env);
     if (request.method === 'POST' && url.pathname === '/api/badge') return handleBadge(request, env);
     if (request.method === 'POST' && url.pathname === '/api/gifts') return handleGifts(request, env);
+    if (request.method === 'POST' && url.pathname === '/api/feedback') return handleFeedback(request, env);
+    if (request.method === 'POST' && url.pathname === '/api/donate') return handleDonate(request, env);
     if (request.method === 'POST' && url.pathname === '/api/unlink') return handleUnlink(request, env);
     if (url.pathname === '/setup') return handleSetup(url, env);
     if (url.pathname === '/') return new Response('AstraGram streak bot', { headers: { 'content-type': 'text/plain; charset=utf-8' } });
