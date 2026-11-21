@@ -231,6 +231,13 @@ public enum AstraVisualGifts {
                     completion(.failed)
                     return
                 }
+                // A message in the chat, as Telegram sends for a real gift: AstraGram draws it as a gift card, other apps
+                // show its text.
+                if let item = AstraGiftMessage.gift(id: gift) {
+                    let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
+                    let text = AstraGiftMessage.text(giftId: gift, title: item.title ?? (isRussian ? "подарок" : "gift"), isRussian: isRussian)
+                    let _ = enqueueMessages(account: context.account, peerId: to, messages: [.message(text: text, attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])]).startStandalone()
+                }
                 // The recipient's profile shows it at once.
                 var received = AstraVisualGifts.received(accountPeerId: accountPeerId)
                 for (user, gifts) in result.received {
@@ -285,8 +292,24 @@ public enum AstraVisualGifts {
 
     /// Keeps the other people's gifts up to date while the app runs: at launch and every half hour, when the streak bot
     /// is connected (the shop connects it; it is never connected only for this).
+    private static var catalogDisposable: Disposable?
+
     static func start(context: AccountContext) {
         let peerId = context.account.peerId
+        if AstraVisualGifts.catalogDisposable == nil {
+            // The catalog for drawing gift messages in chats (AstraGiftMessage), kept as the app refreshes it.
+            AstraVisualGifts.catalogDisposable = context.engine.payments.cachedStarGifts().start(next: { gifts in
+                var result: [Int64: StarGift.Gift] = [:]
+                for gift in gifts ?? [] {
+                    if case let .generic(gift) = gift {
+                        result[gift.id] = gift
+                    }
+                }
+                if !result.isEmpty {
+                    AstraGiftMessage.setCatalog(result)
+                }
+            })
+        }
         if AstraVisualGifts.timers[peerId] != nil {
             AstraVisualGifts.refreshIfStale(context: context)
             return

@@ -111,7 +111,12 @@ public final class ChatMessageItemImpl: ChatMessageItem, CustomStringConvertible
         self.chatLocation = chatLocation
         self.associatedData = associatedData
         self.controllerInteraction = controllerInteraction
-        self.content = content
+        // AstraGram: a visual gift message is drawn as Telegram's gift card.
+        if case let .message(message, read, selection, attributes, location) = content, let displayed = AstraGiftMessage.displayed(message) {
+            self.content = .message(message: displayed, read: read, selection: selection, attributes: attributes, location: location)
+        } else {
+            self.content = content
+        }
         self.disableDate = disableDate || !controllerInteraction.chatIsRotated
         self.additionalContent = additionalContent
         

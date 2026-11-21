@@ -958,9 +958,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
         
         let controllerInteraction = ChatControllerInteraction(openMessage: { [weak self] message, params in
-            guard let self, self.isNodeLoaded, let message = self.chatDisplayNode.historyNode.messageInCurrentHistoryView(message.id)?._asMessage() else {
+            guard let self, self.isNodeLoaded, let storedMessage = self.chatDisplayNode.historyNode.messageInCurrentHistoryView(message.id)?._asMessage() else {
                 return false
             }
+            // AstraGram: a visual gift message opens as the gift card it is drawn as.
+            let message = AstraGiftMessage.displayed(storedMessage) ?? storedMessage
             
             if let request = walletTonConnectRequestRoute(message: EngineMessage(message), accountPeerId: self.context.account.peerId) {
                 guard WalletConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 }).isAvailable else {
@@ -1390,6 +1392,18 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             let toPeerId: PeerId = message.author?.id == self.context.account.peerId ? message.id.peerId : self.context.account.peerId
                             let controller = PremiumIntroScreen(context: self.context, source: .gift(from: fromPeerId, to: toPeerId, duration: duration, giftCode: nil))
                             self.push(controller)
+                            return true
+                        case let .starGift(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) where AstraGiftMessage.isDisplayedGiftMessage(message.id):
+                            // AstraGram: a visual gift message opens the gift's screen, with nothing to buy or convert.
+                            if case let .generic(gift) = gift {
+                                self.chatDisplayNode.dismissInput()
+                                let incoming = message.effectivelyIncoming(self.context.account.peerId)
+                                let ownerId = incoming ? self.context.account.peerId : message.id.peerId
+                                let giver = message.author.flatMap(EnginePeer.init)
+                                astraOpenVisualGiftMessage(context: self.context, gift: gift, giver: giver, ownerId: ownerId, date: message.timestamp, push: { [weak self] controller in
+                                    self?.push(controller)
+                                })
+                            }
                             return true
                         case .starGift, .starGiftUnique:
                             if case let .starGiftUnique(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = action.action, case let .unique(uniqueGift) = gift, uniqueGift.flags.contains(.isBurned) {
