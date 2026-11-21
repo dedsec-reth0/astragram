@@ -21,7 +21,8 @@ START=$(stat -f %B "$LOG")
 
 bar() {
     local done=$1 total=$2 width=30 filled
-    filled=$(( total > 0 ? done * width / total : 0 ))
+    filled=0
+    if [ "$total" -gt 0 ]; then filled=$(( done * width / total )); fi
     printf '['
     printf '%*s' "$filled" '' | tr ' ' '#'
     printf '%*s' $(( width - filled )) '' | tr ' ' '.'
@@ -35,8 +36,11 @@ while true; do
     [ -n "$DONE" ] || DONE=0
     [ -n "$TOTAL" ] && [ "$TOTAL" != "$PROGRESS" ] || TOTAL=0
     ELAPSED=$(( $(date +%s) - START ))
-    LEFT=$(( DONE > 0 ? ELAPSED * (TOTAL - DONE) / DONE : 0 ))
-    PERCENT=$(( TOTAL > 0 ? 100 * DONE / TOTAL : 0 ))
+    # macOS bash 3.2 evaluates both sides of ?: in $(( )), so zero is checked with if.
+    LEFT=0
+    if [ "$DONE" -gt 0 ]; then LEFT=$(( ELAPSED * (TOTAL - DONE) / DONE )); fi
+    PERCENT=0
+    if [ "$TOTAL" -gt 0 ]; then PERCENT=$(( 100 * DONE / TOTAL )); fi
     NOW=$(grep -o -E '\] [A-Z][a-z]+ [^;]*' "$LOG" | tail -1 | cut -c3- | cut -c1-70)
     ERRORS=$(grep -c -E ': error:' "$LOG")
 

@@ -98,6 +98,14 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   created_at INTEGER NOT NULL
 );
 
+-- Visual gifts: the Telegram gift IDs an AstraGram user put on their profile in AstraGram's gift shop (not bought,
+-- only shown in AstraGram), as a JSON array. Other AstraGram apps get them only for the people in their own chats.
+CREATE TABLE IF NOT EXISTS visual_gifts (
+  tg_id INTEGER PRIMARY KEY,
+  gifts TEXT NOT NULL DEFAULT '[]',
+  updated_at INTEGER NOT NULL
+);
+
 -- AstraGram users who show the AstraGram badge: other AstraGram users draw it beside their names.
 CREATE TABLE IF NOT EXISTS badges (
   tg_id INTEGER PRIMARY KEY,

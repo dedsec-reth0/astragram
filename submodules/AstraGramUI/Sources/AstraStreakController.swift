@@ -225,6 +225,53 @@ public enum AstraStreakBot {
         })
     }
 
+    struct VisualGiftsResult {
+        /// The visual gifts of the people asked about, by Telegram ID.
+        var users: [Int64: [Int64]]
+        /// The account's own list as the server keeps it.
+        var mine: [Int64]
+    }
+
+    /// Sends the account's visual gifts (`set`, when given) and gets the visual gifts of `check` (the people in the
+    /// account's chats and contacts); nil when the server did not answer or the bot is not connected.
+    static func visualGifts(accountPeerId: EnginePeer.Id, set: [Int64]?, check: [Int64], completion: @escaping (VisualGiftsResult?) -> Void) {
+        guard AstraStreakBot.isAvailable, let token = AstraStreakBot.token(accountPeerId: accountPeerId) else {
+            completion(nil)
+            return
+        }
+        // Gift IDs are 64-bit: they go as strings, which JavaScript cannot round.
+        var body: [String: Any] = ["check": check.map { NSNumber(value: $0) }]
+        if let set {
+            body["gifts"] = set.map { "\($0)" }
+        }
+        func ids(_ value: Any?) -> [Int64] {
+            guard let list = value as? [Any] else {
+                return []
+            }
+            return list.compactMap { item -> Int64? in
+                if let string = item as? String {
+                    return Int64(string)
+                }
+                return (item as? NSNumber)?.int64Value
+            }
+        }
+        AstraStreakBot.request(path: "/api/gifts", token: token, body: body, completion: { object in
+            guard let object = object else {
+                completion(nil)
+                return
+            }
+            var users: [Int64: [Int64]] = [:]
+            if let map = object["users"] as? [String: Any] {
+                for (user, gifts) in map {
+                    if let user = Int64(user) {
+                        users[user] = ids(gifts)
+                    }
+                }
+            }
+            completion(VisualGiftsResult(users: users, mine: ids(object["mine"])))
+        })
+    }
+
     struct SyncResult {
         /// The days the other people asked to restore in the bot.
         var restores: [(peerId: EnginePeer.Id, day: Int32)]

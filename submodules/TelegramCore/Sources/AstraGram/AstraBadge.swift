@@ -55,22 +55,51 @@ public enum AstraBadge {
         return String(scalars)
     }
 
-    private static let usersKey = "astragram.badge.users"
+    private static let usersKey = "astragram.badge.usersByAccount"
 
-    /// The Telegram IDs of the users who show the badge, as the server last gave them; kept for the next launch.
-    private static let users = Atomic<Set<Int64>>(value: {
-        let stored = UserDefaults.standard.array(forKey: AstraBadge.usersKey) as? [NSNumber] ?? []
-        return Set(stored.map { $0.int64Value })
+    /// The Telegram IDs of the users who show the badge, per account (each account asks the server about its own chats
+    /// and contacts), as the server last gave them; kept for the next launch. A badge shows when any account has it.
+    private static let usersByAccount = Atomic<[Int64: Set<Int64>]>(value: {
+        var result: [Int64: Set<Int64>] = [:]
+        if let stored = UserDefaults.standard.dictionary(forKey: AstraBadge.usersKey) as? [String: [NSNumber]] {
+            for (account, ids) in stored {
+                if let account = Int64(account) {
+                    result[account] = Set(ids.map { $0.int64Value })
+                }
+            }
+        }
+        return result
     }())
+    private static let users = Atomic<Set<Int64>>(value: AstraBadge.usersByAccount.with { Set($0.values.joined()) })
 
-    /// Replaces the list of users who show the badge (an empty list hides every badge).
-    public static func setUsers(_ ids: Set<Int64>) {
-        let changed = AstraBadge.users.with { $0 != ids }
+    /// Replaces an account's list of users who show the badge (an empty list hides the badges it gave).
+    public static func setUsers(_ ids: Set<Int64>, accountPeerId: PeerId) {
+        let account = accountPeerId.id._internalGetInt64Value()
+        var changed = false
+        let all = AstraBadge.usersByAccount.modify { current in
+            var current = current
+            if current[account] != ids {
+                changed = true
+                if ids.isEmpty {
+                    current.removeValue(forKey: account)
+                } else {
+                    current[account] = ids
+                }
+            }
+            return current
+        }
         if !changed {
             return
         }
-        let _ = AstraBadge.users.swap(ids)
-        UserDefaults.standard.set(ids.map { NSNumber(value: $0) }, forKey: AstraBadge.usersKey)
+        let union = Set(all.values.joined())
+        let _ = AstraBadge.users.swap(union)
+        var stored: [String: [NSNumber]] = [:]
+        for (account, ids) in all {
+            stored["\(account)"] = ids.map { NSNumber(value: $0) }
+        }
+        UserDefaults.standard.set(stored, forKey: AstraBadge.usersKey)
+        UserDefaults.standard.removeObject(forKey: "astragram.badge.users")
+        AstraMarks.changed()
     }
 
     static func isAstraGramUser(_ peer: Peer) -> Bool {
@@ -82,6 +111,27 @@ public enum AstraBadge {
             return true
         }
         return AstraBadge.contains(user.firstName) || AstraBadge.contains(user.lastName)
+    }
+}
+
+/// AstraGram: the marks drawn beside names that come from outside the peer itself (the AstraGram badge, the streak
+/// count). They change without the peer changing, so lists that show them redraw when `revision` moves.
+public enum AstraMarks {
+    private static let revisionValue = Atomic<Int>(value: 0)
+    private static let pipe = ValuePipe<Int>()
+
+    public static var revision: Int {
+        return AstraMarks.revisionValue.with { $0 }
+    }
+
+    /// Fires with the new revision whenever a mark changes.
+    public static var updates: Signal<Int, NoError> {
+        return AstraMarks.pipe.signal()
+    }
+
+    public static func changed() {
+        let revision = AstraMarks.revisionValue.modify { $0 + 1 }
+        AstraMarks.pipe.putNext(revision)
     }
 }
 

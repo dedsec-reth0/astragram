@@ -49,7 +49,7 @@ public enum AstraBadgeSync {
                 }, queue: Queue.mainQueue())
                 AstraBadgeSync.timers[peerId]?.start()
             } else {
-                AstraBadge.setUsers([])
+                AstraBadge.setUsers([], accountPeerId: peerId)
                 // Switched off now: the server forgets the badge (it was never on if off at launch).
                 if !wasFirst {
                     AstraStreakBot.badge(accountPeerId: peerId, show: false, completion: { _ in })
@@ -57,6 +57,7 @@ public enum AstraBadgeSync {
             }
         })
         AstraBadgeSync.cleanOldNameMark(context: context)
+        AstraVisualGifts.start(context: context)
 
         if !AstraGramSettings.current.astraBadgeAsked && !AstraBadgeSync.didAsk {
             AstraBadgeSync.didAsk = true
@@ -67,19 +68,18 @@ public enum AstraBadgeSync {
         }
     }
 
-    private static func refresh(context: AccountContext) {
+    /// Who to ask the server about: the people in the chat list (archive included) and the contacts. The server answers
+    /// only for the IDs it is asked about, so nobody gets the whole list.
+    static func candidates(context: AccountContext) -> Signal<[Int64], NoError> {
         let peerId = context.account.peerId
-        guard AstraGramSettings.current.astraBadge, AstraStreakBot.isAvailable else {
-            return
-        }
-        // Who to ask about: the people in the chat list and the contacts (the server answers only for these).
-        let candidates = combineLatest(
+        return combineLatest(
             context.engine.messages.chatList(group: .root, count: 400) |> take(1),
+            context.engine.messages.chatList(group: .archive, count: 200) |> take(1),
             context.engine.data.get(TelegramEngine.EngineData.Item.Contacts.List(includePresences: false))
         )
-        |> map { chatList, contacts -> [Int64] in
+        |> map { chatList, archive, contacts -> [Int64] in
             var ids = Set<Int64>()
-            for item in chatList.items {
+            for item in chatList.items + archive.items {
                 let id = item.renderedPeer.peerId
                 if id.namespace == Namespaces.Peer.CloudUser {
                     ids.insert(id.id._internalGetInt64Value())
@@ -91,7 +91,14 @@ public enum AstraBadgeSync {
             ids.remove(peerId.id._internalGetInt64Value())
             return Array(ids.prefix(1000))
         }
-        let _ = (candidates |> deliverOnMainQueue).start(next: { check in
+    }
+
+    private static func refresh(context: AccountContext) {
+        let peerId = context.account.peerId
+        guard AstraGramSettings.current.astraBadge, AstraStreakBot.isAvailable else {
+            return
+        }
+        let _ = (AstraBadgeSync.candidates(context: context) |> deliverOnMainQueue).start(next: { check in
         AstraStreakBot.badge(accountPeerId: peerId, show: true, check: check, completion: { result in
             Queue.mainQueue().async {
                 guard AstraGramSettings.current.astraBadge else {
@@ -99,7 +106,7 @@ public enum AstraBadgeSync {
                 }
                 switch result {
                 case let .users(ids):
-                    AstraBadge.setUsers(ids.union([peerId.id._internalGetInt64Value()]))
+                    AstraBadge.setUsers(ids.union([peerId.id._internalGetInt64Value()]), accountPeerId: peerId)
                 case .notLinked:
                     // Connected once per session; the server learns the token when the bot gets "/start", so the
                     // list is asked again a little later.

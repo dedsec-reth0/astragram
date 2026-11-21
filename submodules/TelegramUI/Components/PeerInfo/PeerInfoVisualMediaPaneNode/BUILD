@@ -49,6 +49,7 @@ swift_library(
         "//submodules/TelegramUI/Components/TabSelectorComponent",
         "//submodules/TelegramUI/Components/Settings/LanguageSelectionScreen",
         "//submodules/TelegramUI/Components/Gifts/GiftItemComponent",
+        "//submodules/AstraGramUI:AstraGramUI",
         "//submodules/TelegramUI/Components/Gifts/GiftViewScreen",
         "//submodules/TelegramUI/Components/Gifts/GiftUnpinScreen",
         "//submodules/TelegramUI/Components/ButtonComponent",

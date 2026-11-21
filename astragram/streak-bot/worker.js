@@ -333,6 +333,57 @@ async function handleControl(request, env) {
   return json({ ok: true, blocked: !!blocked });
 }
 
+// Visual gifts: the gift shop in AstraGram puts Telegram gifts on a profile without buying them; only AstraGram shows
+// them. `gifts` (when present) replaces this account's list (at most MAX_VISUAL_GIFTS gift IDs); `check` asks for the
+// lists of the people in the app's chats and contacts, the same way the badge does: the whole table is never handed out.
+// A list nobody refreshed in VISUAL_GIFT_DAYS is dropped.
+const MAX_VISUAL_GIFTS = 100;
+const VISUAL_GIFT_DAYS = 90;
+
+async function handleGifts(request, env) {
+  const owner = await ownerFromRequest(request, env);
+  if (!owner) return json({ error: 'not linked' }, 401);
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'bad json' }, 400);
+  }
+  const t = now();
+  if (Array.isArray(body.gifts)) {
+    // Gift IDs are 64-bit; they travel as decimal strings. A number past 2^53 has already been rounded by JSON.parse, so it
+    // is dropped rather than stored as some other gift.
+    const gifts = [...new Set(body.gifts.slice(0, MAX_VISUAL_GIFTS).filter((id) => typeof id === 'string' || Number.isSafeInteger(id)).map((id) => String(id)).filter((id) => /^[0-9]{1,20}$/.test(id)))];
+    if (gifts.length === 0) {
+      await env.DB.prepare('DELETE FROM visual_gifts WHERE tg_id = ?').bind(owner.tg_id).run();
+    } else {
+      await env.DB.prepare('INSERT INTO visual_gifts (tg_id, gifts, updated_at) VALUES (?, ?, ?) ON CONFLICT (tg_id) DO UPDATE SET gifts = excluded.gifts, updated_at = excluded.updated_at')
+        .bind(owner.tg_id, JSON.stringify(gifts), t).run();
+    }
+  } else {
+    await env.DB.prepare('UPDATE visual_gifts SET updated_at = ? WHERE tg_id = ?').bind(t, owner.tg_id).run();
+  }
+  await env.DB.prepare('UPDATE owners SET last_sync = ? WHERE token_hash = ? AND last_sync < ?').bind(t, owner.token_hash, t - 86400).run();
+  const check = Array.isArray(body.check)
+    ? [...new Set(body.check.slice(0, MAX_BADGE_CHECK).map((id) => int(id, 1, Number.MAX_SAFE_INTEGER, 0)).filter((id) => id > 0))]
+    : [];
+  const users = {};
+  for (let i = 0; i < check.length; i += D1_CHUNK) {
+    const chunk = check.slice(i, i + D1_CHUNK);
+    const rows = (await env.DB.prepare(`SELECT tg_id, gifts FROM visual_gifts WHERE updated_at >= ? AND tg_id IN (${chunk.map(() => '?').join(',')})`)
+      .bind(t - VISUAL_GIFT_DAYS * 86400, ...chunk).all()).results || [];
+    for (const r of rows) {
+      try {
+        users[r.tg_id] = JSON.parse(r.gifts);
+      } catch {
+        // A broken row is skipped.
+      }
+    }
+  }
+  const mine = await env.DB.prepare('SELECT gifts FROM visual_gifts WHERE tg_id = ?').bind(owner.tg_id).first();
+  return json({ users, mine: mine ? JSON.parse(mine.gifts) : [] });
+}
+
 async function handleUnlink(request, env) {
   const owner = await ownerFromRequest(request, env);
   if (!owner) return json({ ok: true });
@@ -342,6 +393,7 @@ async function handleUnlink(request, env) {
     env.DB.prepare('DELETE FROM streak_list WHERE owner_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM restore_requests WHERE owner_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM badges WHERE tg_id = ?').bind(owner.tg_id),
+    env.DB.prepare('DELETE FROM visual_gifts WHERE tg_id = ?').bind(owner.tg_id),
   ]);
   return json({ ok: true });
 }
@@ -749,6 +801,7 @@ async function remind(env) {
     env.DB.prepare('DELETE FROM restore_requests WHERE created_at < ?').bind(t - 3 * 86400),
     env.DB.prepare('DELETE FROM owners WHERE last_sync < ? AND created_at < ?').bind(stale, stale),
     env.DB.prepare('DELETE FROM badges WHERE updated_at < ?').bind(t - BADGE_DAYS * 86400),
+    env.DB.prepare('DELETE FROM visual_gifts WHERE updated_at < ?').bind(t - VISUAL_GIFT_DAYS * 86400),
     env.DB.prepare('DELETE FROM support WHERE created_at < ?').bind(t - 30 * 86400),
     env.DB.prepare('DELETE FROM broadcast_queue WHERE created_at < ?').bind(t - 2 * 86400),
     env.DB.prepare('DELETE FROM broadcasts WHERE done = 1 AND created_at < ?').bind(t - 2 * 86400),
@@ -783,6 +836,7 @@ export default {
     if (request.method === 'POST' && url.pathname === '/api/control') return handleControl(request, env);
     if (request.method === 'POST' && url.pathname === '/api/sync') return handleSync(request, env);
     if (request.method === 'POST' && url.pathname === '/api/badge') return handleBadge(request, env);
+    if (request.method === 'POST' && url.pathname === '/api/gifts') return handleGifts(request, env);
     if (request.method === 'POST' && url.pathname === '/api/unlink') return handleUnlink(request, env);
     if (url.pathname === '/setup') return handleSetup(url, env);
     if (url.pathname === '/') return new Response('AstraGram streak bot', { headers: { 'content-type': 'text/plain; charset=utf-8' } });

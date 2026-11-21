@@ -128,10 +128,32 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   check('v1 trims numbers', friends(q('SELECT friend_id FROM pairs WHERE owner_id = 100')), [1]);
   check('v1 leaves list', friends(q('SELECT friend_id FROM streak_list WHERE owner_id = 100 AND stopped = 0')), [1, 2, 3]);
 
+  // 9b. Visual gifts: an account stores its list; another app gets it only for IDs it asks about.
+  const gifts = async (device, body) => {
+    const request = {
+      url: 'https://bot.example/api/gifts', method: 'POST',
+      headers: { get: (k) => (k === 'authorization' ? 'Bearer ' + TOKENS[device] : null) },
+      json: async () => body,
+    };
+    const response = await worker.fetch(request, env);
+    return { status: response.status, body: JSON.parse(response.body) };
+  };
+  r = await gifts('A', { gifts: ['5170145012310081615', '5170145012310081615', 'x', 6028601630662853006], check: [] });
+  check('gifts stored, deduplicated, junk and rounded numbers dropped', r.body.mine, ['5170145012310081615']);
+  r = await gifts('A', { gifts: ['5170145012310081615', '6028601630662853006'], check: [] });
+  check('64-bit ids kept exactly as strings', r.body.mine, ['5170145012310081615', '6028601630662853006']);
+  r = await gifts('C', { check: [100, 999] });
+  check('other app sees the list of a checked id', r.body.users, { 100: ['5170145012310081615', '6028601630662853006'] });
+  r = await gifts('C', { check: [999] });
+  check('unchecked ids are not handed out', r.body.users, {});
+  r = await gifts('C', { gifts: [] , check: [100] });
+  check('empty list clears own gifts', r.body.mine, []);
+
   // 10. Unlink forgets the list.
   call({ op: 'reset' });
   await worker.fetch({ url: 'https://bot.example/api/unlink', method: 'POST', headers: { get: (k) => (k === 'authorization' ? 'Bearer ' + TOKENS.A : null) }, json: async () => ({}) }, env);
   check('unlink clears list', q('SELECT COUNT(*) AS c FROM streak_list WHERE owner_id = 100')[0].c, 0);
+  check('unlink clears visual gifts', q('SELECT COUNT(*) AS c FROM visual_gifts WHERE tg_id = 100')[0].c, 0);
 
   print(failures ? `${failures} FAILED` : 'all passed');
 })().catch((e) => print('Exception ' + e + '\n' + e.stack));

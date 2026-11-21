@@ -164,6 +164,7 @@ public enum AstraGramSettingsPage: Equatable {
 private enum AstraGramSettingsRootTarget: Equatable {
     case page(AstraGramSettingsPage)
     case streaks
+    case giftShop
     case plugins
 }
 
@@ -208,6 +209,7 @@ enum AstraGramSettingsIcons {
     static let chats = bundled("Chat", UIColor(rgb: 0x0A84FF))
     static let notifications = bundled("Notifications", UIColor(rgb: 0xFF453A))
     static let streaks = symbol("flame.fill", UIColor(rgb: 0xFF6A00))
+    static let giftShop = symbol("gift.fill", UIColor(rgb: 0xFF2D55))
     static let tools = bundled("AITools", UIColor(rgb: 0xAF52DE))
     static let plugins = bundled("Bot", UIColor(rgb: 0x00C7BE))
     static let about = bundled("Settings", UIColor(rgb: 0x8E8E93))
@@ -476,6 +478,8 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                     arguments.openPage(page)
                 case .streaks:
                     arguments.openTool(.streaks)
+                case .giftShop:
+                    arguments.openTool(.giftShop)
                 case .plugins:
                     arguments.openPlugins()
                 }
@@ -486,7 +490,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openPlugins()
                 })
-            case .ai, .templates, .keywordAlerts, .bookmarks, .lockedChats, .securityCheck, .telegramPrivacy, .streaks:
+            case .ai, .templates, .keywordAlerts, .bookmarks, .lockedChats, .securityCheck, .telegramPrivacy, .streaks, .giftShop:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openTool(kind)
                 })
@@ -533,6 +537,7 @@ private enum AstraGramSettingsButtonKind: Equatable {
     case telegramPrivacy
     case clearBadge
     case streaks
+    case giftShop
 }
 
 private func formatFileSize(_ size: Int64) -> String {
@@ -558,8 +563,9 @@ private func astraGramSettingsRootEntries(strings: AstraStrings, settings: Astra
     entries.append(.rootRow(id: 1012, section: .rootLook, icon: AstraGramSettingsIcons.notifications, title: strings.pageNotifications, label: settings.backgroundNotifications ? strings.valueOn : strings.valueOff, target: .page(.notifications)))
 
     entries.append(.rootRow(id: 1020, section: .rootExtras, icon: AstraGramSettingsIcons.streaks, title: strings.pageStreaks, label: "", target: .streaks))
-    entries.append(.rootRow(id: 1021, section: .rootExtras, icon: AstraGramSettingsIcons.tools, title: strings.pageTools, label: "", target: .page(.tools)))
-    entries.append(.rootRow(id: 1022, section: .rootExtras, icon: AstraGramSettingsIcons.plugins, title: strings.plugins, label: pluginCount > 0 ? "\(pluginCount)" : "", target: .plugins))
+    entries.append(.rootRow(id: 1021, section: .rootExtras, icon: AstraGramSettingsIcons.giftShop, title: strings.pageGiftShop, label: "", target: .giftShop))
+    entries.append(.rootRow(id: 1022, section: .rootExtras, icon: AstraGramSettingsIcons.tools, title: strings.pageTools, label: "", target: .page(.tools)))
+    entries.append(.rootRow(id: 1023, section: .rootExtras, icon: AstraGramSettingsIcons.plugins, title: strings.plugins, label: pluginCount > 0 ? "\(pluginCount)" : "", target: .plugins))
 
     entries.append(.rootRow(id: 1030, section: .rootAbout, icon: AstraGramSettingsIcons.about, title: strings.pageAbout, label: "", target: .page(.about)))
     entries.append(.footer(id: 1031, section: .rootAbout, text: strings.rootFooter))
@@ -879,6 +885,8 @@ public func astraGramSettingsController(context: AccountContext, page: AstraGram
                 AstraAppRestart.perform(title: strings.restartNotificationTitle, text: strings.restartNotificationText)
             case .streaks:
                 pushControllerImpl?(astraStreaksListController(context: context))
+            case .giftShop:
+                astraOpenGiftShop(context: context)
             case .clearBadge:
                 AstraBadgeSync.clearName(context: context, completion: { removed in
                     let text = removed ? strings.astraBadgeCleared : strings.astraBadgeNothing

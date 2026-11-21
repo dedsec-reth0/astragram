@@ -303,6 +303,7 @@ public enum AstraStreak {
         }
         if changed {
             AstraStreak.updatesPipe.putNext(Void())
+            AstraMarks.changed()
         }
     }
 

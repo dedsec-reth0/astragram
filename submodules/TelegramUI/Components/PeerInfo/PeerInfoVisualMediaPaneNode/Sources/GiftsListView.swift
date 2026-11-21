@@ -27,6 +27,7 @@ import LottieComponent
 import ButtonComponent
 import ContextUI
 import DustEffect
+import AstraGramUI
 
 final class GiftsListView: UIView {
     private let context: AccountContext
@@ -149,7 +150,8 @@ final class GiftsListView: UIView {
                                         
         self.dataDisposable = combineLatest(
             queue: Queue.mainQueue(),
-            profileGifts.state,
+            // AstraGram: the profile's visual gifts from AstraGram's gift shop come after the real ones.
+            astraVisualGiftsState(context: context, peerId: peerId, state: profileGifts.state),
             self.reorderedReferencesPromise.get()
         ).startStrict(next: { [weak self] state, reorderedReferences in
             guard let self else {
@@ -557,7 +559,8 @@ final class GiftsListView: UIView {
                 switch product.gift {
                 case let .generic(gift):
                     subject = .starGift(gift: gift, price: "# \(gift.price)")
-                    peer = product.fromPeer.flatMap { .peer($0) } ?? .anonymous
+                    // AstraGram: a visual gift has no sender, not even an anonymous one.
+                    peer = product.astraIsVisual ? nil : (product.fromPeer.flatMap { .peer($0) } ?? .anonymous)
                     
                     if let availability = gift.availability {
                         ribbonText = params.presentationData.strings.PeerInfo_Gifts_OneOf(compactNumericCountString(Int(availability.total), decimalSeparator: params.presentationData.dateTimeFormat.decimalSeparator)).string
@@ -588,6 +591,14 @@ final class GiftsListView: UIView {
                             }
                         }
                     }
+                }
+                
+                // AstraGram: a visual gift says so, so nobody takes it for a bought one.
+                if product.astraIsVisual {
+                    ribbonText = "AstraGram"
+                    ribbonFont = .generic
+                    ribbonColor = .purple
+                    ribbonOutline = nil
                 }
                 
                 let itemReferenceId = product.reference?.stringValue ?? ""
@@ -663,9 +674,17 @@ final class GiftsListView: UIView {
                                             self.reorderedReferences = reorderedReferences
                                         }
                                     }
+                                } else if product.astraIsVisual {
+                                    // AstraGram: a visual gift has nothing to show or do on Telegram's gift screen.
+                                    let isOwn = self.peerId == self.context.account.peerId
+                                    let isRussian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
+                                    let text = isRussian
+                                        ? (isOwn ? "Визуальный подарок AstraGram: он не куплен, его видят только пользователи AstraGram. Изменить — в настройках AstraGram → «Магазин подарков»." : "Визуальный подарок AstraGram: он не куплен, его показывает только AstraGram.")
+                                        : (isOwn ? "An AstraGram visual gift: not bought, only AstraGram users see it. Change it in AstraGram settings → Gift Shop." : "An AstraGram visual gift: not bought, only AstraGram shows it.")
+                                    self.parentController?.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: true, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
                                 } else {
-                                    let allSubjects: [GiftViewScreen.Subject] = (self.starsProducts ?? []).map { .profileGift(self.peerId, $0) }
-                                    let index = self.starsProducts?.firstIndex(where: { $0 == product }) ?? 0
+                                    let allSubjects: [GiftViewScreen.Subject] = (self.starsProducts ?? []).filter { !$0.astraIsVisual }.map { .profileGift(self.peerId, $0) }
+                                    let index = self.starsProducts?.filter({ !$0.astraIsVisual }).firstIndex(where: { $0 == product }) ?? 0
                                     
                                     var dismissImpl: (() -> Void)?
                                     let controller = GiftViewScreen(

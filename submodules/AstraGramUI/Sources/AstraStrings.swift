@@ -305,6 +305,7 @@ public struct AstraStrings {
     public var pageChats: String { t("Чаты и медиа", "Chats and Media") }
     public var pageNotifications: String { t("Уведомления", "Notifications") }
     public var pageStreaks: String { t("Огоньки", "Streaks") }
+    public var pageGiftShop: String { t("Магазин подарков", "Gift Shop") }
     public var pageTools: String { t("AI и инструменты", "AI and Tools") }
     public var pageAbout: String { t("Об AstraGram", "About AstraGram") }
     public var valueOn: String { t("Вкл.", "On") }
