@@ -2,7 +2,7 @@ import os
 import sys
 import argparse
 
-from BuildEnvironment import run_executable_with_output
+from BuildEnvironment import run_executable_with_output, user_keychain_search_list
 
 def import_certificates(certificatesPath):
     if not os.path.exists(certificatesPath):
@@ -27,17 +27,12 @@ def import_certificates(certificatesPath):
         keychain_name
     ], check_result=True)
 
-    existing_keychains = run_executable_with_output('security', arguments=['list-keychains', '-d', 'user'])
-    existing_keychains.replace('"', '')
-
     run_executable_with_output('security', arguments=[
         'list-keychains',
         '-d',
         'user',
         '-s',
-        keychain_name,
-        existing_keychains
-    ], check_result=True)
+    ] + user_keychain_search_list(keychain_name), check_result=True)
 
     run_executable_with_output('security', arguments=['set-keychain-settings', keychain_name])
     run_executable_with_output('security', arguments=['unlock-keychain', '-p', keychain_password, keychain_name])

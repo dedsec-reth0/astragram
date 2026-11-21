@@ -29,6 +29,23 @@ def resolve_executable(program, use_clean_env=True):
     return None
 
 
+def user_keychain_search_list(adding):
+    """The user's keychain search list with `adding` in front, as separate paths for `security list-keychains -s`.
+
+    `security list-keychains` prints one quoted path per line. Passing that output on as a single argument (as the
+    build scripts once did) replaces the whole search list with one bogus path, which drops login.keychain from it: an
+    ephemeral CI VM never notices, a developer's Mac loses its saved passwords until the list is set again.
+    """
+    output = run_executable_with_output('security', arguments=['list-keychains', '-d', 'user'], check_result=True)
+    paths = [adding]
+    for line in output.splitlines():
+        path = line.strip().strip('"')
+        if not path or path in paths or os.path.basename(path) in (adding, adding + '-db'):
+            continue
+        paths.append(path)
+    return paths
+
+
 def run_executable_with_output(path, arguments, use_clean_env=True, decode=True, input=None, stderr_to_stdout=True, print_command=False, check_result=False):
     executable_path = resolve_executable(path, use_clean_env=use_clean_env)
     if executable_path is None:
