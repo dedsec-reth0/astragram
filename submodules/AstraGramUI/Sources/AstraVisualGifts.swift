@@ -21,6 +21,11 @@ public enum AstraVisualGifts {
         return "astra.visualGifts.mine.\(accountPeerId.toInt64())"
     }
 
+    /// Set while the account's own list has changed and the server has not taken it yet.
+    private static func unsentKey(_ accountPeerId: EnginePeer.Id) -> String {
+        return "astra.visualGifts.unsent.\(accountPeerId.toInt64())"
+    }
+
     private static func othersKey(_ accountPeerId: EnginePeer.Id) -> String {
         return "astra.visualGifts.others.\(accountPeerId.toInt64())"
     }
@@ -79,8 +84,17 @@ public enum AstraVisualGifts {
         var seen = Set<Int64>()
         let unique = Array(ids.filter { seen.insert($0).inserted }.prefix(AstraVisualGifts.maxGifts))
         UserDefaults.standard.set(unique.map { "\($0)" }, forKey: AstraVisualGifts.mineKey(accountPeerId))
+        UserDefaults.standard.set(true, forKey: AstraVisualGifts.unsentKey(accountPeerId))
         AstraVisualGifts.changed()
-        AstraVisualGifts.refresh(context: context, sendMine: true, completion: completion)
+        AstraVisualGifts.refresh(context: context, sendMine: true, completion: { sent in
+            completion(sent)
+            if !sent {
+                // Right after connecting, the server may not know the token yet: one more try soon, then every half hour.
+                Queue.mainQueue().after(30.0, {
+                    AstraVisualGifts.refresh(context: context, sendMine: false, completion: { _ in })
+                })
+            }
+        })
     }
 
     /// Keeps the other people's gifts up to date while the app runs: at launch and every half hour, when the streak bot
@@ -102,14 +116,19 @@ public enum AstraVisualGifts {
 
     /// Asks the server for the gifts of the people in the chat list and contacts (and sends the account's own list
     /// with `sendMine`); `completion` says whether the server answered.
+    /// A list the server has not taken yet (the bot was not connected, or the server not reached) goes with the next
+    /// refresh; until then the server's copy of the account's list is not taken over it.
     static func refresh(context: AccountContext, sendMine: Bool, completion: @escaping (Bool) -> Void) {
         let accountPeerId = context.account.peerId
-        guard AstraStreakBot.isAvailable, AstraStreakBot.isLinked(accountPeerId: accountPeerId) else {
+        let unsent = UserDefaults.standard.bool(forKey: AstraVisualGifts.unsentKey(accountPeerId))
+        let send = (sendMine || unsent) && AstraStreakBot.isLinked(accountPeerId: accountPeerId)
+        // Other people's gifts can be asked with another account's connection on this device.
+        guard AstraStreakBot.isAvailable, send || AstraStreakBot.tokenForLookup(accountPeerId: accountPeerId) != nil else {
             completion(false)
             return
         }
         let _ = (AstraBadgeSync.candidates(context: context) |> deliverOnMainQueue).start(next: { check in
-            let mine: [Int64]? = sendMine ? AstraVisualGifts.mine(accountPeerId: accountPeerId) : nil
+            let mine: [Int64]? = send ? AstraVisualGifts.mine(accountPeerId: accountPeerId) : nil
             AstraStreakBot.visualGifts(accountPeerId: accountPeerId, set: mine, check: check, completion: { result in
                 Queue.mainQueue().async {
                     guard let result = result else {
@@ -125,12 +144,16 @@ public enum AstraVisualGifts {
                         UserDefaults.standard.set(stored, forKey: AstraVisualGifts.othersKey(accountPeerId))
                         AstraVisualGifts.changed()
                     }
-                    // Another device of this account may have changed the account's own list.
-                    if !sendMine && result.mine != AstraVisualGifts.mine(accountPeerId: accountPeerId) {
-                        UserDefaults.standard.set(result.mine.map { "\($0)" }, forKey: AstraVisualGifts.mineKey(accountPeerId))
+                    if send {
+                        UserDefaults.standard.removeObject(forKey: AstraVisualGifts.unsentKey(accountPeerId))
+                    } else if let serverMine = result.mine, !UserDefaults.standard.bool(forKey: AstraVisualGifts.unsentKey(accountPeerId)), serverMine != AstraVisualGifts.mine(accountPeerId: accountPeerId) {
+                        // Another device of this account changed the account's own list.
+                        UserDefaults.standard.set(serverMine.map { "\($0)" }, forKey: AstraVisualGifts.mineKey(accountPeerId))
                         AstraVisualGifts.changed()
                     }
-                    completion(true)
+                    // Sent only when this account's own connection took it (a lookup with another account's token
+                    // does not send it).
+                    completion(!sendMine || send)
                 }
             })
         })

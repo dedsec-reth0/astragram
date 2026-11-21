@@ -90,6 +90,42 @@ public enum AstraStreakBot {
         return String(data: data, encoding: .utf8)
     }
 
+    /// The token of this account, or else of any other account on this device that has the bot connected. Only for
+    /// asking about other people (the badge's and the visual gifts' `check`): what an account says about itself goes
+    /// with its own token, so the server ties it to the right Telegram ID.
+    static func tokenForLookup(accountPeerId: EnginePeer.Id) -> String? {
+        return AstraStreakBot.tokensForLookup(accountPeerId: accountPeerId).first
+    }
+
+    /// Every token on this device, this account's first: an old one (an account logged out, a link the server dropped)
+    /// is turned away by the server, so the next one is tried.
+    static func tokensForLookup(accountPeerId: EnginePeer.Id) -> [String] {
+        var tokens: [String] = []
+        if let token = AstraStreakBot.token(accountPeerId: accountPeerId) {
+            tokens.append(token)
+        }
+        // iOS does not return the data of several keychain items at once: the accounts first, then each one's token.
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "org.astragram.streakbot",
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let items = result as? [[String: Any]] else {
+            return tokens
+        }
+        for item in items {
+            guard let account = item[kSecAttrAccount as String] as? String, let value = Int64(account) else {
+                continue
+            }
+            if let token = AstraStreakBot.token(accountPeerId: EnginePeer.Id(value)), !tokens.contains(token) {
+                tokens.append(token)
+            }
+        }
+        return tokens
+    }
+
     private static func setToken(_ token: String?, accountPeerId: EnginePeer.Id) {
         let query = AstraStreakBot.keychainQuery(accountPeerId)
         SecItemDelete(query as CFDictionary)
@@ -228,14 +264,23 @@ public enum AstraStreakBot {
     struct VisualGiftsResult {
         /// The visual gifts of the people asked about, by Telegram ID.
         var users: [Int64: [Int64]]
-        /// The account's own list as the server keeps it.
-        var mine: [Int64]
+        /// The account's own list as the server keeps it; nil when another account's token asked.
+        var mine: [Int64]?
     }
 
     /// Sends the account's visual gifts (`set`, when given) and gets the visual gifts of `check` (the people in the
     /// account's chats and contacts); nil when the server did not answer or the bot is not connected.
+    /// Without `set`, another account's token on this device does for asking (`tokenForLookup`); the answer's `mine` is
+    /// then that account's and is left out.
     static func visualGifts(accountPeerId: EnginePeer.Id, set: [Int64]?, check: [Int64], completion: @escaping (VisualGiftsResult?) -> Void) {
-        guard AstraStreakBot.isAvailable, let token = AstraStreakBot.token(accountPeerId: accountPeerId) else {
+        let ownToken = AstraStreakBot.token(accountPeerId: accountPeerId)
+        let tokens: [String]
+        if set != nil {
+            tokens = ownToken.map { [$0] } ?? []
+        } else {
+            tokens = AstraStreakBot.tokensForLookup(accountPeerId: accountPeerId)
+        }
+        guard AstraStreakBot.isAvailable, !tokens.isEmpty else {
             completion(nil)
             return
         }
@@ -255,9 +300,17 @@ public enum AstraStreakBot {
                 return (item as? NSNumber)?.int64Value
             }
         }
-        AstraStreakBot.request(path: "/api/gifts", token: token, body: body, completion: { object in
+        func attempt(_ index: Int) {
+            let token = tokens[index]
+            let isOwn = token == ownToken
+        AstraStreakBot.request(path: "/api/gifts", token: token, body: body, statusCompletion: { object, status in
             guard let object = object else {
-                completion(nil)
+                // A token the server does not know: the next one on this device.
+                if status == 401 && index + 1 < tokens.count {
+                    attempt(index + 1)
+                } else {
+                    completion(nil)
+                }
                 return
             }
             var users: [Int64: [Int64]] = [:]
@@ -268,8 +321,10 @@ public enum AstraStreakBot {
                     }
                 }
             }
-            completion(VisualGiftsResult(users: users, mine: ids(object["mine"])))
+            completion(VisualGiftsResult(users: users, mine: isOwn ? ids(object["mine"]) : nil))
         })
+        }
+        attempt(0)
     }
 
     struct SyncResult {

@@ -72,9 +72,16 @@ public enum AstraBadgeSync {
     /// only for the IDs it is asked about, so nobody gets the whole list.
     static func candidates(context: AccountContext) -> Signal<[Int64], NoError> {
         let peerId = context.account.peerId
+        // Right after launch or an account switch the chat list may still be loading (an empty list would ask about
+        // nobody): wait for it, at most 10 s.
+        func loaded(_ group: EngineChatList.Group, _ count: Int) -> Signal<EngineChatList, NoError> {
+            let list = context.engine.messages.chatList(group: group, count: count)
+            return (list |> filter { !$0.isLoading } |> take(1))
+            |> timeout(10.0, queue: Queue.concurrentDefaultQueue(), alternate: list |> take(1))
+        }
         return combineLatest(
-            context.engine.messages.chatList(group: .root, count: 400) |> take(1),
-            context.engine.messages.chatList(group: .archive, count: 200) |> take(1),
+            loaded(.root, 400),
+            loaded(.archive, 200),
             context.engine.data.get(TelegramEngine.EngineData.Item.Contacts.List(includePresences: false))
         )
         |> map { chatList, archive, contacts -> [Int64] in
