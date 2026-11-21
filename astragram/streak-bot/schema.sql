@@ -27,6 +27,17 @@ CREATE TABLE IF NOT EXISTS pairs (
 );
 CREATE INDEX IF NOT EXISTS pairs_friend ON pairs(friend_id);
 
+-- The account's list of streaks, shared by all of its devices (apps from version 2): the day each streak started, or
+-- stopped = 1 once a device turned it off (a mark kept for 30 days, so the other devices turn it off too).
+CREATE TABLE IF NOT EXISTS streak_list (
+  owner_id INTEGER NOT NULL,
+  friend_id INTEGER NOT NULL,
+  start_day INTEGER NOT NULL,
+  stopped INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (owner_id, friend_id)
+);
+
 CREATE TABLE IF NOT EXISTS friends (
   tg_id INTEGER PRIMARY KEY,
   started_at INTEGER NOT NULL,

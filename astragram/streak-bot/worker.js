@@ -102,6 +102,31 @@ function int(value, min, max, fallback = 0) {
   return Math.min(max, Math.max(min, Math.trunc(n)));
 }
 
+const PAIR_UPSERT =
+  `INSERT INTO pairs (owner_id, friend_id, count, mine, theirs, today_done, restores_left, restorable_day, lost_count, day, need, updated_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+   ON CONFLICT (owner_id, friend_id) DO UPDATE SET count = excluded.count, mine = excluded.mine, theirs = excluded.theirs,
+     today_done = excluded.today_done, restores_left = excluded.restores_left, restorable_day = excluded.restorable_day,
+     lost_count = excluded.lost_count, day = excluded.day, need = excluded.need, updated_at = excluded.updated_at`;
+
+// With several devices, one of them may not have the chat's older messages loaded yet and count a shorter streak. On the
+// same day every device counts the same messages, so the larger numbers are the complete ones: the streak (with its
+// restore state) of the device that counted more is kept, and today's messages are the most either device saw. A new
+// day takes the new numbers as they are.
+const SAME_DAY_KEEPS_OLD = 'pairs.day = excluded.day AND (pairs.count > excluded.count OR (pairs.count = excluded.count AND pairs.lost_count > excluded.lost_count))';
+const PAIR_UPSERT_SHARED =
+  `INSERT INTO pairs (owner_id, friend_id, count, mine, theirs, today_done, restores_left, restorable_day, lost_count, day, need, updated_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+   ON CONFLICT (owner_id, friend_id) DO UPDATE SET
+     count = CASE WHEN ${SAME_DAY_KEEPS_OLD} THEN pairs.count ELSE excluded.count END,
+     restores_left = CASE WHEN ${SAME_DAY_KEEPS_OLD} THEN pairs.restores_left ELSE excluded.restores_left END,
+     restorable_day = CASE WHEN ${SAME_DAY_KEEPS_OLD} THEN pairs.restorable_day ELSE excluded.restorable_day END,
+     lost_count = CASE WHEN ${SAME_DAY_KEEPS_OLD} THEN pairs.lost_count ELSE excluded.lost_count END,
+     mine = CASE WHEN pairs.day = excluded.day THEN MAX(pairs.mine, excluded.mine) ELSE excluded.mine END,
+     theirs = CASE WHEN pairs.day = excluded.day THEN MAX(pairs.theirs, excluded.theirs) ELSE excluded.theirs END,
+     today_done = CASE WHEN pairs.day = excluded.day THEN MAX(pairs.today_done, excluded.today_done) ELSE excluded.today_done END,
+     day = excluded.day, need = excluded.need, updated_at = excluded.updated_at`;
+
 async function handleSync(request, env) {
   const owner = await ownerFromRequest(request, env);
   if (!owner) return json({ error: 'not linked' }, 401);
@@ -115,27 +140,34 @@ async function handleSync(request, env) {
   const pairs = Array.isArray(body.pairs) ? body.pairs.slice(0, MAX_PAIRS) : [];
   const need = int(body.need, 1, 100, 3);
   const tz = int(body.tz, -14 * 3600, 14 * 3600, 0);
+  // Version 2 apps keep the account's list of streaks here, shared by all of its devices (see syncList).
+  const shared = int(body.v, 1, 100, 1) >= 2;
   const t = now();
   const statements = [env.DB.prepare('UPDATE owners SET last_sync = ?, tz = ? WHERE token_hash = ?').bind(t, tz, owner.token_hash)];
   const known = new Set(((await env.DB.prepare('SELECT friend_id FROM pairs WHERE owner_id = ?').bind(owner.tg_id).all()).results || []).map((r) => r.friend_id));
+  const list = shared ? await syncList(env, owner, body, pairs, t) : null;
   const friendIds = [];
   for (const pair of pairs) {
     const friend = int(pair.friend, 1, Number.MAX_SAFE_INTEGER, 0);
     if (!friend || friend === owner.tg_id) continue;
+    // A streak another device turned off: this device has not heard yet, its numbers are stale.
+    if (list && list.stopped.has(friend)) continue;
     friendIds.push(friend);
     const restorable = pair.restorableDay === undefined || pair.restorableDay === null ? null : int(pair.restorableDay, 0, 1e6, 0);
-    statements.push(env.DB.prepare(
-      `INSERT INTO pairs (owner_id, friend_id, count, mine, theirs, today_done, restores_left, restorable_day, lost_count, day, need, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (owner_id, friend_id) DO UPDATE SET count = excluded.count, mine = excluded.mine, theirs = excluded.theirs,
-         today_done = excluded.today_done, restores_left = excluded.restores_left, restorable_day = excluded.restorable_day,
-         lost_count = excluded.lost_count, day = excluded.day, need = excluded.need, updated_at = excluded.updated_at`
-    ).bind(owner.tg_id, friend, int(pair.count, 0, 1e5), int(pair.mine, 0, 1e6), int(pair.theirs, 0, 1e6), pair.todayDone ? 1 : 0,
+    statements.push(env.DB.prepare(list ? PAIR_UPSERT_SHARED : PAIR_UPSERT).bind(owner.tg_id, friend, int(pair.count, 0, 1e5), int(pair.mine, 0, 1e6), int(pair.theirs, 0, 1e6), pair.todayDone ? 1 : 0,
       int(pair.restoresLeft, 0, 7), restorable, int(pair.lostCount, 0, 1e5), int(pair.day, 0, 1e6), need, t));
   }
-  // Streaks turned off in the app are gone here too: every pair this sync did not touch (D1 takes at most 100 bound
-  // parameters, so no NOT IN over the whole list).
-  statements.push(env.DB.prepare('DELETE FROM pairs WHERE owner_id = ? AND updated_at < ?').bind(owner.tg_id, t));
+  if (list) {
+    // Another device may have streaks this one has not: only what was turned off goes (syncList), and the numbers of a
+    // streak nobody counts any more age out with STALE_DAYS.
+    for (const friend of list.stopped) {
+      statements.push(env.DB.prepare('DELETE FROM pairs WHERE owner_id = ? AND friend_id = ?').bind(owner.tg_id, friend));
+    }
+  } else {
+    // An app before version 2 knows only its own streaks: every pair this sync did not touch is gone (D1 takes at most
+    // 100 bound parameters, so no NOT IN over the whole list).
+    statements.push(env.DB.prepare('DELETE FROM pairs WHERE owner_id = ? AND updated_at < ?').bind(owner.tg_id, t));
+  }
   await env.DB.batch(statements);
 
   // Whoever started the bot before this streak reached it hears about it now, without pressing anything. Once per
@@ -161,7 +193,60 @@ async function handleSync(request, env) {
 
   const restores = await env.DB.prepare('SELECT friend_id, day FROM restore_requests WHERE owner_id = ?').bind(owner.tg_id).all();
   await env.DB.prepare('DELETE FROM restore_requests WHERE owner_id = ?').bind(owner.tg_id).run();
-  return json({ restores: (restores.results || []).map((r) => ({ friend: r.friend_id, day: r.day })) });
+  const reply = { restores: (restores.results || []).map((r) => ({ friend: r.friend_id, day: r.day })) };
+  if (list) {
+    reply.streaks = list.active.map((r) => ({ friend: r.friend_id, startDay: r.start_day }));
+    reply.stopped = [...list.stopped];
+  }
+  return json(reply);
+}
+
+// The account's list of streaks, shared by its devices: each friend with the day the streak started, or a mark that it
+// was turned off (kept STALE_DAYS, so a device that was away for weeks still hears of it). A device sends what the user did on it
+// since its last sync, `starts` ({friend, startDay}) and `stops` (friends), at most one of them per friend, and its
+// current streaks in `pairs` (with startDay). Its starts and stops are applied first; a pair the list does not know is
+// added (that is how the streaks of a device that synced before version 2 get in), and a pair the list has turned off is
+// left out: it is the stale copy of a device that has not heard yet. Returns the active rows and the turned-off friends.
+async function syncList(env, owner, body, pairs, t) {
+  const friendOf = (value) => {
+    const friend = int(value, 1, Number.MAX_SAFE_INTEGER, 0);
+    return friend && friend !== owner.tg_id ? friend : 0;
+  };
+  const statements = [];
+  const stops = Array.isArray(body.stops) ? body.stops.slice(0, MAX_PAIRS) : [];
+  for (const value of stops) {
+    const friend = friendOf(value);
+    if (!friend) continue;
+    statements.push(env.DB.prepare(
+      `INSERT INTO streak_list (owner_id, friend_id, start_day, stopped, updated_at) VALUES (?, ?, 0, 1, ?)
+       ON CONFLICT (owner_id, friend_id) DO UPDATE SET stopped = 1, updated_at = excluded.updated_at`
+    ).bind(owner.tg_id, friend, t));
+  }
+  const starts = Array.isArray(body.starts) ? body.starts.slice(0, MAX_PAIRS) : [];
+  for (const start of starts) {
+    const friend = friendOf(start && start.friend);
+    if (!friend) continue;
+    statements.push(env.DB.prepare(
+      `INSERT INTO streak_list (owner_id, friend_id, start_day, stopped, updated_at) VALUES (?, ?, ?, 0, ?)
+       ON CONFLICT (owner_id, friend_id) DO UPDATE SET start_day = excluded.start_day, stopped = 0, updated_at = excluded.updated_at`
+    ).bind(owner.tg_id, friend, int(start.startDay, 0, 1e6, 0), t));
+  }
+  for (const pair of pairs) {
+    const friend = friendOf(pair && pair.friend);
+    if (!friend || pair.startDay === undefined || pair.startDay === null) continue;
+    statements.push(env.DB.prepare(
+      'INSERT OR IGNORE INTO streak_list (owner_id, friend_id, start_day, stopped, updated_at) VALUES (?, ?, ?, 0, ?)'
+    ).bind(owner.tg_id, friend, int(pair.startDay, 0, 1e6, 0), t));
+  }
+  // The list of an account that syncs stays; its turned-off marks age out.
+  statements.push(env.DB.prepare('UPDATE streak_list SET updated_at = ? WHERE owner_id = ? AND stopped = 0').bind(t, owner.tg_id));
+  statements.push(env.DB.prepare('DELETE FROM streak_list WHERE owner_id = ? AND stopped = 1 AND updated_at < ?').bind(owner.tg_id, t - STALE_DAYS * 86400));
+  await env.DB.batch(statements);
+  const rows = (await env.DB.prepare('SELECT friend_id, start_day, stopped FROM streak_list WHERE owner_id = ?').bind(owner.tg_id).all()).results || [];
+  return {
+    active: rows.filter((r) => !r.stopped),
+    stopped: new Set(rows.filter((r) => r.stopped).map((r) => r.friend_id)),
+  };
 }
 
 // The AstraGram badge. Telegram drops invisible characters from names, so the badge cannot ride in the name: an app
@@ -254,6 +339,7 @@ async function handleUnlink(request, env) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM owners WHERE tg_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM pairs WHERE owner_id = ?').bind(owner.tg_id),
+    env.DB.prepare('DELETE FROM streak_list WHERE owner_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM restore_requests WHERE owner_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM badges WHERE tg_id = ?').bind(owner.tg_id),
   ]);
@@ -658,6 +744,8 @@ async function remind(env) {
   const stale = t - STALE_DAYS * 86400;
   await env.DB.batch([
     env.DB.prepare('DELETE FROM pairs WHERE updated_at < ?').bind(stale),
+    // Every sync touches the account's list, so a list untouched for a month belongs to nobody any more.
+    env.DB.prepare('DELETE FROM streak_list WHERE updated_at < ?').bind(stale),
     env.DB.prepare('DELETE FROM restore_requests WHERE created_at < ?').bind(t - 3 * 86400),
     env.DB.prepare('DELETE FROM owners WHERE last_sync < ? AND created_at < ?').bind(stale, stale),
     env.DB.prepare('DELETE FROM badges WHERE updated_at < ?').bind(t - BADGE_DAYS * 86400),

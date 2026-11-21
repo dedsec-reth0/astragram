@@ -367,6 +367,20 @@ extension AstraMessageStore {
         }
     }
 
+    /// Turns a streak on with exactly `startDay`, replacing the start day it already has: the account's list from the
+    /// streak bot decides it, so every device counts from the same day.
+    public func setStreakStartDay(peerId: PeerId, startDay: Int32) {
+        self.queue.async {
+            if let statement = self.prepare("INSERT INTO streaks (peer_id, start_day) VALUES (?, ?) ON CONFLICT (peer_id) DO UPDATE SET start_day = excluded.start_day") {
+                sqlite3_bind_int64(statement, 1, peerId.toInt64())
+                sqlite3_bind_int(statement, 2, startDay)
+                sqlite3_step(statement)
+                sqlite3_finalize(statement)
+            }
+            self.changesPipe.putNext(Void())
+        }
+    }
+
     /// The days restored on this device (requests from the bot included).
     public func streakRestores(peerId: PeerId) -> Signal<Set<Int32>, NoError> {
         return Signal { subscriber in
