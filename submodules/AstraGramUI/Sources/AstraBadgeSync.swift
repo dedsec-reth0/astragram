@@ -22,6 +22,8 @@ public enum AstraBadgeSync {
 
     public static func start(context: AccountContext) {
         let peerId = context.account.peerId
+        // Visual gifts are asked again on every switch to the account (at most once a minute).
+        AstraVisualGifts.start(context: context)
         if AstraBadgeSync.disposables[peerId] != nil {
             return
         }
@@ -57,7 +59,6 @@ public enum AstraBadgeSync {
             }
         })
         AstraBadgeSync.cleanOldNameMark(context: context)
-        AstraVisualGifts.start(context: context)
 
         if !AstraGramSettings.current.astraBadgeAsked && !AstraBadgeSync.didAsk {
             AstraBadgeSync.didAsk = true

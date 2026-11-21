@@ -26,6 +26,19 @@ public enum AstraVisualGifts {
         return "astra.visualGifts.unsent.\(accountPeerId.toInt64())"
     }
 
+    /// Set once the server has taken (or handed over) this account's list. A list from before that (version 1.0.26 kept
+    /// lists the server never got) counts as unsent.
+    private static func syncedKey(_ accountPeerId: EnginePeer.Id) -> String {
+        return "astra.visualGifts.synced.\(accountPeerId.toInt64())"
+    }
+
+    private static func isUnsent(_ accountPeerId: EnginePeer.Id) -> Bool {
+        if UserDefaults.standard.bool(forKey: AstraVisualGifts.unsentKey(accountPeerId)) {
+            return true
+        }
+        return !UserDefaults.standard.bool(forKey: AstraVisualGifts.syncedKey(accountPeerId)) && !AstraVisualGifts.mine(accountPeerId: accountPeerId).isEmpty
+    }
+
     private static func othersKey(_ accountPeerId: EnginePeer.Id) -> String {
         return "astra.visualGifts.others.\(accountPeerId.toInt64())"
     }
@@ -99,9 +112,23 @@ public enum AstraVisualGifts {
 
     /// Keeps the other people's gifts up to date while the app runs: at launch and every half hour, when the streak bot
     /// is connected (the shop connects it; it is never connected only for this).
+    private static var lastRefresh: [EnginePeer.Id: Double] = [:]
+
+    /// Asks again when the last answer is more than a minute old: on an account switch, and when a profile is opened.
+    static func refreshIfStale(context: AccountContext) {
+        let peerId = context.account.peerId
+        let now = CFAbsoluteTimeGetCurrent()
+        if let last = AstraVisualGifts.lastRefresh[peerId], now - last < 60.0 {
+            return
+        }
+        AstraVisualGifts.lastRefresh[peerId] = now
+        AstraVisualGifts.refresh(context: context, sendMine: false, completion: { _ in })
+    }
+
     static func start(context: AccountContext) {
         let peerId = context.account.peerId
         if AstraVisualGifts.timers[peerId] != nil {
+            AstraVisualGifts.refreshIfStale(context: context)
             return
         }
         let timer = SwiftSignalKit.Timer(timeout: AstraVisualGifts.refreshInterval, repeat: true, completion: {
@@ -110,7 +137,7 @@ public enum AstraVisualGifts {
         AstraVisualGifts.timers[peerId] = timer
         timer.start()
         Queue.mainQueue().after(5.0, {
-            AstraVisualGifts.refresh(context: context, sendMine: false, completion: { _ in })
+            AstraVisualGifts.refreshIfStale(context: context)
         })
     }
 
@@ -120,7 +147,7 @@ public enum AstraVisualGifts {
     /// refresh; until then the server's copy of the account's list is not taken over it.
     static func refresh(context: AccountContext, sendMine: Bool, completion: @escaping (Bool) -> Void) {
         let accountPeerId = context.account.peerId
-        let unsent = UserDefaults.standard.bool(forKey: AstraVisualGifts.unsentKey(accountPeerId))
+        let unsent = AstraVisualGifts.isUnsent(accountPeerId)
         let send = (sendMine || unsent) && AstraStreakBot.isLinked(accountPeerId: accountPeerId)
         // Other people's gifts can be asked with another account's connection on this device.
         guard AstraStreakBot.isAvailable, send || AstraStreakBot.tokenForLookup(accountPeerId: accountPeerId) != nil else {
@@ -146,10 +173,14 @@ public enum AstraVisualGifts {
                     }
                     if send {
                         UserDefaults.standard.removeObject(forKey: AstraVisualGifts.unsentKey(accountPeerId))
-                    } else if let serverMine = result.mine, !UserDefaults.standard.bool(forKey: AstraVisualGifts.unsentKey(accountPeerId)), serverMine != AstraVisualGifts.mine(accountPeerId: accountPeerId) {
-                        // Another device of this account changed the account's own list.
-                        UserDefaults.standard.set(serverMine.map { "\($0)" }, forKey: AstraVisualGifts.mineKey(accountPeerId))
-                        AstraVisualGifts.changed()
+                        UserDefaults.standard.set(true, forKey: AstraVisualGifts.syncedKey(accountPeerId))
+                    } else if let serverMine = result.mine, !AstraVisualGifts.isUnsent(accountPeerId) {
+                        UserDefaults.standard.set(true, forKey: AstraVisualGifts.syncedKey(accountPeerId))
+                        if serverMine != AstraVisualGifts.mine(accountPeerId: accountPeerId) {
+                            // Another device of this account changed the account's own list.
+                            UserDefaults.standard.set(serverMine.map { "\($0)" }, forKey: AstraVisualGifts.mineKey(accountPeerId))
+                            AstraVisualGifts.changed()
+                        }
                     }
                     // Sent only when this account's own connection took it (a lookup with another account's token
                     // does not send it).
@@ -211,6 +242,11 @@ public func astraVisualGiftsState(context: AccountContext, peerId: EnginePeer.Id
             }
         }
         return result
+    }
+    if peerId != context.account.peerId {
+        Queue.mainQueue().async {
+            AstraVisualGifts.refreshIfStale(context: context)
+        }
     }
     return combineLatest(state, AstraVisualGifts.giftsSignal(accountPeerId: context.account.peerId, peerId: peerId), catalog)
     |> map { state, ids, catalog -> ProfileGiftsContext.State in
