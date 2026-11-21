@@ -38,6 +38,15 @@ CREATE TABLE IF NOT EXISTS streak_list (
   PRIMARY KEY (owner_id, friend_id)
 );
 
+-- Days restored on one of the account's devices (a restore asked for in the bot reaches one device): every device of the
+-- account counts them.
+CREATE TABLE IF NOT EXISTS streak_restores (
+  owner_id INTEGER NOT NULL,
+  friend_id INTEGER NOT NULL,
+  day INTEGER NOT NULL,
+  PRIMARY KEY (owner_id, friend_id, day)
+);
+
 CREATE TABLE IF NOT EXISTS friends (
   tg_id INTEGER PRIMARY KEY,
   started_at INTEGER NOT NULL,

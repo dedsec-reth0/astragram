@@ -200,6 +200,13 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   r = await post('/api/donate', { stars: 0 });
   check('bad amount refused', r.status, 400);
 
+  // 9e. A day restored on one device (a request from the bot) reaches the account's other devices.
+  q('DELETE FROM streak_list WHERE owner_id = 100 AND friend_id = 1');
+  q('INSERT INTO streak_list (owner_id, friend_id, start_day, stopped, updated_at) VALUES (100, 1, 20400, 0, 1)');
+  await sync('A', { v: 2, pairs: [{ ...pair(1, 20400), restored: [20419, 20420, 99999, 1, 'x'] }] });
+  r = await sync('B', { v: 2, pairs: [pair(1, 20400)] });
+  check('restored days shared', (r.body.restored || []).filter((x) => x.friend === 1).map((x) => x.day).sort(), [20419]);
+
   // 10. Unlink forgets the list.
   call({ op: 'reset' });
   await worker.fetch({ url: 'https://bot.example/api/unlink', method: 'POST', headers: { get: (k) => (k === 'authorization' ? 'Bearer ' + TOKENS.A : null) }, json: async () => ({}) }, env);

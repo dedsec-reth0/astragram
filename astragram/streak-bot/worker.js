@@ -154,6 +154,17 @@ async function handleSync(request, env) {
     if (list && list.stopped.has(friend)) continue;
     friendIds.push(friend);
     const restorable = pair.restorableDay === undefined || pair.restorableDay === null ? null : int(pair.restorableDay, 0, 1e6, 0);
+    // The days this device restored (a restore asked for in the bot reaches one device only): kept for the account,
+    // so its other devices count them too. Only days of the last year, at most 60 a sync.
+    if (list && Array.isArray(pair.restored)) {
+      const day = int(pair.day, 0, 1e6, 0);
+      for (const value of pair.restored.slice(0, 60)) {
+        const restoredDay = int(value, 0, 1e6, 0);
+        if (restoredDay > 0 && restoredDay < day && restoredDay >= day - 400) {
+          statements.push(env.DB.prepare('INSERT OR IGNORE INTO streak_restores (owner_id, friend_id, day) VALUES (?, ?, ?)').bind(owner.tg_id, friend, restoredDay));
+        }
+      }
+    }
     statements.push(env.DB.prepare(list ? PAIR_UPSERT_SHARED : PAIR_UPSERT).bind(owner.tg_id, friend, int(pair.count, 0, 1e5), int(pair.mine, 0, 1e6), int(pair.theirs, 0, 1e6), pair.todayDone ? 1 : 0,
       int(pair.restoresLeft, 0, 7), restorable, int(pair.lostCount, 0, 1e5), int(pair.day, 0, 1e6), need, t));
   }
@@ -197,6 +208,9 @@ async function handleSync(request, env) {
   if (list) {
     reply.streaks = list.active.map((r) => ({ friend: r.friend_id, startDay: r.start_day }));
     reply.stopped = [...list.stopped];
+    const restored = (await env.DB.prepare('SELECT friend_id, day FROM streak_restores WHERE owner_id = ?').bind(owner.tg_id).all()).results || [];
+    const active = new Set(list.active.map((r) => r.friend_id));
+    reply.restored = restored.filter((r) => active.has(r.friend_id)).map((r) => ({ friend: r.friend_id, day: r.day }));
   }
   return json(reply);
 }
@@ -528,6 +542,7 @@ async function handleUnlink(request, env) {
     env.DB.prepare('DELETE FROM pairs WHERE owner_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM streak_list WHERE owner_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM restore_requests WHERE owner_id = ?').bind(owner.tg_id),
+    env.DB.prepare('DELETE FROM streak_restores WHERE owner_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM badges WHERE tg_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM visual_gifts WHERE tg_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM visual_gift_received WHERE to_id = ? OR from_id = ?').bind(owner.tg_id, owner.tg_id),
