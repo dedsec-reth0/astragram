@@ -363,8 +363,10 @@ async function handleGifts(request, env) {
     if (gifts.length === 0) {
       await env.DB.prepare('DELETE FROM visual_gifts WHERE tg_id = ?').bind(owner.tg_id).run();
     } else {
-      await env.DB.prepare('INSERT INTO visual_gifts (tg_id, gifts, updated_at) VALUES (?, ?, ?) ON CONFLICT (tg_id) DO UPDATE SET gifts = excluded.gifts, updated_at = excluded.updated_at')
-        .bind(owner.tg_id, JSON.stringify(gifts), t).run();
+      await env.DB.prepare(`INSERT INTO visual_gifts (tg_id, gifts, updated_at, changed_at) VALUES (?, ?, ?, ?) ON CONFLICT (tg_id) DO UPDATE SET
+        changed_at = CASE WHEN visual_gifts.gifts = excluded.gifts THEN visual_gifts.changed_at ELSE excluded.changed_at END,
+        gifts = excluded.gifts, updated_at = excluded.updated_at`)
+        .bind(owner.tg_id, JSON.stringify(gifts), t, t).run();
     }
   } else {
     await env.DB.prepare('UPDATE visual_gifts SET updated_at = ? WHERE tg_id = ?').bind(t, owner.tg_id).run();
@@ -391,13 +393,16 @@ async function handleGifts(request, env) {
     ? [...new Set(body.check.slice(0, MAX_BADGE_CHECK).map((id) => int(id, 1, Number.MAX_SAFE_INTEGER, 0)).filter((id) => id > 0))]
     : [];
   const users = {};
+  // When each list last changed: shown as the date of the gifts in it.
+  const usersDate = {};
   for (let i = 0; i < check.length; i += D1_CHUNK) {
     const chunk = check.slice(i, i + D1_CHUNK);
-    const rows = (await env.DB.prepare(`SELECT tg_id, gifts FROM visual_gifts WHERE updated_at >= ? AND tg_id IN (${chunk.map(() => '?').join(',')})`)
+    const rows = (await env.DB.prepare(`SELECT tg_id, gifts, changed_at FROM visual_gifts WHERE updated_at >= ? AND tg_id IN (${chunk.map(() => '?').join(',')})`)
       .bind(t - VISUAL_GIFT_DAYS * 86400, ...chunk).all()).results || [];
     for (const r of rows) {
       try {
         users[r.tg_id] = JSON.parse(r.gifts);
+        usersDate[r.tg_id] = r.changed_at || 0;
       } catch {
         // A broken row is skipped.
       }
@@ -413,7 +418,7 @@ async function handleGifts(request, env) {
   }
   const mineReceived = ((await env.DB.prepare('SELECT id, from_id, gift_id, created_at FROM visual_gift_received WHERE to_id = ? ORDER BY id DESC').bind(owner.tg_id).all()).results || []).map(receivedRow);
   const mine = await env.DB.prepare('SELECT gifts FROM visual_gifts WHERE tg_id = ?').bind(owner.tg_id).first();
-  const reply = { users, received, mine: mine ? JSON.parse(mine.gifts) : [], mineReceived };
+  const reply = { users, usersDate, received, mine: mine ? JSON.parse(mine.gifts) : [], mineReceived };
   if (sent !== null) reply.sent = sent;
   return json(reply);
 }

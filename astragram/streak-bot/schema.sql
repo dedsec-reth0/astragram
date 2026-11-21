@@ -103,7 +103,8 @@ CREATE TABLE IF NOT EXISTS broadcasts (
 CREATE TABLE IF NOT EXISTS visual_gifts (
   tg_id INTEGER PRIMARY KEY,
   gifts TEXT NOT NULL DEFAULT '[]',
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  changed_at INTEGER NOT NULL DEFAULT 0
 );
 
 -- Visual gifts one AstraGram user gave another for free: shown on the recipient's profile in AstraGram, with the sender.
