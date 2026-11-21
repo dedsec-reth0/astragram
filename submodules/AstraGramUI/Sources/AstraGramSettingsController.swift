@@ -166,6 +166,8 @@ private enum AstraGramSettingsRootTarget: Equatable {
     case streaks
     case giftShop
     case plugins
+    case feedback
+    case donate
 }
 
 /// The icons of the main page, drawn the way Telegram draws its settings icons: a white glyph on a colored rounded
@@ -213,6 +215,8 @@ enum AstraGramSettingsIcons {
     static let tools = bundled("AITools", UIColor(rgb: 0xAF52DE))
     static let plugins = bundled("Bot", UIColor(rgb: 0x00C7BE))
     static let about = bundled("Settings", UIColor(rgb: 0x8E8E93))
+    static let feedback = symbol("ladybug.fill", UIColor(rgb: 0xFF9500))
+    static let donate = symbol("heart.fill", UIColor(rgb: 0xFF2D55))
 }
 
 private enum AstraGramSettingsEntry: ItemListNodeEntry {
@@ -482,6 +486,10 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                     arguments.openTool(.giftShop)
                 case .plugins:
                     arguments.openPlugins()
+                case .feedback:
+                    arguments.openTool(.feedback)
+                case .donate:
+                    arguments.openTool(.donate)
                 }
             })
         case let .button(_, _, title, label, kind):
@@ -490,7 +498,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openPlugins()
                 })
-            case .ai, .templates, .keywordAlerts, .bookmarks, .lockedChats, .securityCheck, .telegramPrivacy, .streaks, .giftShop:
+            case .ai, .templates, .keywordAlerts, .bookmarks, .lockedChats, .securityCheck, .telegramPrivacy, .streaks, .giftShop, .feedback, .donate:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openTool(kind)
                 })
@@ -538,6 +546,8 @@ private enum AstraGramSettingsButtonKind: Equatable {
     case clearBadge
     case streaks
     case giftShop
+    case feedback
+    case donate
 }
 
 private func formatFileSize(_ size: Int64) -> String {
@@ -567,8 +577,10 @@ private func astraGramSettingsRootEntries(strings: AstraStrings, settings: Astra
     entries.append(.rootRow(id: 1022, section: .rootExtras, icon: AstraGramSettingsIcons.tools, title: strings.pageTools, label: "", target: .page(.tools)))
     entries.append(.rootRow(id: 1023, section: .rootExtras, icon: AstraGramSettingsIcons.plugins, title: strings.plugins, label: pluginCount > 0 ? "\(pluginCount)" : "", target: .plugins))
 
-    entries.append(.rootRow(id: 1030, section: .rootAbout, icon: AstraGramSettingsIcons.about, title: strings.pageAbout, label: "", target: .page(.about)))
-    entries.append(.footer(id: 1031, section: .rootAbout, text: strings.rootFooter))
+    entries.append(.rootRow(id: 1030, section: .rootAbout, icon: AstraGramSettingsIcons.feedback, title: strings.pageFeedback, label: "", target: .feedback))
+    entries.append(.rootRow(id: 1032, section: .rootAbout, icon: AstraGramSettingsIcons.donate, title: strings.pageDonate, label: "", target: .donate))
+    entries.append(.rootRow(id: 1033, section: .rootAbout, icon: AstraGramSettingsIcons.about, title: strings.pageAbout, label: "", target: .page(.about)))
+    entries.append(.footer(id: 1039, section: .rootAbout, text: strings.rootFooter))
     return entries
 }
 
@@ -750,6 +762,7 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
 /// The "AstraGram" section of Settings.
 public func astraGramSettingsController(context: AccountContext, page: AstraGramSettingsPage = .root, makeLinked: @escaping (AstraLinkedTelegramSettings) -> ViewController) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
+    var navigationControllerImpl: (() -> NavigationController?)?
     var presentControllerImpl: ((ViewController) -> Void)?
     var presentNativeControllerImpl: ((UIViewController) -> Void)?
     var topNativeControllerImpl: (() -> UIViewController?)?
@@ -887,6 +900,10 @@ public func astraGramSettingsController(context: AccountContext, page: AstraGram
                 pushControllerImpl?(astraStreaksListController(context: context))
             case .giftShop:
                 astraOpenGiftShop(context: context)
+            case .feedback:
+                astraOpenFeedback(context: context, idea: false)
+            case .donate:
+                astraOpenDonation(context: context, navigationController: navigationControllerImpl?())
             case .clearBadge:
                 AstraBadgeSync.clearName(context: context, completion: { removed in
                     let text = removed ? strings.astraBadgeCleared : strings.astraBadgeNothing
@@ -967,6 +984,9 @@ public func astraGramSettingsController(context: AccountContext, page: AstraGram
     let controller = ItemListController(context: context, state: signal)
     pushControllerImpl = { [weak controller] c in
         (controller?.navigationController as? NavigationController)?.pushViewController(c)
+    }
+    navigationControllerImpl = { [weak controller] in
+        return controller?.navigationController as? NavigationController
     }
     presentControllerImpl = { [weak controller] c in
         controller?.present(c, in: .window(.root))

@@ -255,7 +255,78 @@ public enum AstraStreak {
 
     /// Counts the streak of an account's chat (for the app's modules, which do not use Postbox).
     public static func compute(account: Account, peerId: EnginePeer.Id, startDay: Int32, localRestores: Set<Int32>) -> Signal<AstraStreakState, NoError> {
-        return AstraStreak.compute(postbox: account.postbox, peerId: peerId, startDay: startDay, localRestores: localRestores)
+        let count = AstraStreak.compute(postbox: account.postbox, peerId: peerId, startDay: startDay, localRestores: localRestores)
+        // Counted at once from what is stored, and again once the missing history is in.
+        let load: Signal<AstraStreakState, NoError> = AstraStreak.loadMissingHistory(account: account, peerId: peerId, startDay: startDay)
+        return count |> then(load) |> then(count)
+    }
+
+    private static let loadLock = NSLock()
+    private static var lastLoad: [PeerId: Double] = [:]
+
+    /// The streak is counted from the messages stored on this device, so a chat whose recent history was never opened
+    /// here (a new device, a fresh login) would count only the days it has. Before counting, the gaps in the chat's
+    /// history back to the streak's first day are loaded from the server (at most every 5 minutes for a chat, and at
+    /// most 20 pages of 100 messages at a time).
+    static func loadMissingHistory<T>(account: Account, peerId: PeerId, startDay: Int32) -> Signal<T, NoError> {
+        let now = CFAbsoluteTimeGetCurrent()
+        AstraStreak.loadLock.lock()
+        let last = AstraStreak.lastLoad[peerId]
+        let due = last == nil || now - last! > 5.0 * 60.0
+        if due {
+            AstraStreak.lastLoad[peerId] = now
+        }
+        AstraStreak.loadLock.unlock()
+        if !due {
+            return .complete()
+        }
+        let firstDay = max(startDay, AstraStreak.today() - 370)
+        let fromTimestamp = Int32(clamping: Int64(firstDay) * 86400 - 2 * 86400)
+        let postbox = account.postbox
+
+        func step(_ remaining: Int) -> Signal<T, NoError> {
+            if remaining <= 0 {
+                return .complete()
+            }
+            return postbox.transaction { transaction -> ClosedRange<Int32>? in
+                // Message ids of a chat grow with time, so only the gaps above the newest stored message older than
+                // the streak can hold its days.
+                let older = transaction.getMessages(
+                    peerId: peerId,
+                    namespace: Namespaces.Message.Cloud,
+                    from: MessageIndex(id: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: Int32.max - 1), timestamp: fromTimestamp),
+                    includeFrom: false,
+                    to: MessageIndex.lowerBound(peerId: peerId, namespace: Namespaces.Message.Cloud),
+                    limit: 1
+                )
+                let floor = older.first?.id.id ?? 0
+                let holes = transaction.getHoles(peerId: peerId, namespace: Namespaces.Message.Cloud)
+                guard let range = holes.rangeView.last(where: { $0.upperBound - 1 > Int(floor) }) else {
+                    return nil
+                }
+                let lower = max(Int32(clamping: range.lowerBound), floor + 1)
+                let upper = Int32(clamping: range.upperBound - 1)
+                return lower <= upper ? lower ... upper : nil
+            }
+            |> mapToSignal { range -> Signal<T, NoError> in
+                guard let range = range else {
+                    return .complete()
+                }
+                let direction: MessageHistoryViewRelativeHoleDirection = .range(
+                    start: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: range.upperBound),
+                    end: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: range.lowerBound - 1)
+                )
+                return fetchMessageHistoryHole(accountPeerId: account.peerId, source: .network(account.network), postbox: postbox, peerInput: .direct(peerId: peerId, threadId: nil), namespace: Namespaces.Message.Cloud, direction: direction, space: .everywhere, count: 100)
+                |> mapToSignal { result -> Signal<T, NoError> in
+                    // Nothing taken out of the gap (an error, or a gap the server cannot fill): stop here.
+                    guard let result = result, !result.removedIndices.isEmpty else {
+                        return .complete()
+                    }
+                    return step(remaining - 1)
+                }
+            }
+        }
+        return step(20)
     }
 
     /// The id of the newest message of each chat; changes when a chat gets a message.

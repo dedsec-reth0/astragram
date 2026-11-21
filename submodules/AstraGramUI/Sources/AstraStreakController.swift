@@ -209,6 +209,12 @@ public enum AstraStreakBot {
     }
 
     /// `statusCompletion` also gets the HTTP status (0 without an answer).
+    /// A call that needs no streak-bot link (feedback, donations); the account's token goes along when there is one.
+    static func publicRequest(path: String, accountPeerId: EnginePeer.Id?, body: [String: Any], completion: @escaping ([String: Any]?, Int) -> Void) {
+        let token = accountPeerId.flatMap { AstraStreakBot.token(accountPeerId: $0) }
+        AstraStreakBot.request(path: path, token: token ?? "", body: body, statusCompletion: completion)
+    }
+
     private static func request(path: String, token: String, body: [String: Any], statusCompletion completion: @escaping ([String: Any]?, Int) -> Void) {
         var base = AstraStreakBot.serverURL
         while base.hasSuffix("/") {
@@ -221,7 +227,9 @@ public enum AstraStreakBot {
         var request = URLRequest(url: url, timeoutInterval: 30.0)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = data
         URLSession.shared.dataTask(with: request, completionHandler: { data, response, _ in
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -375,6 +383,8 @@ public enum AstraStreakBot {
         var streaks: [EnginePeer.Id: Int32]?
         /// Streaks a device turned off.
         var stopped: Set<EnginePeer.Id>
+        /// Days restored on any of the account's devices.
+        var restored: [(peerId: EnginePeer.Id, day: Int32)] = []
         /// The starts and stops this sync handed over.
         var sentEvents: [Int64: Int32]
     }
@@ -386,7 +396,7 @@ public enum AstraStreakBot {
     /// Sends the numbers of the streaks and what was turned on or off on this device; returns what the server keeps for
     /// the account, or nil when it did not take them (no connection, or Start not pressed in the bot yet).
     /// `startDays` are the stored ones (a state's `startDay` is cut to the year it counts).
-    static func sync(accountPeerId: EnginePeer.Id, states: [EnginePeer.Id: AstraStreakState], startDays: [EnginePeer.Id: Int32], completion: @escaping (SyncResult?) -> Void) {
+    static func sync(accountPeerId: EnginePeer.Id, states: [EnginePeer.Id: AstraStreakState], startDays: [EnginePeer.Id: Int32], restores: [EnginePeer.Id: Set<Int32>], completion: @escaping (SyncResult?) -> Void) {
         guard AstraStreakBot.isAvailable, let token = AstraStreakBot.token(accountPeerId: accountPeerId) else {
             completion(nil)
             return
@@ -406,6 +416,9 @@ public enum AstraStreakBot {
             ]
             if let restorableDay = state.restorableDay {
                 pair["restorableDay"] = restorableDay
+            }
+            if let days = restores[peerId], !days.isEmpty {
+                pair["restored"] = Array(days.sorted().suffix(60))
             }
             pairs.append(pair)
         }
@@ -448,6 +461,13 @@ public enum AstraStreakBot {
                     }
                 }
                 result.streaks = shared
+            }
+            if let restored = object["restored"] as? [[String: Any]] {
+                for item in restored {
+                    if let friend = (item["friend"] as? NSNumber)?.int64Value, let day = (item["day"] as? NSNumber)?.int32Value {
+                        result.restored.append((peerId: AstraStreakBot.userPeerId(friend), day: day))
+                    }
+                }
             }
             if let stopped = object["stopped"] as? [NSNumber] {
                 result.stopped = Set(stopped.map { AstraStreakBot.userPeerId($0.int64Value) })
@@ -549,6 +569,8 @@ public final class AstraStreakManager {
     private var states: [EnginePeer.Id: AstraStreakState] = [:]
     /// The streaks on this device with their start days, as stored.
     private var localStreaks: [EnginePeer.Id: Int32] = [:]
+    /// The days restored on this device, sent to the bot so the account's other devices count them too.
+    private var localRestores: [EnginePeer.Id: Set<Int32>] = [:]
     private var localStreaksDisposable: Disposable?
     private var lastSync: Double = 0.0
     private var lastSyncedStates: [EnginePeer.Id: AstraStreakState] = [:]
@@ -604,27 +626,30 @@ public final class AstraStreakManager {
         let ticks: Signal<Void, NoError> = .single(Void()) |> then(self.refreshPipe.signal())
 
         self.disposable = (combineLatest(streaks, topMessages, ticks)
-        |> mapToSignal { streaks, _, _ -> Signal<[EnginePeer.Id: AstraStreakState], NoError> in
+        |> mapToSignal { streaks, _, _ -> Signal<([EnginePeer.Id: AstraStreakState], [EnginePeer.Id: Set<Int32>]), NoError> in
             if streaks.isEmpty {
-                return .single([:])
+                return .single(([:], [:]))
             }
-            let signals = streaks.map { peerId, startDay -> Signal<(EnginePeer.Id, AstraStreakState), NoError> in
+            let signals = streaks.map { peerId, startDay -> Signal<(EnginePeer.Id, AstraStreakState, Set<Int32>), NoError> in
                 return store.streakRestores(peerId: peerId)
                 |> mapToSignal { restores in
                     return AstraStreak.compute(account: account, peerId: peerId, startDay: startDay, localRestores: restores)
+                    |> map { (peerId, $0, restores) }
                 }
-                |> map { (peerId, $0) }
             }
             return combineLatest(signals)
-            |> map { pairs -> [EnginePeer.Id: AstraStreakState] in
+            |> map { pairs -> ([EnginePeer.Id: AstraStreakState], [EnginePeer.Id: Set<Int32>]) in
                 var result: [EnginePeer.Id: AstraStreakState] = [:]
-                for (peerId, state) in pairs {
+                var restores: [EnginePeer.Id: Set<Int32>] = [:]
+                for (peerId, state, peerRestores) in pairs {
                     result[peerId] = state
+                    restores[peerId] = peerRestores
                 }
-                return result
+                return (result, restores)
             }
         }
-        |> deliverOnMainQueue).start(next: { [weak self] states in
+        |> deliverOnMainQueue).start(next: { [weak self] states, restores in
+            self?.localRestores = restores
             self?.apply(states)
         })
 
@@ -671,7 +696,8 @@ public final class AstraStreakManager {
         self.lastSyncedStates = states
         self.lastSyncedToken = token
         let store = self.store
-        AstraStreakBot.sync(accountPeerId: accountPeerId, states: states, startDays: self.localStreaks, completion: { [weak self] result in
+        let localRestores = self.localRestores
+        AstraStreakBot.sync(accountPeerId: accountPeerId, states: states, startDays: self.localStreaks, restores: localRestores, completion: { [weak self] result in
             Queue.mainQueue().async {
                 guard let result = result else {
                     if let self, self.lastSyncedToken == token {
@@ -690,6 +716,11 @@ public final class AstraStreakManager {
                         store.addStreakRestore(peerId: restore.peerId, day: restore.day)
                         applied = true
                     }
+                }
+                // Days another device of the account restored (a request from the bot reaches only one of them).
+                for (peerId, day) in result.restored where states[peerId] != nil && !(localRestores[peerId]?.contains(day) ?? false) {
+                    store.addStreakRestore(peerId: peerId, day: day)
+                    applied = true
                 }
                 if applied {
                     self?.lastSync = 0.0
