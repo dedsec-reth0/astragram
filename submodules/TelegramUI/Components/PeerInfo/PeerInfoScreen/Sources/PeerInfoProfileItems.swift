@@ -967,6 +967,13 @@ func infoItems(
         }, requestLayout: { animated in
             interaction.requestLayout(animated)
         }))
+        // AstraGram: a free visual gift for this person, from AstraGram's gift shop.
+        let giftPeer = EnginePeer(user)
+        items[.astraInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.gift", label: isRussian ? "Подарок AstraGram" : "AstraGram Gift", text: isRussian ? "Подарить бесплатно" : "Give for Free", textColor: .accent, action: { _, _ in
+            astraOpenGiftShop(context: context, giftTo: giftPeer)
+        }, requestLayout: { animated in
+            interaction.requestLayout(animated)
+        }))
     }
 
     // AstraGram: the numeric ID (in the Bot API form), tap to copy.

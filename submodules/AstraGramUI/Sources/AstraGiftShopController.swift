@@ -21,9 +21,12 @@ final class AstraGiftShopController: UIViewController, UICollectionViewDataSourc
     private var collectionView: UICollectionView!
     private let headerLabel = UILabel()
     private let emptyLabel = UILabel()
+    /// Giving a gift to this person instead of choosing the account's own.
+    private let giftTo: EnginePeer?
 
-    init(context: AccountContext) {
+    init(context: AccountContext, giftTo: EnginePeer? = nil) {
         self.context = context
+        self.giftTo = giftTo
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
         self.isRussian = self.presentationData.strings.baseLanguageCode.astraUsesRussianTexts
         self.selected = AstraVisualGifts.mine(accountPeerId: context.account.peerId)
@@ -46,9 +49,11 @@ final class AstraGiftShopController: UIViewController, UICollectionViewDataSourc
         super.viewDidLoad()
         let theme = self.presentationData.theme
         self.view.backgroundColor = theme.list.blocksBackgroundColor
-        self.title = self.text("Магазин подарков", "Gift Shop")
+        self.title = self.giftTo == nil ? self.text("Магазин подарков", "Gift Shop") : self.text("Подарить", "Give a Gift")
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.text("Отмена", "Cancel"), style: .plain, target: self, action: #selector(self.cancelPressed))
-        self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: self.text("Готово", "Done"), style: .done, target: self, action: #selector(self.donePressed))
+        if self.giftTo == nil {
+            self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: self.text("Готово", "Done"), style: .done, target: self, action: #selector(self.donePressed))
+        }
 
         self.headerLabel.numberOfLines = 0
         self.headerLabel.font = UIFont.systemFont(ofSize: 13.0)
@@ -112,6 +117,14 @@ final class AstraGiftShopController: UIViewController, UICollectionViewDataSourc
     }
 
     private func updateHeader() {
+        if let giftTo = self.giftTo {
+            let name = giftTo.compactDisplayTitle
+            self.headerLabel.text = self.text(
+                "Выберите подарок для \(name). Это бесплатно: подарок появится в профиле \(name) с пометкой «AstraGram» и вашим именем, и увидят его только пользователи AstraGram. \(name) может его убрать.",
+                "Choose a gift for \(name). It's free: the gift shows on \(name)'s profile with an \"AstraGram\" ribbon and your name, and only AstraGram users see it. \(name) can take it off."
+            )
+            return
+        }
         self.headerLabel.text = self.text(
             "Выбрано: \(self.selected.count) из \(AstraVisualGifts.maxGifts). Подарки не покупаются: они появятся в вашем профиле с пометкой «AstraGram», и увидят их только пользователи AstraGram.",
             "Chosen: \(self.selected.count) of \(AstraVisualGifts.maxGifts). Gifts are not bought: they show on your profile with an \"AstraGram\" ribbon, and only AstraGram users see them."
@@ -133,7 +146,7 @@ final class AstraGiftShopController: UIViewController, UICollectionViewDataSourc
         let isSelected = self.selected.contains(gift.id)
         let isSoldOut = gift.soldOut != nil || gift.availability?.remains == 0
         var ribbon: GiftItemComponent.Ribbon?
-        if isSelected {
+        if isSelected && self.giftTo == nil {
             ribbon = GiftItemComponent.Ribbon(text: "AstraGram", color: .purple)
         } else if isSoldOut {
             ribbon = GiftItemComponent.Ribbon(text: self.text("распродан", "sold out"), color: .red)
@@ -150,15 +163,71 @@ final class AstraGiftShopController: UIViewController, UICollectionViewDataSourc
                 peer: nil,
                 subject: .starGift(gift: gift, price: "# \(gift.price)"),
                 ribbon: ribbon,
-                isSelected: isSelected,
-                mode: .select,
+                isSelected: self.giftTo == nil && isSelected,
+                mode: self.giftTo == nil ? .select : .generic,
                 action: { [weak self] in
-                    self?.toggle(gift.id)
+                    guard let self else {
+                        return
+                    }
+                    if self.giftTo != nil {
+                        self.give(gift)
+                    } else {
+                        self.toggle(gift.id)
+                    }
                 }
             ),
             size: size
         )
         return cell
+    }
+
+    private func give(_ gift: StarGift.Gift) {
+        guard let giftTo = self.giftTo else {
+            return
+        }
+        let context = self.context
+        let isRussian = self.isRussian
+        let name = giftTo.compactDisplayTitle
+        let title = gift.title ?? self.text("подарок", "gift")
+        let give = { [weak self] in
+            AstraVisualGifts.give(context: context, to: giftTo.id, gift: gift.id, completion: { result in
+                let text: String
+                switch result {
+                case .given:
+                    AstraHaptics.success()
+                    text = isRussian ? "Подарок для \(name) уже в профиле: его видят пользователи AstraGram" : "The gift is on \(name)'s profile: AstraGram users see it"
+                    self?.dismiss(animated: true)
+                case .limit:
+                    text = isRussian ? "На сегодня подарки закончились: можно дарить до 20 в день" : "No more gifts today: up to 20 a day"
+                case .failed:
+                    text = isRussian ? "Не получилось подарить. Проверьте интернет и попробуйте ещё раз" : "Couldn't give the gift. Check the connection and try again"
+                }
+                let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                context.sharedContext.mainWindow?.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), on: .root, blockInteraction: false, completion: {})
+            })
+        }
+        let linked = AstraStreakBot.isLinked(accountPeerId: context.account.peerId)
+        let alert = UIAlertController(
+            title: self.text("Подарить «\(title)»?", "Give \"\(title)\"?"),
+            message: linked
+                ? self.text("Подарок бесплатный и визуальный: он появится в профиле \(name) с пометкой «AstraGram» и вашим именем, видят его только пользователи AstraGram.", "The gift is free and visual: it shows on \(name)'s profile with an \"AstraGram\" ribbon and your name, and only AstraGram users see it.")
+                : self.text("Подарок бесплатный и визуальный: он появится в профиле \(name) с пометкой «AstraGram» и вашим именем. Для этого AstraGram подключит бота огоньков @\(AstraStreakBot.username) (в его чат уйдёт одно сообщение «/start»): серверу уходят ваш Telegram ID, ID \(name) и номер подарка.", "The gift is free and visual: it shows on \(name)'s profile with an \"AstraGram\" ribbon and your name. For this AstraGram connects the streak bot @\(AstraStreakBot.username) (one \"/start\" goes to its chat): the server gets your Telegram ID, \(name)'s ID and the gift number."),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: self.text("Отмена", "Cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: self.text("Подарить", "Give"), style: .default, handler: { _ in
+            if linked {
+                give()
+            } else {
+                AstraStreakBot.linkSilently(context: context, completion: { _ in
+                    // The bot learns the token from "/start": the gift goes a moment later.
+                    Queue.mainQueue().after(5.0, {
+                        give()
+                    })
+                })
+            }
+        }))
+        self.present(alert, animated: true)
     }
 
     private func toggle(_ id: Int64) {
@@ -247,12 +316,45 @@ private final class AstraGiftShopCell: UICollectionViewCell {
     }
 }
 
-/// Opens the gift shop over the app.
-public func astraOpenGiftShop(context: AccountContext) {
+/// Opens the gift shop over the app: the account's own gifts, or a gift for `giftTo`.
+public func astraOpenGiftShop(context: AccountContext, giftTo: EnginePeer? = nil) {
     guard let top = astraTopViewController() else {
         return
     }
-    let navigation = UINavigationController(rootViewController: AstraGiftShopController(context: context))
+    let navigation = UINavigationController(rootViewController: AstraGiftShopController(context: context, giftTo: giftTo))
     navigation.modalPresentationStyle = .pageSheet
     top.present(navigation, animated: true)
+}
+
+/// The action of a visual gift's screen: take it off one's own profile, or give a gift to the profile's owner.
+public func astraVisualGiftAction(context: AccountContext, peerId: EnginePeer.Id, item: ProfileGiftsContext.State.StarGift) -> (title: String, action: () -> Void)? {
+    let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
+    let accountPeerId = context.account.peerId
+    if peerId == accountPeerId {
+        guard let entry = AstraVisualGifts.entry(accountPeerId: accountPeerId, peerId: peerId, item: item) else {
+            return nil
+        }
+        return (title: isRussian ? "Убрать из профиля" : "Remove from Profile", action: {
+            if let received = entry.received {
+                AstraVisualGifts.hideReceived(context: context, id: received.id, completion: { _ in })
+            } else {
+                AstraVisualGifts.removeMine(context: context, gift: entry.gift)
+            }
+        })
+    }
+    guard peerId.namespace == Namespaces.Peer.CloudUser else {
+        return nil
+    }
+    return (title: isRussian ? "Подарить бесплатно" : "Give a Free Gift", action: {
+        let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+        |> deliverOnMainQueue).start(next: { peer in
+            guard let peer else {
+                return
+            }
+            // After the gift's screen has gone.
+            Queue.mainQueue().after(0.4, {
+                astraOpenGiftShop(context: context, giftTo: peer)
+            })
+        })
+    })
 }

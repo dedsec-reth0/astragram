@@ -560,7 +560,8 @@ final class GiftsListView: UIView {
                 case let .generic(gift):
                     subject = .starGift(gift: gift, price: "# \(gift.price)")
                     // AstraGram: a visual gift has no sender, not even an anonymous one.
-                    peer = product.astraIsVisual ? nil : (product.fromPeer.flatMap { .peer($0) } ?? .anonymous)
+                    // AstraGram: a visual gift shows its giver, or nobody when its owner put it on.
+                    peer = product.astraIsVisual ? product.fromPeer.flatMap { .peer($0) } : (product.fromPeer.flatMap { .peer($0) } ?? .anonymous)
                     
                     if let availability = gift.availability {
                         ribbonText = params.presentationData.strings.PeerInfo_Gifts_OneOf(compactNumericCountString(Int(availability.total), decimalSeparator: params.presentationData.dateTimeFormat.decimalSeparator)).string
@@ -675,13 +676,15 @@ final class GiftsListView: UIView {
                                         }
                                     }
                                 } else if product.astraIsVisual {
-                                    // AstraGram: a visual gift has nothing to show or do on Telegram's gift screen.
-                                    let isOwn = self.peerId == self.context.account.peerId
-                                    let isRussian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
-                                    let text = isRussian
-                                        ? (isOwn ? "Визуальный подарок AstraGram: он не куплен, его видят только пользователи AstraGram. Изменить — в настройках AstraGram → «Магазин подарков»." : "Визуальный подарок AstraGram: он не куплен, его показывает только AstraGram.")
-                                        : (isOwn ? "An AstraGram visual gift: not bought, only AstraGram users see it. Change it in AstraGram settings → Gift Shop." : "An AstraGram visual gift: not bought, only AstraGram shows it.")
-                                    self.parentController?.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: true, animateInAsReplacement: false, action: { _ in return false }), in: .window(.root))
+                                    // AstraGram: a visual gift opens Telegram's gift screen on its own, with AstraGram's
+                                    // action (take it off, give one like it) in place of the purchase buttons.
+                                    let action = astraVisualGiftAction(context: self.context, peerId: self.peerId, item: product)
+                                    let controller = GiftViewScreen(
+                                        context: self.context,
+                                        subject: .profileGift(self.peerId, product),
+                                        customAction: action.map { GiftViewScreen.CustomAction(title: $0.title, action: $0.action) }
+                                    )
+                                    self.parentController?.push(controller)
                                 } else {
                                     let allSubjects: [GiftViewScreen.Subject] = (self.starsProducts ?? []).filter { !$0.astraIsVisual }.map { .profileGift(self.peerId, $0) }
                                     let index = self.starsProducts?.filter({ !$0.astraIsVisual }).firstIndex(where: { $0 == product }) ?? 0

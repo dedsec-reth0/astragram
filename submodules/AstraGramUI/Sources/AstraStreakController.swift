@@ -262,20 +262,30 @@ public enum AstraStreakBot {
     }
 
     struct VisualGiftsResult {
-        /// The visual gifts of the people asked about, by Telegram ID.
+        /// The visual gifts the people asked about put on their own profiles, by Telegram ID.
         var users: [Int64: [Int64]]
+        /// When each of those lists last changed.
+        var usersDate: [Int64: Int32] = [:]
+        /// The visual gifts the people asked about were given by others, by Telegram ID.
+        var received: [Int64: [AstraReceivedGift]]
         /// The account's own list as the server keeps it; nil when another account's token asked.
         var mine: [Int64]?
+        /// The gifts others gave this account; nil when another account's token asked.
+        var mineReceived: [AstraReceivedGift]?
+        /// The server's ID of the gift this call gave (`send`).
+        var sent: Int64?
+        /// The HTTP status of a refused call (429: the day's gifts are used up).
+        var status: Int = 200
     }
 
-    /// Sends the account's visual gifts (`set`, when given) and gets the visual gifts of `check` (the people in the
-    /// account's chats and contacts); nil when the server did not answer or the bot is not connected.
-    /// Without `set`, another account's token on this device does for asking (`tokenForLookup`); the answer's `mine` is
-    /// then that account's and is left out.
-    static func visualGifts(accountPeerId: EnginePeer.Id, set: [Int64]?, check: [Int64], completion: @escaping (VisualGiftsResult?) -> Void) {
+    /// Sends the account's visual gifts (`set`), gives a gift (`send`), takes received gifts off (`hide`), and gets the
+    /// visual gifts of `check` (the people in the account's chats and contacts); nil when the server did not answer or
+    /// the bot is not connected. With none of `set`, `send` and `hide`, another account's token on this device does for
+    /// asking (`tokenForLookup`); the answer's own lists are then that account's and are left out.
+    static func visualGifts(accountPeerId: EnginePeer.Id, set: [Int64]?, send: (to: Int64, gift: Int64)? = nil, hide: [Int64] = [], check: [Int64], completion: @escaping (VisualGiftsResult?) -> Void) {
         let ownToken = AstraStreakBot.token(accountPeerId: accountPeerId)
         let tokens: [String]
-        if set != nil {
+        if set != nil || send != nil || !hide.isEmpty {
             tokens = ownToken.map { [$0] } ?? []
         } else {
             tokens = AstraStreakBot.tokensForLookup(accountPeerId: accountPeerId)
@@ -289,40 +299,71 @@ public enum AstraStreakBot {
         if let set {
             body["gifts"] = set.map { "\($0)" }
         }
-        func ids(_ value: Any?) -> [Int64] {
-            guard let list = value as? [Any] else {
-                return []
+        if let send {
+            body["send"] = ["to": NSNumber(value: send.to), "gift": "\(send.gift)"]
+        }
+        if !hide.isEmpty {
+            body["hide"] = hide.map { NSNumber(value: $0) }
+        }
+        func int64(_ item: Any?) -> Int64? {
+            if let string = item as? String {
+                return Int64(string)
             }
-            return list.compactMap { item -> Int64? in
-                if let string = item as? String {
-                    return Int64(string)
+            return (item as? NSNumber)?.int64Value
+        }
+        func ids(_ value: Any?) -> [Int64] {
+            return (value as? [Any] ?? []).compactMap(int64)
+        }
+        func receivedList(_ value: Any?) -> [AstraReceivedGift] {
+            return (value as? [[String: Any]] ?? []).compactMap { item in
+                guard let id = int64(item["id"]), let gift = int64(item["gift"]), let from = int64(item["from"]) else {
+                    return nil
                 }
-                return (item as? NSNumber)?.int64Value
+                return AstraReceivedGift(id: id, gift: gift, from: from, date: Int32(clamping: int64(item["date"]) ?? 0))
             }
         }
         func attempt(_ index: Int) {
             let token = tokens[index]
             let isOwn = token == ownToken
-        AstraStreakBot.request(path: "/api/gifts", token: token, body: body, statusCompletion: { object, status in
-            guard let object = object else {
-                // A token the server does not know: the next one on this device.
-                if status == 401 && index + 1 < tokens.count {
-                    attempt(index + 1)
-                } else {
-                    completion(nil)
+            AstraStreakBot.request(path: "/api/gifts", token: token, body: body, statusCompletion: { object, status in
+                guard let object = object else {
+                    // A token the server does not know: the next one on this device.
+                    if status == 401 && index + 1 < tokens.count {
+                        attempt(index + 1)
+                    } else if status == 429 || status == 400 {
+                        completion(VisualGiftsResult(users: [:], received: [:], mine: nil, mineReceived: nil, sent: nil, status: status))
+                    } else {
+                        completion(nil)
+                    }
+                    return
                 }
-                return
-            }
-            var users: [Int64: [Int64]] = [:]
-            if let map = object["users"] as? [String: Any] {
-                for (user, gifts) in map {
+                var users: [Int64: [Int64]] = [:]
+                for (user, gifts) in object["users"] as? [String: Any] ?? [:] {
                     if let user = Int64(user) {
                         users[user] = ids(gifts)
                     }
                 }
-            }
-            completion(VisualGiftsResult(users: users, mine: isOwn ? ids(object["mine"]) : nil))
-        })
+                var usersDate: [Int64: Int32] = [:]
+                for (user, date) in object["usersDate"] as? [String: Any] ?? [:] {
+                    if let user = Int64(user), let date = int64(date) {
+                        usersDate[user] = Int32(clamping: date)
+                    }
+                }
+                var received: [Int64: [AstraReceivedGift]] = [:]
+                for (user, gifts) in object["received"] as? [String: Any] ?? [:] {
+                    if let user = Int64(user) {
+                        received[user] = receivedList(gifts)
+                    }
+                }
+                completion(VisualGiftsResult(
+                    users: users,
+                    usersDate: usersDate,
+                    received: received,
+                    mine: isOwn ? ids(object["mine"]) : nil,
+                    mineReceived: isOwn ? receivedList(object["mineReceived"]) : nil,
+                    sent: int64(object["sent"])
+                ))
+            })
         }
         attempt(0)
     }
