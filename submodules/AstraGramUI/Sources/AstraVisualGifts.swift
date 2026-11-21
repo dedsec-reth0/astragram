@@ -231,7 +231,7 @@ extension AstraVisualGifts {
     }
 }
 
-/// A profile's gifts with its visual gifts added after the real ones (in the "All" view only).
+/// A profile's gifts with its visual gifts first, before the real ones (in the "All" view only).
 public func astraVisualGiftsState(context: AccountContext, peerId: EnginePeer.Id, state: Signal<ProfileGiftsContext.State, NoError>) -> Signal<ProfileGiftsContext.State, NoError> {
     let catalog = context.engine.payments.cachedStarGifts()
     |> map { gifts -> [Int64: StarGift.Gift] in
@@ -255,9 +255,10 @@ public func astraVisualGiftsState(context: AccountContext, peerId: EnginePeer.Id
             return state
         }
         var state = state
-        state.gifts = state.gifts + items
+        // First, before the real gifts.
+        state.gifts = items + state.gifts
         if state.filter == .All {
-            state.filteredGifts = state.filteredGifts + items
+            state.filteredGifts = items + state.filteredGifts
         }
         state.count = (state.count ?? 0) + Int32(items.count)
         return state
