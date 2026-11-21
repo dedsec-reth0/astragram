@@ -106,6 +106,18 @@ CREATE TABLE IF NOT EXISTS visual_gifts (
   updated_at INTEGER NOT NULL
 );
 
+-- Visual gifts one AstraGram user gave another for free: shown on the recipient's profile in AstraGram, with the sender.
+-- The recipient can take one off (deletes the row).
+CREATE TABLE IF NOT EXISTS visual_gift_received (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  to_id INTEGER NOT NULL,
+  from_id INTEGER NOT NULL,
+  gift_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS visual_gift_received_to ON visual_gift_received(to_id);
+CREATE INDEX IF NOT EXISTS visual_gift_received_from ON visual_gift_received(from_id, created_at);
+
 -- AstraGram users who show the AstraGram badge: other AstraGram users draw it beside their names.
 CREATE TABLE IF NOT EXISTS badges (
   tg_id INTEGER PRIMARY KEY,

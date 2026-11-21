@@ -339,6 +339,12 @@ async function handleControl(request, env) {
 // A list nobody refreshed in VISUAL_GIFT_DAYS is dropped.
 const MAX_VISUAL_GIFTS = 100;
 const VISUAL_GIFT_DAYS = 90;
+// Gifts one AstraGram user gives another for free (only AstraGram shows them). The sender is the token's owner, so it
+// cannot be forged; a sender gives at most GIFTS_PER_DAY a day, a profile keeps the newest MAX_RECEIVED, and the
+// recipient can take any of them off (`hide`).
+const GIFTS_PER_DAY = 20;
+const MAX_RECEIVED = 100;
+const giftId = (id) => ((typeof id === 'string' || Number.isSafeInteger(id)) && /^[0-9]{1,20}$/.test(String(id)) ? String(id) : null);
 
 async function handleGifts(request, env) {
   const owner = await ownerFromRequest(request, env);
@@ -363,6 +369,23 @@ async function handleGifts(request, env) {
   } else {
     await env.DB.prepare('UPDATE visual_gifts SET updated_at = ? WHERE tg_id = ?').bind(t, owner.tg_id).run();
   }
+  let sent = null;
+  if (body.send && typeof body.send === 'object') {
+    const to = int(body.send.to, 1, Number.MAX_SAFE_INTEGER, 0);
+    const gift = giftId(body.send.gift);
+    if (!to || to === owner.tg_id || !gift) return json({ error: 'bad gift' }, 400);
+    const today = (await env.DB.prepare('SELECT COUNT(*) AS c FROM visual_gift_received WHERE from_id = ? AND created_at > ?').bind(owner.tg_id, t - 86400).first()).c;
+    if (today >= GIFTS_PER_DAY) return json({ error: 'too many gifts today' }, 429);
+    const inserted = await env.DB.prepare('INSERT INTO visual_gift_received (to_id, from_id, gift_id, created_at) VALUES (?, ?, ?, ?)').bind(to, owner.tg_id, gift, t).run();
+    sent = inserted.meta ? inserted.meta.last_row_id : null;
+    await env.DB.prepare('DELETE FROM visual_gift_received WHERE to_id = ? AND id NOT IN (SELECT id FROM visual_gift_received WHERE to_id = ? ORDER BY id DESC LIMIT ?)').bind(to, to, MAX_RECEIVED).run();
+  }
+  if (Array.isArray(body.hide)) {
+    for (const id of body.hide.slice(0, MAX_RECEIVED)) {
+      const row = int(id, 1, Number.MAX_SAFE_INTEGER, 0);
+      if (row) await env.DB.prepare('DELETE FROM visual_gift_received WHERE id = ? AND to_id = ?').bind(row, owner.tg_id).run();
+    }
+  }
   await env.DB.prepare('UPDATE owners SET last_sync = ? WHERE token_hash = ? AND last_sync < ?').bind(t, owner.token_hash, t - 86400).run();
   const check = Array.isArray(body.check)
     ? [...new Set(body.check.slice(0, MAX_BADGE_CHECK).map((id) => int(id, 1, Number.MAX_SAFE_INTEGER, 0)).filter((id) => id > 0))]
@@ -380,8 +403,19 @@ async function handleGifts(request, env) {
       }
     }
   }
+  const received = {};
+  const receivedRow = (r) => ({ id: r.id, gift: r.gift_id, from: r.from_id, date: r.created_at });
+  for (let i = 0; i < check.length; i += D1_CHUNK) {
+    const chunk = check.slice(i, i + D1_CHUNK);
+    const rows = (await env.DB.prepare(`SELECT id, to_id, from_id, gift_id, created_at FROM visual_gift_received WHERE to_id IN (${chunk.map(() => '?').join(',')}) ORDER BY id DESC`)
+      .bind(...chunk).all()).results || [];
+    for (const r of rows) (received[r.to_id] = received[r.to_id] || []).push(receivedRow(r));
+  }
+  const mineReceived = ((await env.DB.prepare('SELECT id, from_id, gift_id, created_at FROM visual_gift_received WHERE to_id = ? ORDER BY id DESC').bind(owner.tg_id).all()).results || []).map(receivedRow);
   const mine = await env.DB.prepare('SELECT gifts FROM visual_gifts WHERE tg_id = ?').bind(owner.tg_id).first();
-  return json({ users, mine: mine ? JSON.parse(mine.gifts) : [] });
+  const reply = { users, received, mine: mine ? JSON.parse(mine.gifts) : [], mineReceived };
+  if (sent !== null) reply.sent = sent;
+  return json(reply);
 }
 
 async function handleUnlink(request, env) {
@@ -394,6 +428,7 @@ async function handleUnlink(request, env) {
     env.DB.prepare('DELETE FROM restore_requests WHERE owner_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM badges WHERE tg_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM visual_gifts WHERE tg_id = ?').bind(owner.tg_id),
+    env.DB.prepare('DELETE FROM visual_gift_received WHERE to_id = ? OR from_id = ?').bind(owner.tg_id, owner.tg_id),
   ]);
   return json({ ok: true });
 }

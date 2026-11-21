@@ -149,11 +149,32 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   r = await gifts('C', { gifts: [] , check: [100] });
   check('empty list clears own gifts', r.body.mine, []);
 
+  // 9c. Free gifts: A (100) gives C (200) a gift; C and anyone asking about 200 see it with the sender; C can take it off.
+  r = await gifts('A', { send: { to: 200, gift: '5170145012310081615' }, check: [] });
+  check('gift sent', typeof r.body.sent, 'number');
+  const sentId = r.body.sent;
+  r = await gifts('A', { send: { to: 100, gift: '5170145012310081615' } });
+  check('no gift to oneself', r.status, 400);
+  r = await gifts('A', { send: { to: 200, gift: 'x' } });
+  check('no junk gift id', r.status, 400);
+  r = await gifts('C', { check: [] });
+  check('recipient sees own received gift', r.body.mineReceived.map((g) => [g.gift, g.from]), [['5170145012310081615', 100]]);
+  r = await gifts('B', { check: [200] });
+  check('others see received gifts of a checked id', r.body.received[200].map((g) => g.from), [100]);
+  r = await gifts('A', { hide: [sentId], check: [200] });
+  check('sender cannot take it off', r.body.received[200].length, 1);
+  r = await gifts('C', { hide: [sentId], check: [] });
+  check('recipient takes it off', r.body.mineReceived, []);
+  for (let i = 0; i < 20; i++) await gifts('A', { send: { to: 200, gift: '1' } });
+  r = await gifts('A', { send: { to: 200, gift: '1' } });
+  check('daily limit', r.status, 429);
+
   // 10. Unlink forgets the list.
   call({ op: 'reset' });
   await worker.fetch({ url: 'https://bot.example/api/unlink', method: 'POST', headers: { get: (k) => (k === 'authorization' ? 'Bearer ' + TOKENS.A : null) }, json: async () => ({}) }, env);
   check('unlink clears list', q('SELECT COUNT(*) AS c FROM streak_list WHERE owner_id = 100')[0].c, 0);
   check('unlink clears visual gifts', q('SELECT COUNT(*) AS c FROM visual_gifts WHERE tg_id = 100')[0].c, 0);
+  check('unlink clears given gifts', q('SELECT COUNT(*) AS c FROM visual_gift_received WHERE from_id = 100')[0].c, 0);
 
   print(failures ? `${failures} FAILED` : 'all passed');
 })().catch((e) => print('Exception ' + e + '\n' + e.stack));
