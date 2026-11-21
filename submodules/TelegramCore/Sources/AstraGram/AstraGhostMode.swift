@@ -22,7 +22,8 @@ import SwiftSignalKit
 public enum AstraGhostMode {
     private static let readAllowances = Atomic<Set<PeerId>>(value: Set())
 
-    private static let onlinePipe = ValuePipe<Void>()
+    /// The network of the account whose activity it was (nil: not known, every account answers).
+    private static let onlinePipe = ValuePipe<ObjectIdentifier?>()
 
     /// Requests that only read: the server does not show the account online for them. Every other request (sending,
     /// reading a chat, reacting, voting, reading mentions or reactions, editing, joining, viewing stories...) is
@@ -59,14 +60,27 @@ public enum AstraGhostMode {
     /// Something has just made the server show the account online. With the online status hidden, the presence
     /// manager of every account answers with `account.updateStatus(offline: true)`.
     public static func markAsOnline() {
+        AstraGhostMode.markAsOnline(networkId: nil)
+    }
+
+    /// The same for the account that uses `networkId`: only that account answers, so activity in one account does not
+    /// send "offline" for the others (which would end their real "online" on their other devices).
+    static func markAsOnline(networkId: ObjectIdentifier?) {
         if !AstraGramSettings.current.hideOnlineStatus {
             return
         }
-        AstraGhostMode.onlinePipe.putNext(Void())
+        AstraGhostMode.onlinePipe.putNext(networkId)
     }
 
-    static func markedAsOnline() -> Signal<Void, NoError> {
+    static func markedAsOnline(network: Network) -> Signal<Void, NoError> {
+        let id = ObjectIdentifier(network)
         return AstraGhostMode.onlinePipe.signal()
+        |> filter { networkId in
+            return networkId == nil || networkId == id
+        }
+        |> map { _ -> Void in
+            return Void()
+        }
     }
 
     /// Fires when the server reports the account itself as online, whatever caused it (this device or another).

@@ -169,8 +169,8 @@ private enum AstraGramSettingsRootTarget: Equatable {
 
 /// The icons of the main page, drawn the way Telegram draws its settings icons: a white glyph on a colored rounded
 /// square with the same light gradient on top.
-private enum AstraGramSettingsIcons {
-    private static func render(glyph: UIImage?, color: UIColor) -> UIImage? {
+enum AstraGramSettingsIcons {
+    static func render(glyph: UIImage?, color: UIColor) -> UIImage? {
         let size = CGSize(width: 30.0, height: 30.0)
         let format = UIGraphicsImageRendererFormat()
         format.opaque = false
@@ -190,11 +190,11 @@ private enum AstraGramSettingsIcons {
         }
     }
 
-    private static func bundled(_ name: String, _ color: UIColor) -> UIImage? {
+    static func bundled(_ name: String, _ color: UIColor) -> UIImage? {
         return render(glyph: UIImage(bundleImageName: "Item List/Icons/\(name)"), color: color)
     }
 
-    private static func symbol(_ name: String, _ color: UIColor) -> UIImage? {
+    static func symbol(_ name: String, _ color: UIColor) -> UIImage? {
         let configuration = UIImage.SymbolConfiguration(pointSize: 16.0, weight: .semibold)
         return render(glyph: UIImage(systemName: name, withConfiguration: configuration), color: color)
     }
@@ -785,9 +785,21 @@ public func astraGramSettingsController(context: AccountContext, page: AstraGram
         reset: {
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let strings = AstraStrings(presentationData.strings)
-            AstraGramSettings.reset()
-            AstraHaptics.success()
-            presentControllerImpl?(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: strings.resetDone, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }))
+            let actionSheet = ActionSheetController(presentationData: presentationData)
+            actionSheet.setItemGroups([ActionSheetItemGroup(items: [
+                ActionSheetTextItem(title: strings.resetConfirm),
+                ActionSheetButtonItem(title: strings.resetSettings, color: .destructive, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                    AstraGramSettings.reset()
+                    AstraHaptics.success()
+                    presentControllerImpl?(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: strings.resetDone, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }))
+                })
+            ]), ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                })
+            ])])
+            presentControllerImpl?(actionSheet)
         },
         openPlugins: {
             pushControllerImpl?(astraPluginsController(context: context))

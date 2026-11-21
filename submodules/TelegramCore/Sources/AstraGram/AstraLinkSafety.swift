@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// AstraGram security: what is checked about an external link before it opens.
 public enum AstraLinkSafety {
@@ -77,13 +78,9 @@ public enum AstraLinkSafety {
         if host.contains(":") {
             return .ipAddress
         }
-        let parts = host.split(separator: ".")
-        if parts.count == 4 && parts.allSatisfy({ part -> Bool in
-            if let value = Int(part) {
-                return value >= 0 && value <= 255
-            }
-            return false
-        }) {
+        // Every form a browser reads as an IPv4 address: 1.2.3.4, but also 2130706433, 0x7f.0.0.1 or 127.1.
+        var address = in_addr()
+        if inet_aton(host, &address) != 0 {
             return .ipAddress
         }
         let isTelegram = AstraLinkSafety.telegramHosts.contains(where: { host == $0 || host.hasSuffix("." + $0) })
@@ -95,7 +92,7 @@ public enum AstraLinkSafety {
                 .replacingOccurrences(of: "0", with: "o")
                 .replacingOccurrences(of: "rn", with: "m")
                 .replacingOccurrences(of: "q", with: "g")
-            if normalized.contains("telegram") || normalized.contains("telegrarn") {
+            if normalized.contains("telegram") {
                 return .imitatesTelegram
             }
         }

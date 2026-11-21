@@ -360,7 +360,7 @@ func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, ur
     // AstraGram security: trackers are cut from the link, and a link that looks dangerous is confirmed first.
     let url = AstraGramSettings.current.stripLinkTrackers ? AstraLinkSafety.removingTrackers(rawUrl) : rawUrl
     if AstraGramSettings.current.warnSuspiciousLinks, let warning = AstraLinkSafety.warning(for: url), !AstraLinkSafety.consumeConfirmation(url) {
-        let isRussian = presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+        let isRussian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
         let reason: String
         switch warning {
         case .lookalikeLetters:

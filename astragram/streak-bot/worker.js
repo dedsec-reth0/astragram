@@ -133,23 +133,29 @@ async function handleSync(request, env) {
     ).bind(owner.tg_id, friend, int(pair.count, 0, 1e5), int(pair.mine, 0, 1e6), int(pair.theirs, 0, 1e6), pair.todayDone ? 1 : 0,
       int(pair.restoresLeft, 0, 7), restorable, int(pair.lostCount, 0, 1e5), int(pair.day, 0, 1e6), need, t));
   }
-  // Streaks turned off in the app are gone here too.
-  if (friendIds.length > 0) {
-    statements.push(env.DB.prepare(`DELETE FROM pairs WHERE owner_id = ? AND friend_id NOT IN (${friendIds.map(() => '?').join(',')})`).bind(owner.tg_id, ...friendIds));
-  } else {
-    statements.push(env.DB.prepare('DELETE FROM pairs WHERE owner_id = ?').bind(owner.tg_id));
-  }
+  // Streaks turned off in the app are gone here too: every pair this sync did not touch (D1 takes at most 100 bound
+  // parameters, so no NOT IN over the whole list).
+  statements.push(env.DB.prepare('DELETE FROM pairs WHERE owner_id = ? AND updated_at < ?').bind(owner.tg_id, t));
   await env.DB.batch(statements);
 
-  // Whoever started the bot before this streak reached it hears about it now, without pressing anything.
+  // Whoever started the bot before this streak reached it hears about it now, without pressing anything. Once per
+  // pair ever: turning a streak off and on (or a client sending made-up IDs) must not make the bot message anyone again.
   const fresh = friendIds.filter((id) => !known.has(id));
   if (fresh.length > 0) {
-    const listening = (await env.DB.prepare(`SELECT tg_id FROM friends WHERE stopped = 0 AND tg_id IN (${fresh.map(() => '?').join(',')})`).bind(...fresh).all()).results || [];
+    await env.DB.prepare('CREATE TABLE IF NOT EXISTS notified (owner_id INTEGER NOT NULL, friend_id INTEGER NOT NULL, PRIMARY KEY (owner_id, friend_id))').run();
     const name = cleanName(owner.name);
-    for (const row of listening) {
-      const reply = await streaksMessage(env, row.tg_id, true);
-      reply.text = `🔥 ${name} начал(а) с тобой огонёк!\n\n${reply.text}`;
-      await tg(env, 'sendMessage', { chat_id: row.tg_id, ...reply });
+    for (let i = 0; i < fresh.length; i += D1_CHUNK) {
+      const chunk = fresh.slice(i, i + D1_CHUNK);
+      const listening = (await env.DB.prepare(
+        `SELECT tg_id FROM friends WHERE stopped = 0 AND tg_id IN (${chunk.map(() => '?').join(',')})
+           AND tg_id NOT IN (SELECT friend_id FROM notified WHERE owner_id = ?)`
+      ).bind(...chunk, owner.tg_id).all()).results || [];
+      for (const row of listening) {
+        await env.DB.prepare('INSERT OR IGNORE INTO notified (owner_id, friend_id) VALUES (?, ?)').bind(owner.tg_id, row.tg_id).run();
+        const reply = await streaksMessage(env, row.tg_id, true);
+        reply.text = `🔥 ${name} начал(а) с тобой огонёк!\n\n${reply.text}`;
+        await tg(env, 'sendMessage', { chat_id: row.tg_id, ...reply });
+      }
     }
   }
 
@@ -159,10 +165,12 @@ async function handleSync(request, env) {
 }
 
 // The AstraGram badge. Telegram drops invisible characters from names, so the badge cannot ride in the name: an app
-// with the badge on says so here, and every AstraGram with the badge on gets the whole list back (no contacts are
-// sent). A badge nobody refreshed in BADGE_DAYS is dropped.
+// with the badge on says so here and sends the IDs of the people in its chats and contacts ("check"); it gets back
+// which of them show the badge. The whole list is never handed out: any Telegram account can link to the bot, so
+// returning it would give anyone the IDs of every AstraGram user. A badge nobody refreshed in BADGE_DAYS is dropped.
 const BADGE_DAYS = 45;
-const MAX_BADGES = 50000;
+const MAX_BADGE_CHECK = 1000;
+const D1_CHUNK = 90;
 
 async function handleBadge(request, env) {
   const owner = await ownerFromRequest(request, env);
@@ -182,8 +190,17 @@ async function handleBadge(request, env) {
   await env.DB.prepare('UPDATE owners SET last_sync = ? WHERE token_hash = ? AND last_sync < ?').bind(t, owner.token_hash, t - 86400).run();
   await env.DB.prepare('INSERT INTO badges (tg_id, updated_at) VALUES (?, ?) ON CONFLICT (tg_id) DO UPDATE SET updated_at = excluded.updated_at')
     .bind(owner.tg_id, t).run();
-  const rows = (await env.DB.prepare('SELECT tg_id FROM badges WHERE updated_at >= ? LIMIT ?').bind(t - BADGE_DAYS * 86400, MAX_BADGES).all()).results || [];
-  return json({ users: rows.map((r) => r.tg_id) });
+  const check = Array.isArray(body.check)
+    ? [...new Set(body.check.slice(0, MAX_BADGE_CHECK).map((id) => int(id, 1, Number.MAX_SAFE_INTEGER, 0)).filter((id) => id > 0))]
+    : [];
+  const users = [];
+  for (let i = 0; i < check.length; i += D1_CHUNK) {
+    const chunk = check.slice(i, i + D1_CHUNK);
+    const rows = (await env.DB.prepare(`SELECT tg_id FROM badges WHERE updated_at >= ? AND tg_id IN (${chunk.map(() => '?').join(',')})`)
+      .bind(t - BADGE_DAYS * 86400, ...chunk).all()).results || [];
+    for (const r of rows) users.push(r.tg_id);
+  }
+  return json({ users });
 }
 
 // The app's launch gate. The app reads this at launch; when blocked it refuses to run and shows the message. The
@@ -293,10 +310,10 @@ async function handleMessage(env, message) {
   const link = text.match(/^\/start l([0-9a-f]{48})$/);
   if (link) {
     const hash = await sha256Hex(link[1]);
-    // One linked device per account: a new link replaces the old one.
+    // Up to 5 linked devices per account (a phone and an iPad must not keep unlinking each other): the oldest go.
     await env.DB.batch([
-      env.DB.prepare('DELETE FROM owners WHERE tg_id = ?').bind(from.id),
-      env.DB.prepare('INSERT INTO owners (token_hash, tg_id, name, created_at) VALUES (?, ?, ?, ?)').bind(hash, from.id, cleanName(from.first_name), t),
+      env.DB.prepare('DELETE FROM owners WHERE tg_id = ? AND token_hash NOT IN (SELECT token_hash FROM owners WHERE tg_id = ? ORDER BY created_at DESC LIMIT 4)').bind(from.id, from.id),
+      env.DB.prepare('INSERT OR REPLACE INTO owners (token_hash, tg_id, name, created_at) VALUES (?, ?, ?, ?)').bind(hash, from.id, cleanName(from.first_name), t),
     ]);
     await tg(env, 'sendMessage', {
       chat_id: from.id,

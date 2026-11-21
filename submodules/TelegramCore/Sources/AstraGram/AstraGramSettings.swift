@@ -632,9 +632,17 @@ public final class AstraGramSettings {
         return true
     }
 
+    /// Back to the defaults, except what protects the user or cannot be typed again easily: the AI key, the chats
+    /// locked with Face ID and Face ID for these settings.
     public static func reset() {
         AstraGramSettings.update { value in
+            let aiApiKey = value.aiApiKey
+            let lockedChats = value.lockedChats
+            let biometricForAstraGram = value.biometricForAstraGram
             value = .default
+            value.aiApiKey = aiApiKey
+            value.lockedChats = lockedChats
+            value.biometricForAstraGram = biometricForAstraGram
         }
     }
 }
@@ -719,5 +727,14 @@ public enum AstraLocalPremium {
             return user
         }
         return user.withUpdatedEmojiStatus(stored.status)
+    }
+}
+
+public extension String {
+    /// Whether AstraGram's own texts are shown in Russian for this language code: Russian, and also Ukrainian and
+    /// Belarusian (AstraGram has no texts of its own in those, and Russian is closer than English).
+    var astraUsesRussianTexts: Bool {
+        let code = self.lowercased()
+        return code.hasPrefix("ru") || code.hasPrefix("uk") || code.hasPrefix("be")
     }
 }

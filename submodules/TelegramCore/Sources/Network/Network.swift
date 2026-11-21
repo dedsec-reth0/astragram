@@ -1375,6 +1375,7 @@ public final class Network: NSObject {
     func requestWithAdditionalInfo<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), info: NetworkRequestAdditionalInfo, tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<NetworkRequestResult<T>, MTRpcError> {
         // AstraGram ghost mode: whether the server shows the account online once this request is done.
         let astraMarksOnline = AstraGhostMode.requestMarksOnline(data.0.name)
+        let astraNetworkId = ObjectIdentifier(self)
         let requestService = self.requestService
         return Signal { [requestService] subscriber in
             let request = NetworkEngineRequest(
@@ -1405,7 +1406,7 @@ public final class Network: NSObject {
                     case let .success(response):
                         if let result = (response.result as! BoxedMessage).body as? T {
                             if astraMarksOnline {
-                                AstraGhostMode.markAsOnline()
+                                AstraGhostMode.markAsOnline(networkId: astraNetworkId)
                             }
                             subscriber.putNext(.result(result))
                             subscriber.putCompletion()
@@ -1423,7 +1424,7 @@ public final class Network: NSObject {
             if astraMarksOnline {
                 // AstraGram ghost mode: "offline" goes out right behind the request, so the server shows the
                 // account online for as short a time as possible (and again once the request is done).
-                AstraGhostMode.markAsOnline()
+                AstraGhostMode.markAsOnline(networkId: astraNetworkId)
             }
             return disposable
         }
@@ -1432,6 +1433,7 @@ public final class Network: NSObject {
     func request<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<T, MTRpcError> {
         // AstraGram ghost mode: whether the server shows the account online once this request is done.
         let astraMarksOnline = AstraGhostMode.requestMarksOnline(data.0.name)
+        let astraNetworkId = ObjectIdentifier(self)
         let requestService = self.requestService
         return Signal { [requestService] subscriber in
             let request = NetworkEngineRequest(
@@ -1454,7 +1456,7 @@ public final class Network: NSObject {
                     case let .success(response):
                         if let result = (response.result as! BoxedMessage).body as? T {
                             if astraMarksOnline {
-                                AstraGhostMode.markAsOnline()
+                                AstraGhostMode.markAsOnline(networkId: astraNetworkId)
                             }
                             subscriber.putNext(result)
                             subscriber.putCompletion()
@@ -1472,7 +1474,7 @@ public final class Network: NSObject {
             if astraMarksOnline {
                 // AstraGram ghost mode: "offline" goes out right behind the request, so the server shows the
                 // account online for as short a time as possible (and again once the request is done).
-                AstraGhostMode.markAsOnline()
+                AstraGhostMode.markAsOnline(networkId: astraNetworkId)
             }
             return disposable
         }

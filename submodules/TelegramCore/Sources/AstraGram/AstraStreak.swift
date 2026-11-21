@@ -153,6 +153,7 @@ public enum AstraStreak {
             var mine: [Int32: Int] = [:]
             var theirs: [Int32: Int] = [:]
             var restored = localRestores
+            var chatRestores = Set<Int32>()
             let messages = transaction.getMessages(
                 peerId: peerId,
                 namespace: Namespaces.Message.Cloud,
@@ -174,7 +175,12 @@ public enum AstraStreak {
                     continue
                 }
                 if let day = AstraStreak.restoredDay(in: message.text) {
-                    restored.insert(day)
+                    // A restore is sent the day after the missed day. A mark for any other day (an old message, a
+                    // forged one, a different time zone by more than a day) does not count.
+                    let sentDay = AstraStreak.dayNumber(message.timestamp)
+                    if day >= sentDay - 2 && day <= sentDay - 1 {
+                        chatRestores.insert(day)
+                    }
                     continue
                 }
                 let day = AstraStreak.dayNumber(message.timestamp)
@@ -185,6 +191,18 @@ public enum AstraStreak {
                     theirs[day, default: 0] += 1
                 } else {
                     mine[day, default: 0] += 1
+                }
+            }
+            // At most restoresPerWeek restores count in a week, whoever sent them.
+            var perWeek: [Int32: Int] = [:]
+            for day in restored {
+                perWeek[AstraStreak.week(day), default: 0] += 1
+            }
+            for day in chatRestores.sorted() where !restored.contains(day) {
+                let week = AstraStreak.week(day)
+                if perWeek[week, default: 0] < AstraStreak.restoresPerWeek {
+                    perWeek[week, default: 0] += 1
+                    restored.insert(day)
                 }
             }
             return AstraStreak.state(today: today, startDay: firstDay, mine: mine, theirs: theirs, restored: restored)

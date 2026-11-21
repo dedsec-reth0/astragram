@@ -256,12 +256,9 @@ private func synchronizeConsumeMessageContents(transaction: Transaction, postbox
     // reaction is (as in AyuGram): otherwise the server keeps counting it, and its badge comes back on every update of
     // the chat list. It is held back only while it is a voice or video message that has not been played.
     if AstraGramSettings.current.hideMessageContentsRead {
-        if let message = transaction.getMessage(id), message.attributes.contains(where: { attribute -> Bool in
-            if let attribute = attribute as? ConsumableContentMessageAttribute {
-                return !attribute.consumed
-            }
-            return false
-        }) {
+        // Any voice, round or view-once message, played or not: playing it marks it consumed locally and re-adds this
+        // action, and readMessageContents for it is exactly what tells the sender it was listened to.
+        if let message = transaction.getMessage(id), message.attributes.contains(where: { $0 is ConsumableContentMessageAttribute }) {
             return .complete()
         }
     }

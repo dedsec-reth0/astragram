@@ -78,6 +78,7 @@ public struct AstraStrings {
     // About
     public var aboutHeader: String { t("О ПРИЛОЖЕНИИ", "ABOUT") }
     public var resetSettings: String { t("Сбросить настройки AstraGram", "Reset AstraGram Settings") }
+    public var resetConfirm: String { t("Все настройки AstraGram вернутся к стандартным. Ключ AI, чаты под Face ID и Face ID для настроек останутся.", "All AstraGram settings return to their defaults. The AI key, chats locked with Face ID and Face ID for these settings stay.") }
     public var resetDone: String { t("Настройки AstraGram сброшены", "AstraGram settings reset") }
 
     // Deleted messages screen

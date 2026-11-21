@@ -314,7 +314,7 @@ extension PeerInfoScreenNode {
         case .astraGram:
             // AstraGram security: its settings open after Face ID when that is asked for.
             if AstraGramSettings.current.biometricForAstraGram && !AstraChatLock.settingsUnlocked {
-                let isRussian = self.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+                let isRussian = self.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
                 AstraBiometrics.authenticate(reason: isRussian ? "Открыть настройки AstraGram" : "Open AstraGram settings", completion: { [weak self] success in
                     if success {
                         AstraChatLock.settingsUnlocked = true

@@ -97,7 +97,8 @@ final class AstraBackgroundNotifier {
     }
 
     private func notify(context: AccountContext, messages: [Message]) {
-        guard AstraGramSettings.current.backgroundNotifications, self.application.applicationState != .active else {
+        // Only while in the background: "inactive" is also Control Center or a Face ID prompt over the open app.
+        guard AstraGramSettings.current.backgroundNotifications, self.application.applicationState == .background else {
             return
         }
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
@@ -117,8 +118,8 @@ final class AstraBackgroundNotifier {
                 body = EnginePeer(author).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) + ": " + body
             }
             content.title = chatTitle
-            // A chat locked with Face ID does not show its messages in a notification either.
-            if AstraGramSettings.current.lockedChats.contains(message.id.peerId.toInt64()) {
+            // A chat locked with Face ID, and a secret chat, do not show their messages in a notification.
+            if AstraGramSettings.current.lockedChats.contains(message.id.peerId.toInt64()) || message.id.peerId.namespace == Namespaces.Peer.SecretChat {
                 body = AstraStringsCompat.isRussian(presentationData) ? "Новое сообщение" : "New message"
             }
             content.body = body

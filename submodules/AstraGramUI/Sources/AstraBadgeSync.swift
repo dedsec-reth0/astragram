@@ -60,7 +60,7 @@ public enum AstraBadgeSync {
 
         if !AstraGramSettings.current.astraBadgeAsked && !AstraBadgeSync.didAsk {
             AstraBadgeSync.didAsk = true
-            let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+            let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
             Queue.mainQueue().after(2.0, {
                 AstraBadgeSync.ask(isRussian: isRussian)
             })
@@ -72,7 +72,27 @@ public enum AstraBadgeSync {
         guard AstraGramSettings.current.astraBadge, AstraStreakBot.isAvailable else {
             return
         }
-        AstraStreakBot.badge(accountPeerId: peerId, show: true, completion: { result in
+        // Who to ask about: the people in the chat list and the contacts (the server answers only for these).
+        let candidates = combineLatest(
+            context.engine.messages.chatList(group: .root, count: 400) |> take(1),
+            context.engine.data.get(TelegramEngine.EngineData.Item.Contacts.List(includePresences: false))
+        )
+        |> map { chatList, contacts -> [Int64] in
+            var ids = Set<Int64>()
+            for item in chatList.items {
+                let id = item.renderedPeer.peerId
+                if id.namespace == Namespaces.Peer.CloudUser {
+                    ids.insert(id.id._internalGetInt64Value())
+                }
+            }
+            for peer in contacts.peers {
+                ids.insert(peer.id.id._internalGetInt64Value())
+            }
+            ids.remove(peerId.id._internalGetInt64Value())
+            return Array(ids.prefix(1000))
+        }
+        let _ = (candidates |> deliverOnMainQueue).start(next: { check in
+        AstraStreakBot.badge(accountPeerId: peerId, show: true, check: check, completion: { result in
             Queue.mainQueue().async {
                 guard AstraGramSettings.current.astraBadge else {
                     return
@@ -98,6 +118,7 @@ public enum AstraBadgeSync {
                     break
                 }
             }
+        })
         })
     }
 

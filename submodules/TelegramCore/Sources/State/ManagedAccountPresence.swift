@@ -59,7 +59,7 @@ private final class AccountPresenceManagerImpl {
             }
         })
 
-        self.astraMarkDisposable = (AstraGhostMode.markedAsOnline()
+        self.astraMarkDisposable = (AstraGhostMode.markedAsOnline(network: network)
         |> deliverOn(self.queue)).start(next: { [weak self] _ in
             self?.astraMarkAsOnline()
         })

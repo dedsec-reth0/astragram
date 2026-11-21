@@ -307,7 +307,7 @@ private enum AstraBookmarksEntry: ItemListNodeEntry {
         let arguments = arguments as! AstraBookmarksArguments
         switch self {
         case let .bookmark(_, bookmark, dateText):
-            let preview = bookmark.text.isEmpty ? (presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru") ? "Медиа" : "Media") : String(bookmark.text.prefix(80)).replacingOccurrences(of: "\n", with: " ")
+            let preview = bookmark.text.isEmpty ? (presentationData.strings.baseLanguageCode.astraUsesRussianTexts ? "Медиа" : "Media") : String(bookmark.text.prefix(80)).replacingOccurrences(of: "\n", with: " ")
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: preview, label: bookmark.chatTitle + " · " + dateText, labelStyle: .detailText, sectionId: self.section, style: .blocks, action: {
                 arguments.open(bookmark)
             })
@@ -424,14 +424,31 @@ public enum AstraBackup {
                 if previous.biometricForAstraGram {
                     settings.biometricForAstraGram = true
                 }
+                // No protection is switched off by a file: each stays on if it was on.
+                settings.hideInAppSwitcher = settings.hideInAppSwitcher || previous.hideInAppSwitcher
+                settings.blockThirdPartyKeyboards = settings.blockThirdPartyKeyboards || previous.blockThirdPartyKeyboards
+                settings.warnSuspiciousLinks = settings.warnSuspiciousLinks || previous.warnSuspiciousLinks
+                settings.stripLinkTrackers = settings.stripLinkTrackers || previous.stripLinkTrackers
+                settings.clipboardExpire = settings.clipboardExpire || previous.clipboardExpire
+                settings.clipboardLocalOnly = settings.clipboardLocalOnly || previous.clipboardLocalOnly
             }
         }
+        // Bookmarks are merged: the ones added since the backup was made stay.
         if let bookmarks = object["bookmarks"] as? [Any], let bookmarksData = try? JSONSerialization.data(withJSONObject: bookmarks), let decoded = try? JSONDecoder().decode([AstraBookmark].self, from: bookmarksData) {
-            AstraBookmarks.replaceAll(decoded)
+            var merged = AstraBookmarks.all
+            for bookmark in decoded where !merged.contains(where: { $0.engineMessageId == bookmark.engineMessageId }) {
+                merged.append(bookmark)
+            }
+            AstraBookmarks.replaceAll(merged.sorted(by: { $0.savedAt > $1.savedAt }))
         }
-        // Plugins from a file arrive switched off: each is turned on by hand in Plugins, after reading what it is.
+        // Plugins from a file arrive switched off: each is turned on by hand in Plugins, after reading what it is. A
+        // plugin already installed is not replaced by the (older) copy in the file.
         if let plugins = object["plugins"] as? [String] {
+            let installed = Set(AstraPluginManager.shared.exportSources().compactMap { AstraPluginManager.pluginId(of: $0) })
             for source in plugins {
+                if let id = AstraPluginManager.pluginId(of: source), installed.contains(id) {
+                    continue
+                }
                 AstraPluginManager.shared.install(source: source, enable: false)
             }
         }

@@ -42,7 +42,7 @@ public enum AstraAI {
     /// An error when the own endpoint is not secure (nothing is sent then).
     private static func insecureEndpointError() -> AIError? {
         if AstraAI.hasOwnKey && !AstraAI.isSecureEndpoint(AstraGramSettings.current.aiEndpoint) {
-            let isRussian = (Locale.preferredLanguages.first ?? "").lowercased().hasPrefix("ru")
+            let isRussian = (Locale.preferredLanguages.first ?? "").astraUsesRussianTexts
             return .server(isRussian ? "Адрес AI должен начинаться с https:// — по http ключ и текст ушли бы незашифрованными. Ничего не отправлено." : "The AI address must start with https:// — over http the key and the text would travel unencrypted. Nothing was sent.")
         }
         return nil
@@ -84,7 +84,7 @@ public enum AstraAI {
                 declined()
                 return
             }
-            let isRussian = (Locale.preferredLanguages.first ?? "").lowercased().hasPrefix("ru")
+            let isRussian = (Locale.preferredLanguages.first ?? "").astraUsesRussianTexts
             let alert = UIAlertController(
                 title: isRussian ? "Отправить текст в AI?" : "Send the text to AI?",
                 message: isRussian ? "Текст сообщений уйдёт на сервер \(host), за пределы Telegram. Его владелец сможет этот текст прочитать." : "The text of the messages goes to the server \(host), outside Telegram. Its owner can read that text.",
