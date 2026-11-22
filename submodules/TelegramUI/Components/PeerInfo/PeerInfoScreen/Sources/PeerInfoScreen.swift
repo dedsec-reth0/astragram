@@ -1707,6 +1707,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             navigationBar.layer.animateAlpha(from: 0.0, to: navigationBar.alpha, duration: 0.25)
         }
         
+        self.headerNode.astraFlowTintUpdated = { [weak self] color in
+            self?.astraApplyFlowTint(color)
+        }
         self.headerNode.requestUpdateLayout = { [weak self] animated in
             guard let strongSelf = self else {
                 return
@@ -5756,6 +5759,10 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 } else {
                     sectionNode = PeerInfoScreenItemSectionContainerNode()
                     self.regularSections[sectionId] = sectionNode
+                    if let tint = self.astraFlowTint {
+                        let isDark = self.presentationData.theme.overallDarkAppearance
+                        sectionNode.astraTint = isDark ? tint.withMultiplied(hue: 1.0, saturation: 0.9, brightness: 0.62) : tint.mixedWith(.white, alpha: 0.72)
+                    }
                     self.scrollNode.insertSubnode(sectionNode, belowSubnode: self.paneContainerNode)
                     wasAdded = true
                 }
@@ -6081,7 +6088,32 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         }
     }
     
+    /// AstraGram: the profile's flowing color (the background and the cards), as in the concept.
+    private var astraFlowTint: UIColor?
+    
+    fileprivate func astraApplyFlowTint(_ color: UIColor?) {
+        self.astraFlowTint = color
+        let isDark = self.presentationData.theme.overallDarkAppearance
+        let cardColor: UIColor? = color.flatMap { color in
+            return isDark ? color.withMultiplied(hue: 1.0, saturation: 0.9, brightness: 0.62) : color.mixedWith(.white, alpha: 0.72)
+        }
+        for (_, section) in self.regularSections {
+            section.astraTint = cardColor
+        }
+        self.updateBackgroundColor()
+    }
+    
     private func updateBackgroundColor() {
+        if let tint = self.astraFlowTint, self.paneContainerNode.currentPaneKey != .gifts {
+            let isDark = self.presentationData.theme.overallDarkAppearance
+            let color = isDark ? tint.withMultiplied(hue: 1.0, saturation: 0.95, brightness: 0.42) : tint.mixedWith(.white, alpha: 0.55)
+            if let expansionBackgroundView = self.expansionBackgroundView {
+                expansionBackgroundView.backgroundColor = color
+            } else {
+                self.backgroundColor = color
+            }
+            return
+        }
         let color: UIColor
         if self.paneContainerNode.currentPaneKey == .gifts {
             color = self.presentationData.theme.list.blocksBackgroundColor

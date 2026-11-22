@@ -39,6 +39,8 @@ public final class PeerInfoGiftsCoverComponent: Component {
     public let astraBubbleGifts: Signal<[ProfileGiftsContext.State.StarGift], NoError>?
     /// AstraGram: a bubble was touched (the header takes on the gift's colors).
     public let astraBubbleTouched: ((ProfileGiftsContext.State.StarGift) -> Void)?
+    /// AstraGram: the profile's flowing color (nil: no bubbles).
+    public let astraTintChanged: ((UIColor?) -> Void)?
     
     public init(
         context: AccountContext,
@@ -58,7 +60,8 @@ public final class PeerInfoGiftsCoverComponent: Component {
         bottomHeight: CGFloat,
         action: @escaping (ProfileGiftsContext.State.StarGift) -> Void,
         astraBubbleGifts: Signal<[ProfileGiftsContext.State.StarGift], NoError>? = nil,
-        astraBubbleTouched: ((ProfileGiftsContext.State.StarGift) -> Void)? = nil
+        astraBubbleTouched: ((ProfileGiftsContext.State.StarGift) -> Void)? = nil,
+        astraTintChanged: ((UIColor?) -> Void)? = nil
     ) {
         self.context = context
         self.peerId = peerId
@@ -78,6 +81,7 @@ public final class PeerInfoGiftsCoverComponent: Component {
         self.action = action
         self.astraBubbleGifts = astraBubbleGifts
         self.astraBubbleTouched = astraBubbleTouched
+        self.astraTintChanged = astraTintChanged
     }
     
     public static func ==(lhs: PeerInfoGiftsCoverComponent, rhs: PeerInfoGiftsCoverComponent) -> Bool {
@@ -1041,6 +1045,12 @@ extension PeerInfoGiftsCoverComponent.View {
         }
         bubbles.opened = { [weak self] gift in
             self?.componentValue?.action(gift)
+        }
+        bubbles.tintChanged = { [weak self] color in
+            self?.componentValue?.astraTintChanged?(color)
+        }
+        if self.astraBubbleItems.isEmpty {
+            component.astraTintChanged?(nil)
         }
 
         bubbles.frame = CGRect(origin: .zero, size: availableSize)

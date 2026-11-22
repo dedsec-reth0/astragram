@@ -123,6 +123,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let giftsCover = ComponentView<Empty>()
     /// AstraGram: the colors of the gift bubble touched last, worn by the header until another one is touched.
     private var astraBubbleTint: PeerEmojiStatus?
+    /// AstraGram: recolors the header's background (its luminance and pattern kept) with the profile's flowing color.
+    private let astraFlowOverlay = UIView()
+    /// AstraGram: the rest of the profile takes on the flowing color too (nil: back to the theme).
+    var astraFlowTintUpdated: ((UIColor?) -> Void)?
     private var astraBubbleGifts: (EnginePeer.Id, Signal<[ProfileGiftsContext.State.StarGift], NoError>)?
     var didSetupBackgroundCover = false
     let buttonsContainerNode: SparseNode
@@ -229,6 +233,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     private var astraMusicPlaybackDisposable: Disposable?
     private var astraMusicPlaybackPeerId: EnginePeer.Id?
     private var astraMusicPlayback: (fraction: Double, secondsLeft: Double, playing: Bool)?
+    private let astraEqualizerLayer = CALayer()
+    private var astraEqualizerBars: [CALayer] = []
     var music: ComponentView<Empty>?
     var walletBalance: ComponentView<Empty>?
     private var walletBalanceCutoutIcon: (color: UIColor, image: UIImage)?
@@ -2567,6 +2573,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     astraBubbleGifts: self.isSettings ? nil : self.astraBubbleGiftsSignal(peerId: peer.id, giftsContext: profileGiftsContext),
                     astraBubbleTouched: { [weak self] gift in
                         self?.astraTintWithGift(gift)
+                    },
+                    astraTintChanged: { [weak self] color in
+                        self?.astraApplyFlowTint(color)
                     }
                 )),
                 environment: {},
@@ -2575,6 +2584,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             if let giftsCoverView = self.giftsCover.view as? PeerInfoGiftsCoverComponent.View {
                 if giftsCoverView.superview == nil {
                     self.view.insertSubview(giftsCoverView, aboveSubview: self.backgroundBannerView)
+                }
+                // AstraGram: the bubbles float over the avatar and the name.
+                if !self.isSettings, giftsCoverView.superview === self.view, self.view.subviews.last !== giftsCoverView {
+                    self.view.bringSubviewToFront(giftsCoverView)
                 }
                 if additive {
                     transition.updateFrameAdditive(view: giftsCoverView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: giftsCoverSize))
@@ -2806,7 +2819,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                                 HStack([
                                     AnyComponentWithIdentity(
                                         id: "icon",
-                                        component: AnyComponent(BundleIconComponent(name: "Media Editor/SmallAudio", tintColor: isOverlay ? .white : presentationData.theme.list.itemAccentColor))
+                                        // In the capsule the note gives way to an equalizer, drawn over its place.
+                                        component: AnyComponent(BundleIconComponent(name: "Media Editor/SmallAudio", tintColor: astraMusicCapsule ? .clear : (isOverlay ? .white : presentationData.theme.list.itemAccentColor)))
                                     ),
                                     AnyComponentWithIdentity(
                                         id: "label",
@@ -2866,6 +2880,32 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                             pillLayer.addSublayer(self.astraMusicFillLayer)
                         }
                         self.astraMusicFillLayer.backgroundColor = (isOverlay ? UIColor(white: 1.0, alpha: 0.3) : presentationData.theme.list.itemAccentColor.withAlphaComponent(0.14)).cgColor
+                        CATransaction.commit()
+                        // The equalizer where the note was: the content is centered in the capsule.
+                        let iconWidth = UIImage(bundleImageName: "Media Editor/SmallAudio")?.size.width ?? 12.0
+                        let arrowWidth = UIImage(bundleImageName: "Item List/InlineTextRightArrow")?.size.width ?? 8.0
+                        let contentWidth = iconWidth + 4.0 + textWidth + 4.0 + arrowWidth
+                        let iconCenterX = musicSize.width / 2.0 - contentWidth / 2.0 + iconWidth / 2.0
+                        if self.astraEqualizerLayer.superlayer !== musicView.layer {
+                            musicView.layer.addSublayer(self.astraEqualizerLayer)
+                        }
+                        if self.astraEqualizerBars.isEmpty {
+                            for _ in 0 ..< 3 {
+                                let bar = CALayer()
+                                bar.anchorPoint = CGPoint(x: 0.5, y: 1.0)
+                                bar.cornerRadius = 1.0
+                                self.astraEqualizerLayer.addSublayer(bar)
+                                self.astraEqualizerBars.append(bar)
+                            }
+                        }
+                        CATransaction.begin()
+                        CATransaction.setDisableActions(true)
+                        self.astraEqualizerLayer.frame = CGRect(x: iconCenterX - 6.0, y: musicSize.height / 2.0 - 6.0, width: 12.0, height: 12.0)
+                        for (i, bar) in self.astraEqualizerBars.enumerated() {
+                            bar.backgroundColor = (isOverlay ? UIColor.white : presentationData.theme.list.itemAccentColor).cgColor
+                            bar.bounds = CGRect(x: 0.0, y: 0.0, width: 2.4, height: 12.0)
+                            bar.position = CGPoint(x: 1.6 + CGFloat(i) * 4.2, y: 12.0)
+                        }
                         CATransaction.commit()
                         if let peer, self.astraMusicPlaybackPeerId != peer.id {
                             self.astraObserveMusicPlayback(peerId: peer.id)
@@ -3201,6 +3241,27 @@ extension PeerInfoHeaderNode {
         guard let pillLayer = self.astraMusicPillLayer else {
             return
         }
+        // The equalizer bounces while the music plays, and rests in three steps while it does not.
+        let playing = self.astraMusicPlayback?.playing == true
+        for (i, bar) in self.astraEqualizerBars.enumerated() {
+            if playing {
+                if bar.animation(forKey: "eq") == nil {
+                    let animation = CAKeyframeAnimation(keyPath: "transform.scale.y")
+                    let values: [[CGFloat]] = [[0.35, 1.0, 0.55, 0.85, 0.4], [0.9, 0.45, 1.0, 0.3, 0.75], [0.5, 0.8, 0.3, 1.0, 0.6]]
+                    animation.values = (values[i % 3] + [values[i % 3][0]]).map { NSNumber(value: Double($0)) }
+                    animation.duration = 0.9 + Double(i) * 0.13
+                    animation.repeatCount = .infinity
+                    animation.calculationMode = .linear
+                    bar.add(animation, forKey: "eq")
+                }
+            } else {
+                bar.removeAnimation(forKey: "eq")
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                bar.transform = CATransform3DMakeScale(1.0, [0.45, 1.0, 0.7][i % 3], 1.0)
+                CATransaction.commit()
+            }
+        }
         let fill = self.astraMusicFillLayer
         let size = pillLayer.bounds.size
         fill.removeAllAnimations()
@@ -3226,5 +3287,37 @@ extension PeerInfoHeaderNode {
             animation.isRemovedOnCompletion = false
             fill.add(animation, forKey: "progress")
         }
+    }
+}
+
+
+extension PeerInfoHeaderNode {
+    /// AstraGram: the header's background and the rest of the profile in the flowing color.
+    fileprivate func astraApplyFlowTint(_ color: UIColor?) {
+        if let color, self.astraBubbleTint == nil, !self.isSettings {
+            // The header becomes a colored one (gradient, white texts) once; the flow then turns its hue.
+            func value(_ c: UIColor) -> Int32 {
+                return Int32(bitPattern: c.rgb)
+            }
+            let inner = color.withMultiplied(hue: 1.0, saturation: 0.9, brightness: 1.15)
+            let outer = color.withMultiplied(hue: 1.0, saturation: 1.1, brightness: 0.55)
+            self.astraBubbleTint = PeerEmojiStatus(content: .starGift(id: 0, fileId: 0, title: "", slug: "", patternFileId: 0, innerColor: value(inner), outerColor: value(outer), patternColor: value(outer.withMultipliedBrightnessBy(0.7)), textColor: value(.white)), expirationDate: nil)
+            self.requestUpdateLayout?(false)
+        }
+        let overlay = self.astraFlowOverlay
+        if let color {
+            if overlay.superview !== self.backgroundBannerView {
+                overlay.isUserInteractionEnabled = false
+                // Keeps what is under it (the gradient, the pattern) and gives it this color's hue.
+                overlay.layer.compositingFilter = "colorBlendMode"
+                self.backgroundBannerView.addSubview(overlay)
+            }
+            overlay.frame = self.backgroundBannerView.bounds
+            overlay.backgroundColor = color
+            overlay.isHidden = false
+        } else {
+            overlay.isHidden = true
+        }
+        self.astraFlowTintUpdated?(color)
     }
 }

@@ -35,8 +35,47 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
         self.addSubnode(self.bottomSeparatorNode)
     }
     
+    /// AstraGram: the card's color while the profile flows through its gifts' colors (nil: the theme's).
+    var astraTint: UIColor? {
+        didSet {
+            if let astraTint {
+                self.backgroundNode.backgroundColor = astraTint
+            } else if let themeColor = self.themeBackgroundColor {
+                self.backgroundNode.backgroundColor = themeColor
+            }
+            if (oldValue == nil) != (astraTint == nil) {
+                self.astraUpdateClipping()
+            }
+        }
+    }
+    private var themeBackgroundColor: UIColor?
+    /// The card's rect and the whole content's height, for clipping the theme-colored corners away while tinted.
+    private var astraCardRect: CGRect = .zero
+    private var astraContentHeight: CGFloat = 0.0
+    private var astraWidth: CGFloat = 0.0
+    private var astraHasCorners = false
+    
+    /// While tinted the items' corner images (painted in the theme's background) would show as dark corners: the card
+    /// is clipped to its rounded shape instead.
+    private func astraUpdateClipping() {
+        guard self.astraTint != nil, self.astraHasCorners, self.astraCardRect.height > 0.0 else {
+            self.itemContainerNode.layer.mask = nil
+            self.backgroundNode.cornerRadius = 0.0
+            return
+        }
+        let card = self.astraCardRect
+        let path = UIBezierPath(rect: CGRect(x: 0.0, y: 0.0, width: self.astraWidth, height: card.minY))
+        path.append(UIBezierPath(roundedRect: card, cornerRadius: 26.0))
+        path.append(UIBezierPath(rect: CGRect(x: 0.0, y: card.maxY, width: self.astraWidth, height: max(0.0, self.astraContentHeight - card.maxY))))
+        let mask = (self.itemContainerNode.layer.mask as? CAShapeLayer) ?? CAShapeLayer()
+        mask.frame = CGRect(x: 0.0, y: 0.0, width: self.astraWidth, height: self.astraContentHeight)
+        mask.path = path.cgPath
+        self.itemContainerNode.layer.mask = mask
+    }
+    
     func update(context: AccountContext, width: CGFloat, safeInsets: UIEdgeInsets, hasCorners: Bool, presentationData: PresentationData, items: [PeerInfoScreenItem], transition: ContainedViewLayoutTransition) -> CGFloat {
-        self.backgroundNode.backgroundColor = presentationData.theme.list.itemBlocksBackgroundColor
+        self.themeBackgroundColor = presentationData.theme.list.itemBlocksBackgroundColor
+        self.backgroundNode.backgroundColor = self.astraTint ?? presentationData.theme.list.itemBlocksBackgroundColor
         self.topSeparatorNode.backgroundColor = presentationData.theme.list.itemBlocksSeparatorColor
         self.bottomSeparatorNode.backgroundColor = presentationData.theme.list.itemBlocksSeparatorColor
         
@@ -123,7 +162,20 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
         }
         
         transition.updateFrame(node: self.itemContainerNode, frame: CGRect(origin: CGPoint(), size: CGSize(width: width, height: contentHeight)))
-        transition.updateFrame(node: self.backgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: contentWithBackgroundOffset), size: CGSize(width: width, height: max(0.0, contentWithBackgroundHeight - contentWithBackgroundOffset))))
+        let cardRect = CGRect(x: safeInsets.left, y: contentWithBackgroundOffset, width: width - safeInsets.left - safeInsets.right, height: max(0.0, contentWithBackgroundHeight - contentWithBackgroundOffset))
+        self.astraCardRect = cardRect
+        self.astraContentHeight = contentHeight
+        self.astraWidth = width
+        self.astraHasCorners = hasCorners
+        if self.astraTint != nil && hasCorners {
+            // The tinted card in its rounded shape.
+            transition.updateFrame(node: self.backgroundNode, frame: cardRect)
+            self.backgroundNode.cornerRadius = 26.0
+        } else {
+            self.backgroundNode.cornerRadius = 0.0
+            transition.updateFrame(node: self.backgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: contentWithBackgroundOffset), size: CGSize(width: width, height: max(0.0, contentWithBackgroundHeight - contentWithBackgroundOffset))))
+        }
+        self.astraUpdateClipping()
         transition.updateFrame(node: self.topSeparatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: contentWithBackgroundOffset - UIScreenPixel), size: CGSize(width: width, height: UIScreenPixel)))
         transition.updateFrame(node: self.bottomSeparatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: contentWithBackgroundHeight), size: CGSize(width: width, height: UIScreenPixel)))
         

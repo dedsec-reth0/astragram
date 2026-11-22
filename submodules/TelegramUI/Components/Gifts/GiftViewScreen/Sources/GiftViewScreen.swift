@@ -2639,16 +2639,35 @@ private final class GiftViewSheetContent: CombinedComponent {
                 return
             }
             self.inProgress = true
-            self.updated()
-            self.upgradeDisposable = (upgrade()
-            |> take(1)
+            // As in Telegram, the variants spin first: the reveal below starts from that spin (and needs it).
+            let hasPreview = self.upgradePreview != nil
+            if hasPreview {
+                self.inUpgradePreview = true
+                self.updated(transition: .spring(duration: 0.4))
+            } else {
+                self.updated()
+            }
+            let minimumSpin: Signal<Void, NoError> = hasPreview ? (.single(Void()) |> delay(1.2, queue: Queue.mainQueue())) : .single(Void())
+            self.upgradeDisposable = (combineLatest(upgrade() |> take(1), minimumSpin)
+            |> map { result, _ in result }
             |> deliverOnMainQueue).start(next: { [weak self] result in
                 guard let self else {
                     return
                 }
                 guard let result, case let .unique(uniqueGift) = result.gift else {
                     self.inProgress = false
-                    self.updated()
+                    self.inUpgradePreview = false
+                    self.updated(transition: .spring(duration: 0.4))
+                    return
+                }
+                if !hasPreview {
+                    // No variants to spin through: the unique gift shows as it is.
+                    self.inProgress = false
+                    self.subject = .profileGift(peerId, result)
+                    self.updated(transition: .spring(duration: 0.4))
+                    if let controller = self.getController() as? GiftViewScreen {
+                        controller.animateSuccess()
+                    }
                     return
                 }
                 let duration = Double.random(in: 1.4 ..< 2.4)
