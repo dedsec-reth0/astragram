@@ -124,8 +124,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     /// AstraGram: the colors of the gift bubble touched last, worn by the header until another one is touched.
     private var astraBubbleTint: PeerEmojiStatus?
     /// AstraGram: the color of the profile's surface last given to the screen.
-    private var astraSurface: UIColor?
+    fileprivate var astraSurface: UIColor?
     private var astraSurfaceReported = false
+    /// AstraGram: the music's mood (the dark, drifting color while the profile's track plays).
+    fileprivate var astraMusicMoodPlaying = false
+    fileprivate var astraMusicMoodAmount: CGFloat = 0.0
+    fileprivate var astraMusicMoodTime: CGFloat = 0.0
+    fileprivate var astraMusicMoodColor: UIColor?
+    fileprivate var astraMusicMoodLink: CADisplayLink?
     /// AstraGram: recolors the header's background (its luminance and pattern kept) with the profile's flowing color.
     private let astraFlowOverlay = UIView()
     /// AstraGram: the rest of the profile takes on the flowing color too (nil: back to the theme).
@@ -723,7 +729,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         if self.astraSurface != astraSurface || !self.astraSurfaceReported {
             self.astraSurface = astraSurface
             self.astraSurfaceReported = true
-            self.astraFlowTintUpdated?(astraSurface)
+            if self.astraMusicMoodColor == nil {
+                self.astraFlowTintUpdated?(astraSurface)
+            }
         }
         
         let currentSavedMusic = self.profileMusic(peer: peer, screenData: screenData)
@@ -3251,7 +3259,67 @@ extension PeerInfoHeaderNode {
             self.astraMusicPlayback = playback
             self.astraUpdateMusicFill()
             (self.giftsCover.view as? PeerInfoGiftsCoverComponent.View)?.astraSetMusicPlaying(playback?.playing == true)
+            self.astraSetMusicMood(playback?.playing == true)
         })
+    }
+
+    /// AstraGram: while the profile's music plays the screen goes dark and drifts slowly through deep colors, the
+    /// bubbles glowing against it (as in the concept); it comes back to the profile's own color when the music stops.
+    fileprivate func astraSetMusicMood(_ playing: Bool) {
+        guard self.astraMusicMoodPlaying != playing else {
+            return
+        }
+        self.astraMusicMoodPlaying = playing
+        if self.astraMusicMoodLink == nil {
+            let link = CADisplayLink(target: AstraMusicMoodTarget(self), selector: #selector(AstraMusicMoodTarget.tick(_:)))
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 20.0, maximum: 30.0, preferred: 30.0)
+            link.add(to: .main, forMode: .common)
+            self.astraMusicMoodLink = link
+        }
+    }
+
+    fileprivate func astraMusicMoodTick(_ link: CADisplayLink) {
+        let dt = CGFloat(min(0.1, max(0.0, link.targetTimestamp - link.timestamp)))
+        let target: CGFloat = self.astraMusicMoodPlaying ? 1.0 : 0.0
+        if self.astraMusicMoodAmount < target {
+            self.astraMusicMoodAmount = min(target, self.astraMusicMoodAmount + dt / 1.0)
+        } else if self.astraMusicMoodAmount > target {
+            self.astraMusicMoodAmount = max(target, self.astraMusicMoodAmount - dt / 1.0)
+        }
+        self.astraMusicMoodTime += dt
+        // Deep blue, teal, green, olive, amber, graphite, wine: each glides into the next.
+        let palette: [UInt32] = [0x24406e, 0x1f5a66, 0x22603e, 0x57581f, 0x7a531c, 0x26282c, 0x6c2442]
+        let position = self.astraMusicMoodTime / 2.8
+        let index = Int(position) % palette.count
+        let fraction = position - floor(position)
+        let eased = fraction * fraction * (3.0 - 2.0 * fraction)
+        let mood = UIColor(rgb: palette[index]).mixedWith(UIColor(rgb: palette[(index + 1) % palette.count]), alpha: eased)
+        let amount = self.astraMusicMoodAmount
+
+        let overlay = self.astraFlowOverlay
+        if overlay.superview !== self.backgroundBannerView {
+            overlay.isUserInteractionEnabled = false
+            overlay.layer.compositingFilter = nil
+            self.backgroundBannerView.addSubview(overlay)
+        }
+        overlay.frame = self.backgroundBannerView.bounds
+        overlay.isHidden = amount <= 0.0
+        // The cover's pattern still shows through a little.
+        overlay.backgroundColor = mood.withAlphaComponent(0.9 * amount)
+
+        if amount <= 0.0 {
+            self.astraMusicMoodColor = nil
+            self.astraFlowTintUpdated?(self.astraSurface)
+            if !self.astraMusicMoodPlaying {
+                self.astraMusicMoodLink?.invalidate()
+                self.astraMusicMoodLink = nil
+            }
+        } else {
+            let base = self.astraSurface ?? ((self.presentationData?.theme.overallDarkAppearance ?? true) ? UIColor.black : UIColor(rgb: 0xefeff4))
+            let color = base.mixedWith(mood, alpha: amount)
+            self.astraMusicMoodColor = color
+            self.astraFlowTintUpdated?(color)
+        }
     }
 
     /// The fill under the capsule's text: where the track is now, running to the end while it plays.
@@ -3337,5 +3405,21 @@ extension PeerInfoHeaderNode {
             overlay.isHidden = true
         }
         self.astraFlowTintUpdated?(color)
+    }
+}
+
+private final class AstraMusicMoodTarget: NSObject {
+    private weak var node: PeerInfoHeaderNode?
+
+    init(_ node: PeerInfoHeaderNode) {
+        self.node = node
+    }
+
+    @objc func tick(_ link: CADisplayLink) {
+        if let node = self.node {
+            node.astraMusicMoodTick(link)
+        } else {
+            link.invalidate()
+        }
     }
 }

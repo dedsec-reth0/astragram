@@ -6092,10 +6092,11 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     
     /// The cards are glass over the surface: a little lighter on a dark profile, a little deeper on a light one.
     private func astraCardColor(_ surface: UIColor) -> UIColor {
+        // See-through, so the cards follow the surface as its color moves (with the music).
         if self.presentationData.theme.overallDarkAppearance {
-            return surface.mixedWith(.white, alpha: 0.09)
+            return UIColor(white: 1.0, alpha: 0.09)
         } else {
-            return surface.mixedWith(UIColor(rgb: 0x2a1a6e), alpha: 0.16)
+            return UIColor(rgb: 0x2a1a6e, alpha: 0.16)
         }
     }
 
@@ -6110,9 +6111,11 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     fileprivate func astraApplyFlowTint(_ color: UIColor?) {
         let themeChanged = (self.astraFlowTint == nil) != (color == nil)
         self.astraFlowTint = color
-        let cardColor: UIColor? = color.flatMap { self.astraCardColor($0) }
-        for (_, section) in self.regularSections {
-            section.astraTint = cardColor
+        if themeChanged {
+            let cardColor: UIColor? = color.flatMap { self.astraCardColor($0) }
+            for (_, section) in self.regularSections {
+                section.astraTint = cardColor
+            }
         }
         if self.paneContainerNode.astraTint != color {
             self.paneContainerNode.astraTint = color

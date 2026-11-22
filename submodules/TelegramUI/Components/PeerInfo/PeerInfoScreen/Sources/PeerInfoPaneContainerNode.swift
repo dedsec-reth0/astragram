@@ -947,21 +947,21 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         return result
     }
 
-    private var astraPaneTheme: (tint: UIColor, base: PresentationTheme, theme: PresentationTheme)?
+    private var astraPaneTheme: (base: PresentationTheme, theme: PresentationTheme)?
 
     private func astraPanePresentationData(_ presentationData: PresentationData) -> PresentationData {
-        guard let tint = self.astraTint else {
+        guard self.astraTint != nil else {
             return presentationData
         }
-        if let current = self.astraPaneTheme, current.tint == tint, current.base === presentationData.theme {
+        if let current = self.astraPaneTheme, current.base === presentationData.theme {
             return presentationData.withUpdated(theme: current.theme)
         }
-        // White texts read on a color; a light theme's dark ones would not.
+        // White texts read on a color; a light theme's dark ones would not. The panes' own backgrounds are
+        // see-through, so they follow the surface as its color moves (with the music).
         let base = presentationData.theme.overallDarkAppearance ? presentationData.theme : defaultDarkColorPresentationTheme
-        let card = tint.mixedWith(.white, alpha: 0.09)
-        let list = base.list.withUpdated(blocksBackgroundColor: tint, plainBackgroundColor: tint, itemBlocksBackgroundColor: card)
+        let list = base.list.withUpdated(blocksBackgroundColor: UIColor.clear, plainBackgroundColor: UIColor.clear, itemBlocksBackgroundColor: UIColor(white: 1.0, alpha: 0.09))
         let theme = PresentationTheme(name: base.name, index: base.index, referenceTheme: base.referenceTheme, overallDarkAppearance: base.overallDarkAppearance, intro: base.intro, passcode: base.passcode, rootController: base.rootController, list: list, chatList: base.chatList, chat: base.chat, actionSheet: base.actionSheet, contextMenu: base.contextMenu, inAppNotification: base.inAppNotification, chart: base.chart, preview: base.preview)
-        self.astraPaneTheme = (tint, presentationData.theme, theme)
+        self.astraPaneTheme = (presentationData.theme, theme)
         return presentationData.withUpdated(theme: theme)
     }
 
@@ -971,7 +971,8 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
             if let astraTint {
                 self.backgroundColor = astraTint
             }
-            if let (size, sideInset, topInset, bottomInset, deviceMetrics, visibleHeight, expansionFraction, presentationData, data, areTabsHidden, disableTabSwitching, navigationHeight) = self.currentParams {
+            // The panes change their theme only when the color comes or goes, not as it moves.
+            if (oldValue == nil) != (self.astraTint == nil), let (size, sideInset, topInset, bottomInset, deviceMetrics, visibleHeight, expansionFraction, presentationData, data, areTabsHidden, disableTabSwitching, navigationHeight) = self.currentParams {
                 self.update(size: size, sideInset: sideInset, topInset: topInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, expansionFraction: expansionFraction, presentationData: presentationData, data: data, areTabsHidden: areTabsHidden, disableTabSwitching: disableTabSwitching, navigationHeight: navigationHeight, transition: .immediate)
             }
         }

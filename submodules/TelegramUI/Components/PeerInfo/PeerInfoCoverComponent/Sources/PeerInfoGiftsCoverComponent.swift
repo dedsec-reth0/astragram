@@ -1092,8 +1092,7 @@ extension PeerInfoGiftsCoverComponent.View {
             homes: homes,
             avatarCenter: avatarCenter,
             avatarRadius: component.avatarSize.width / 2.0,
-            area: CGRect(x: 0.0, y: component.statusBarHeight, width: availableSize.width, height: max(0.0, component.defaultHeight - component.statusBarHeight)),
-            soap: !component.context.sharedContext.currentPresentationData.with({ $0 }).theme.overallDarkAppearance
+            area: CGRect(x: 0.0, y: component.statusBarHeight, width: availableSize.width, height: max(0.0, component.defaultHeight - component.statusBarHeight))
         )
         // As the header collapses into the bar, the bubbles fade into the avatar.
         let fraction = max(0.0, min(1.0, component.avatarTransitionFraction * 1.6))

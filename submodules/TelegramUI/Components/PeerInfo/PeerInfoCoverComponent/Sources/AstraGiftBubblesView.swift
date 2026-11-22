@@ -27,6 +27,11 @@ final class AstraGiftBubblesView: UIView {
         /// The resting place as distance and angle from the avatar: it turns slowly, so the bubbles swirl.
         var homeDistance: CGFloat = 0.0
         var homeAngle: CGFloat = 0.0
+        /// Where it rests now (it moves to another place every several seconds).
+        var restAngle: CGFloat = 0.0
+        var restDistance: CGFloat = 0.0
+        var nextMoveTime: CGFloat = 0.0
+        var snapUntil: CGFloat = 0.0
         var position: CGPoint = .zero
         var velocity: CGPoint = .zero
         var radius: CGFloat
@@ -94,7 +99,7 @@ final class AstraGiftBubblesView: UIView {
     private let ringMask = CAShapeLayer()
 
     /// On a light profile the bubbles are clear soap bubbles; on a dark one, glowing neon jelly (as in the concept).
-    private var soap = false
+    private var soap = true
     private var dragged: Bubble?
     private var dragPoint: CGPoint = .zero
     private var dragStart: CGPoint = .zero
@@ -165,13 +170,23 @@ final class AstraGiftBubblesView: UIView {
             self.lastBeatIndex = -1
             self.beatsSinceCycle = 0
         }
+        // With music the bubbles light up as neon jelly and more of them come out; without, clear soap bubbles.
+        if let (context, items, homes, avatarCenter, avatarRadius, area) = self.lastUpdate {
+            self.update(context: context, items: items, homes: homes, avatarCenter: avatarCenter, avatarRadius: avatarRadius, area: area)
+        }
     }
 
+    private var lastUpdate: (AccountContext, [Item], [CGPoint], CGPoint, CGFloat, CGRect)?
+    private static let restingCount = 3
+
     /// Lays the bubbles out around `avatarCenter`, with their resting places at `homes` (as many as there are items).
-    func update(context: AccountContext, items: [Item], homes: [CGPoint], avatarCenter: CGPoint, avatarRadius: CGFloat, area: CGRect, soap: Bool) {
+    func update(context: AccountContext, items: [Item], homes: [CGPoint], avatarCenter: CGPoint, avatarRadius: CGFloat, area: CGRect) {
         self.context = context
+        self.lastUpdate = (context, items, homes, avatarCenter, avatarRadius, area)
+        let soap = !self.musicPlaying
         let soapChanged = self.soap != soap
         self.soap = soap
+        let items = soap ? Array(items.prefix(AstraGiftBubblesView.restingCount)) : items
         self.avatarCenter = avatarCenter
         self.avatarRadius = avatarRadius
         self.area = area
@@ -205,6 +220,7 @@ final class AstraGiftBubblesView: UIView {
                 // Out of the avatar, as Telegram's gift icons come.
                 bubble.position = avatarCenter
                 bubble.velocity = CGPoint(x: (homes[index].x - avatarCenter.x) * 3.0, y: (homes[index].y - avatarCenter.y) * 3.0)
+                bubble.snapUntil = self.time + 1.0
             }
             next.append(bubble)
         }
@@ -340,19 +356,33 @@ final class AstraGiftBubblesView: UIView {
             } else {
                 // The resting place turns around the avatar, its distance breathing in and out, so the bubbles swirl:
                 // they pass over the avatar's edge and the name, as in the concept. Livelier with music.
+                // As in the concept the bubbles hang almost still, drifting a little; now and then one floats slowly
+                // over to another place around the avatar (over its edge and the name too).
                 let t = self.time * bubble.speed + bubble.phase
-                let drift: CGFloat = 1.0 + self.beatEnergy * 0.5
-                let angle = bubble.homeAngle + self.time * 0.22 * drift + sin(t * 0.37) * 0.35
-                let distance0 = bubble.homeDistance * (1.0 + 0.16 * sin(t * 0.53 + 0.8))
-                let orbit = CGPoint(x: self.avatarCenter.x + cos(angle) * distance0, y: self.avatarCenter.y + sin(angle) * distance0 * 0.9)
-                let wander = CGPoint(x: sin(t * 1.7 + 1.3) * 4.0 * drift, y: sin(t * 1.3) * 3.0 * drift)
-                force.x += (orbit.x + wander.x - bubble.position.x) * 7.0 - bubble.velocity.x * 3.0
-                force.y += (orbit.y + wander.y - bubble.position.y) * 7.0 - bubble.velocity.y * 3.0
+                if self.time >= bubble.nextMoveTime {
+                    bubble.nextMoveTime = self.time + CGFloat.random(in: 5.0 ..< 11.0)
+                    if bubble.restDistance > 0.0 {
+                        bubble.restAngle += CGFloat.random(in: -1.1 ..< 1.1)
+                        bubble.restDistance = self.avatarRadius * CGFloat.random(in: 0.95 ..< 1.75)
+                    } else {
+                        bubble.restAngle = bubble.homeAngle
+                        bubble.restDistance = bubble.homeDistance
+                    }
+                }
+                let rest = CGPoint(x: self.avatarCenter.x + cos(bubble.restAngle) * bubble.restDistance * 1.15, y: self.avatarCenter.y + sin(bubble.restAngle) * bubble.restDistance * 0.9)
+                let wander = CGPoint(x: sin(t * 0.55 + 1.3) * 5.0 + sin(t * 0.23) * 4.0, y: sin(t * 0.47) * 4.0 + sin(t * 0.19 + 2.0) * 3.0)
+                // A soft, slow pull: it glides there rather than jumps.
+                // (Let go, or just out of the avatar, it snaps back with a bounce first.)
+                let snapping = self.time < bubble.snapUntil
+                let pull: CGFloat = snapping ? 26.0 : 1.6
+                let damping: CGFloat = snapping ? 5.5 : 2.4
+                force.x += (rest.x + wander.x - bubble.position.x) * pull - bubble.velocity.x * damping
+                force.y += (rest.y + wander.y - bubble.position.y) * pull - bubble.velocity.y * damping
                 // Not deep into the avatar (its edge is fine).
                 let dx = bubble.position.x - self.avatarCenter.x
                 let dy = bubble.position.y - self.avatarCenter.y
                 let distance = max(0.001, sqrt(dx * dx + dy * dy))
-                let minDistance = self.avatarRadius * 0.7 + bubble.radius * 0.3
+                let minDistance = self.avatarRadius * 0.55 + bubble.radius * 0.2
                 if distance < minDistance {
                     let push = (minDistance - distance) * 70.0
                     force.x += dx / distance * push
@@ -548,6 +578,7 @@ final class AstraGiftBubblesView: UIView {
         self.holdTimer = nil
         if let bubble = self.dragged {
             bubble.targetRadius = bubble.baseRadius
+            bubble.snapUntil = self.time + 1.1
             if !self.dragMoved {
                 // A tap: a little jelly bounce.
                 bubble.radiusVelocity -= 50.0
