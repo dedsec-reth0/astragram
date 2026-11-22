@@ -146,3 +146,33 @@ CREATE TABLE IF NOT EXISTS feedback (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS feedback_ip ON feedback(ip, created_at);
+
+-- What a visual gift's owner set on it, beside the gift itself (apps from 1.0.30): `ref` is 'o<gift ID>' for a gift the
+-- owner put on from the shop, 'r<row>' for a visual_gift_received row. pinned_at > 0 pins it to the top of the profile
+-- (in that order); hidden keeps it for the owner only; unique is the look it was upgraded to ({n, m, p, b}: number,
+-- model, pattern, backdrop, as Telegram names them); text and anonymous are what the giver wrote and whether the giver's
+-- name is kept from everyone but the recipient.
+CREATE TABLE IF NOT EXISTS visual_gift_meta (
+  tg_id INTEGER NOT NULL,
+  ref TEXT NOT NULL,
+  pinned_at INTEGER NOT NULL DEFAULT 0,
+  hidden INTEGER NOT NULL DEFAULT 0,
+  unique_look TEXT NOT NULL DEFAULT '',
+  text TEXT NOT NULL DEFAULT '',
+  anonymous INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (tg_id, ref)
+);
+
+-- The next number of each gift upgraded in AstraGram (its own count, apart from Telegram's).
+CREATE TABLE IF NOT EXISTS visual_gift_numbers (
+  gift_id TEXT PRIMARY KEY,
+  next INTEGER NOT NULL
+);
+
+-- The visual gift each AstraGram user wears as their status (AstraGram shows it beside their name; everyone else sees
+-- the user's own Telegram status).
+CREATE TABLE IF NOT EXISTS visual_gift_worn (
+  tg_id INTEGER PRIMARY KEY,
+  ref TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);

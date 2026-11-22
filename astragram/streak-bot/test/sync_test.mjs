@@ -272,6 +272,48 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   check('donation goes to its topic', [donation.chat_id, donation.message_thread_id], [GROUP, box.donate]);
   q("DELETE FROM kv WHERE key = 'inbox'");
 
+  // 9h. Gifts like Telegram's: a caption and an anonymous giver, pinning, hiding, upgrades with numbers, passing on, wearing.
+  r = await gifts('C', { send: { to: 100, gift: '777', text: 'С днём рождения!', anonymous: true }, check: [] });
+  const anonId = r.body.sent;
+  r = await gifts('A', { check: [] });
+  const mineAnon = r.body.mineReceived.find((g) => g.id === anonId);
+  check('recipient sees the caption and the giver', [mineAnon.text, mineAnon.from, mineAnon.anon], ['С днём рождения!', 200, true]);
+  r = await gifts('C', { check: [100] });
+  const seenAnon = r.body.received[100].find((g) => g.id === anonId);
+  check('others see the caption, not the anonymous giver', [seenAnon.text, seenAnon.from], ['С днём рождения!', 0]);
+  r = await gifts('A', { gifts: ['5170145012310081615', '6028601630662853006'], meta: [{ ref: 'o5170145012310081615', pinned: true }, { ref: 'o6028601630662853006', hidden: true }, { ref: 'o42', pinned: true }], check: [] });
+  check('owner sees pin and hidden', [r.body.mineMeta['5170145012310081615'].pin > 0, r.body.mineMeta['6028601630662853006'].hidden], [true, true]);
+  check('a gift not on the profile is not pinned', q("SELECT COUNT(*) AS c FROM visual_gift_meta WHERE ref = 'o42'")[0].c, 0);
+  r = await gifts('C', { check: [100] });
+  check('a hidden gift is not handed out', r.body.users[100], ['5170145012310081615']);
+  check('others see the pin', r.body.usersMeta[100]['5170145012310081615'].pin > 0, true);
+  r = await gifts('A', { upgrade: { ref: `r${anonId}`, model: 'Blue Star', pattern: 'Moon', backdrop: 'Midnight' }, check: [] });
+  check('upgrade numbered from 1', r.body.upgraded.u, { n: 1, m: 'Blue Star', p: 'Moon', b: 'Midnight' });
+  r = await gifts('A', { upgrade: { ref: `r${anonId}`, model: 'Other', pattern: 'x', backdrop: 'y' }, check: [] });
+  check('a gift is upgraded once', r.body.upgraded.u.m, 'Blue Star');
+  r = await gifts('C', { send: { to: 100, gift: '777' }, check: [] });
+  r = await gifts('A', { upgrade: { ref: `r${r.body.sent}`, model: 'M', pattern: 'P', backdrop: 'B' }, check: [] });
+  check('the next one of the same gift is #2', r.body.upgraded.u.n, 2);
+  r = await gifts('C', { upgrade: { ref: `r${anonId}`, model: 'M', pattern: 'P', backdrop: 'B' }, check: [] });
+  check('nobody upgrades a gift that is not theirs', r.status, 400);
+  r = await gifts('A', { wear: { ref: `r${anonId}` }, check: [] });
+  check('worn by its owner', r.body.worn[100].u.n, 1);
+  r = await gifts('C', { check: [100] });
+  check('others see what is worn', [r.body.worn[100].gift, r.body.worn[100].u.m], ['777', 'Blue Star']);
+  r = await gifts('B', { transfer: { ref: `r${anonId}`, to: 200 }, check: [] });
+  check('passed on', typeof r.body.transferred, 'number');
+  check('taken off when passed on', r.body.worn[100], undefined);
+  r = await gifts('C', { check: [] });
+  const moved = r.body.mineReceived.find((g) => g.id === anonId);
+  check('the new owner gets it with its upgrade, from the one who passed it', [moved.from, moved.u.n, moved.text, moved.anon], [100, 1, undefined, undefined]);
+  r = await gifts('C', { gifts: ['9'], check: [] });
+  r = await gifts('C', { transfer: { ref: 'o9', to: 100 }, check: [] });
+  check('an own gift passed on leaves the list', r.body.mine, []);
+  r = await gifts('A', { check: [] });
+  check('and reaches the other profile', r.body.mineReceived.some((g) => g.id === r.body.mineReceived[0].id && g.gift === '9' && g.from === 200), true);
+  r = await gifts('A', { wear: null, meta: [{ ref: 'o5170145012310081615', pinned: false }], check: [] });
+  check('unpinned', r.body.mineMeta['5170145012310081615'], undefined);
+
   // 10. Unlink forgets the list.
   call({ op: 'reset' });
   await worker.fetch({ url: 'https://bot.example/api/unlink', method: 'POST', headers: { get: (k) => (k === 'authorization' ? 'Bearer ' + TOKENS.A : null) }, json: async () => ({}) }, env);

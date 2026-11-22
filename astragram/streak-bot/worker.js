@@ -396,6 +396,58 @@ const GIFTS_PER_DAY = 20;
 const MAX_RECEIVED = 100;
 const giftId = (id) => ((typeof id === 'string' || Number.isSafeInteger(id)) && /^[0-9]{1,20}$/.test(String(id)) ? String(id) : null);
 
+const MAX_PINNED_GIFTS = 6;
+const GIFT_TEXT_MAX = 255;
+const giftRef = (ref) => (typeof ref === 'string' && /^[or][0-9]{1,20}$/.test(ref) ? ref : null);
+
+// The look an upgrade gave a gift, as sent to the apps: {n, m, p, b} or null.
+function uniqueLook(value) {
+  if (!value) return null;
+  try {
+    const u = JSON.parse(value);
+    return u && Number.isSafeInteger(u.n) ? { n: u.n, m: String(u.m || ''), p: String(u.p || ''), b: String(u.b || '') } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function ownGiftList(env, tgId) {
+  const row = await env.DB.prepare('SELECT gifts FROM visual_gifts WHERE tg_id = ?').bind(tgId).first();
+  try {
+    return row ? JSON.parse(row.gifts) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveOwnGiftList(env, tgId, gifts, t) {
+  if (gifts.length === 0) {
+    await env.DB.prepare('DELETE FROM visual_gifts WHERE tg_id = ?').bind(tgId).run();
+    return;
+  }
+  await env.DB.prepare(`INSERT INTO visual_gifts (tg_id, gifts, updated_at, changed_at) VALUES (?, ?, ?, ?) ON CONFLICT (tg_id) DO UPDATE SET
+    changed_at = CASE WHEN visual_gifts.gifts = excluded.gifts THEN visual_gifts.changed_at ELSE excluded.changed_at END,
+    gifts = excluded.gifts, updated_at = excluded.updated_at`)
+    .bind(tgId, JSON.stringify(gifts), t, t).run();
+}
+
+// The gift ID behind one of the owner's refs, or null when the gift is not theirs.
+async function ownedGift(env, tgId, ref) {
+  if (ref[0] === 'o') {
+    const id = ref.slice(1);
+    return (await ownGiftList(env, tgId)).includes(id) ? id : null;
+  }
+  const row = await env.DB.prepare('SELECT gift_id FROM visual_gift_received WHERE id = ? AND to_id = ?').bind(int(ref.slice(1), 1, Number.MAX_SAFE_INTEGER, 0), tgId).first();
+  return row ? String(row.gift_id) : null;
+}
+
+async function setGiftMeta(env, tgId, ref, fields) {
+  const keys = Object.keys(fields);
+  await env.DB.prepare(`INSERT INTO visual_gift_meta (tg_id, ref, ${keys.join(', ')}) VALUES (?, ?, ${keys.map(() => '?').join(', ')})
+    ON CONFLICT (tg_id, ref) DO UPDATE SET ${keys.map((k) => `${k} = excluded.${k}`).join(', ')}`)
+    .bind(tgId, ref, ...keys.map((k) => fields[k])).run();
+}
+
 async function handleGifts(request, env) {
   const owner = await ownerFromRequest(request, env);
   if (!owner) return json({ error: 'not linked' }, 401);
@@ -410,66 +462,213 @@ async function handleGifts(request, env) {
     // Gift IDs are 64-bit; they travel as decimal strings. A number past 2^53 has already been rounded by JSON.parse, so it
     // is dropped rather than stored as some other gift.
     const gifts = [...new Set(body.gifts.slice(0, MAX_VISUAL_GIFTS).filter((id) => typeof id === 'string' || Number.isSafeInteger(id)).map((id) => String(id)).filter((id) => /^[0-9]{1,20}$/.test(id)))];
-    if (gifts.length === 0) {
-      await env.DB.prepare('DELETE FROM visual_gifts WHERE tg_id = ?').bind(owner.tg_id).run();
-    } else {
-      await env.DB.prepare(`INSERT INTO visual_gifts (tg_id, gifts, updated_at, changed_at) VALUES (?, ?, ?, ?) ON CONFLICT (tg_id) DO UPDATE SET
-        changed_at = CASE WHEN visual_gifts.gifts = excluded.gifts THEN visual_gifts.changed_at ELSE excluded.changed_at END,
-        gifts = excluded.gifts, updated_at = excluded.updated_at`)
-        .bind(owner.tg_id, JSON.stringify(gifts), t, t).run();
+    await saveOwnGiftList(env, owner.tg_id, gifts, t);
+    // A gift taken off loses what was set on it (put on again, it starts afresh).
+    const metaRows = (await env.DB.prepare("SELECT ref FROM visual_gift_meta WHERE tg_id = ? AND ref LIKE 'o%'").bind(owner.tg_id).all()).results || [];
+    for (const r of metaRows) {
+      if (!gifts.includes(r.ref.slice(1))) await env.DB.prepare('DELETE FROM visual_gift_meta WHERE tg_id = ? AND ref = ?').bind(owner.tg_id, r.ref).run();
     }
   } else {
     await env.DB.prepare('UPDATE visual_gifts SET updated_at = ? WHERE tg_id = ?').bind(t, owner.tg_id).run();
   }
+  const giftsToday = async () => (await env.DB.prepare('SELECT COUNT(*) AS c FROM visual_gift_received WHERE from_id = ? AND created_at > ?').bind(owner.tg_id, t - 86400).first()).c;
+  const trimReceived = (to) => env.DB.prepare('DELETE FROM visual_gift_received WHERE to_id = ? AND id NOT IN (SELECT id FROM visual_gift_received WHERE to_id = ? ORDER BY id DESC LIMIT ?)').bind(to, to, MAX_RECEIVED).run();
   let sent = null;
   if (body.send && typeof body.send === 'object') {
     const to = int(body.send.to, 1, Number.MAX_SAFE_INTEGER, 0);
     const gift = giftId(body.send.gift);
     if (!to || to === owner.tg_id || !gift) return json({ error: 'bad gift' }, 400);
-    const today = (await env.DB.prepare('SELECT COUNT(*) AS c FROM visual_gift_received WHERE from_id = ? AND created_at > ?').bind(owner.tg_id, t - 86400).first()).c;
-    if (today >= GIFTS_PER_DAY) return json({ error: 'too many gifts today' }, 429);
+    if (await giftsToday() >= GIFTS_PER_DAY) return json({ error: 'too many gifts today' }, 429);
     const inserted = await env.DB.prepare('INSERT INTO visual_gift_received (to_id, from_id, gift_id, created_at) VALUES (?, ?, ?, ?)').bind(to, owner.tg_id, gift, t).run();
     sent = inserted.meta ? inserted.meta.last_row_id : null;
-    await env.DB.prepare('DELETE FROM visual_gift_received WHERE to_id = ? AND id NOT IN (SELECT id FROM visual_gift_received WHERE to_id = ? ORDER BY id DESC LIMIT ?)').bind(to, to, MAX_RECEIVED).run();
+    const text = clip(body.send.text, GIFT_TEXT_MAX);
+    if (sent && (text || body.send.anonymous)) {
+      await setGiftMeta(env, to, `r${sent}`, { text, anonymous: body.send.anonymous ? 1 : 0 });
+    }
+    await trimReceived(to);
   }
   if (Array.isArray(body.hide)) {
     for (const id of body.hide.slice(0, MAX_RECEIVED)) {
       const row = int(id, 1, Number.MAX_SAFE_INTEGER, 0);
-      if (row) await env.DB.prepare('DELETE FROM visual_gift_received WHERE id = ? AND to_id = ?').bind(row, owner.tg_id).run();
+      if (!row) continue;
+      await env.DB.prepare('DELETE FROM visual_gift_received WHERE id = ? AND to_id = ?').bind(row, owner.tg_id).run();
+      await env.DB.prepare('DELETE FROM visual_gift_meta WHERE tg_id = ? AND ref = ?').bind(owner.tg_id, `r${row}`).run();
+      await env.DB.prepare('DELETE FROM visual_gift_worn WHERE tg_id = ? AND ref = ?').bind(owner.tg_id, `r${row}`).run();
+    }
+  }
+  // Pinning and hiding, as on Telegram's own gifts: [{ref, pinned?, hidden?}].
+  if (Array.isArray(body.meta)) {
+    for (const item of body.meta.slice(0, MAX_RECEIVED)) {
+      const ref = giftRef(item && item.ref);
+      if (!ref || !(await ownedGift(env, owner.tg_id, ref))) continue;
+      const fields = {};
+      if (typeof item.pinned === 'boolean') {
+        if (item.pinned) {
+          const pinned = (await env.DB.prepare('SELECT COUNT(*) AS c FROM visual_gift_meta WHERE tg_id = ? AND pinned_at > 0 AND ref != ?').bind(owner.tg_id, ref).first()).c;
+          if (pinned >= MAX_PINNED_GIFTS) return json({ error: 'too many pinned' }, 409);
+          const current = await env.DB.prepare('SELECT pinned_at FROM visual_gift_meta WHERE tg_id = ? AND ref = ?').bind(owner.tg_id, ref).first();
+          fields.pinned_at = current && current.pinned_at > 0 ? current.pinned_at : t;
+        } else {
+          fields.pinned_at = 0;
+        }
+      }
+      if (typeof item.hidden === 'boolean') {
+        fields.hidden = item.hidden ? 1 : 0;
+        if (item.hidden) fields.pinned_at = 0;
+      }
+      if (Object.keys(fields).length) await setGiftMeta(env, owner.tg_id, ref, fields);
+    }
+  }
+  // An upgrade to a unique gift: the app picks the model, pattern and backdrop from Telegram's list for the gift; the
+  // server gives it the next number. A gift is upgraded once.
+  let upgraded = null;
+  if (body.upgrade && typeof body.upgrade === 'object') {
+    const ref = giftRef(body.upgrade.ref);
+    const gift = ref ? await ownedGift(env, owner.tg_id, ref) : null;
+    const m = clip(body.upgrade.model, 64), p = clip(body.upgrade.pattern, 64), b = clip(body.upgrade.backdrop, 64);
+    if (!gift || !m || !p || !b) return json({ error: 'bad upgrade' }, 400);
+    const current = await env.DB.prepare('SELECT unique_look FROM visual_gift_meta WHERE tg_id = ? AND ref = ?').bind(owner.tg_id, ref).first();
+    let look = current ? uniqueLook(current.unique_look) : null;
+    if (!look) {
+      const counter = await env.DB.prepare('INSERT INTO visual_gift_numbers (gift_id, next) VALUES (?, 2) ON CONFLICT (gift_id) DO UPDATE SET next = next + 1 RETURNING next').bind(gift).first();
+      look = { n: counter.next - 1, m, p, b };
+      await setGiftMeta(env, owner.tg_id, ref, { unique_look: JSON.stringify(look) });
+    }
+    upgraded = { ref, u: look };
+  }
+  // Passing a gift on to someone else: it leaves this profile (with its upgrade) and shows on theirs, from this account.
+  let transferred = null;
+  if (body.transfer && typeof body.transfer === 'object') {
+    const ref = giftRef(body.transfer.ref);
+    const to = int(body.transfer.to, 1, Number.MAX_SAFE_INTEGER, 0);
+    const gift = ref ? await ownedGift(env, owner.tg_id, ref) : null;
+    if (!gift || !to || to === owner.tg_id) return json({ error: 'bad transfer' }, 400);
+    const meta = await env.DB.prepare('SELECT unique_look FROM visual_gift_meta WHERE tg_id = ? AND ref = ?').bind(owner.tg_id, ref).first();
+    let row;
+    if (ref[0] === 'o') {
+      await saveOwnGiftList(env, owner.tg_id, (await ownGiftList(env, owner.tg_id)).filter((id) => id !== gift), t);
+      const inserted = await env.DB.prepare('INSERT INTO visual_gift_received (to_id, from_id, gift_id, created_at) VALUES (?, ?, ?, ?)').bind(to, owner.tg_id, gift, t).run();
+      row = inserted.meta.last_row_id;
+    } else {
+      row = int(ref.slice(1), 1, Number.MAX_SAFE_INTEGER, 0);
+      await env.DB.prepare('UPDATE visual_gift_received SET to_id = ?, from_id = ?, created_at = ? WHERE id = ?').bind(to, owner.tg_id, t, row).run();
+    }
+    await env.DB.prepare('DELETE FROM visual_gift_meta WHERE tg_id = ? AND ref = ?').bind(owner.tg_id, ref).run();
+    await env.DB.prepare('DELETE FROM visual_gift_worn WHERE tg_id = ? AND ref = ?').bind(owner.tg_id, ref).run();
+    const text = clip(body.transfer.text, GIFT_TEXT_MAX);
+    const fields = { text, anonymous: body.transfer.anonymous ? 1 : 0 };
+    if (meta && meta.unique_look) fields.unique_look = meta.unique_look;
+    await setGiftMeta(env, to, `r${row}`, fields);
+    await trimReceived(to);
+    transferred = row;
+  }
+  // Wearing a gift as the status AstraGram shows beside the name: {ref} or null to take it off.
+  if (body.wear !== undefined) {
+    const ref = body.wear === null ? null : giftRef(body.wear && body.wear.ref);
+    if (ref === null) {
+      await env.DB.prepare('DELETE FROM visual_gift_worn WHERE tg_id = ?').bind(owner.tg_id).run();
+    } else if (await ownedGift(env, owner.tg_id, ref)) {
+      await env.DB.prepare('INSERT INTO visual_gift_worn (tg_id, ref, updated_at) VALUES (?, ?, ?) ON CONFLICT (tg_id) DO UPDATE SET ref = excluded.ref, updated_at = excluded.updated_at').bind(owner.tg_id, ref, t).run();
+    } else {
+      return json({ error: 'bad wear' }, 400);
     }
   }
   await env.DB.prepare('UPDATE owners SET last_sync = ? WHERE token_hash = ? AND last_sync < ?').bind(t, owner.token_hash, t - 86400).run();
   const check = Array.isArray(body.check)
-    ? [...new Set(body.check.slice(0, MAX_BADGE_CHECK).map((id) => int(id, 1, Number.MAX_SAFE_INTEGER, 0)).filter((id) => id > 0))]
+    ? [...new Set(body.check.slice(0, MAX_BADGE_CHECK).map((id) => int(id, 1, Number.MAX_SAFE_INTEGER, 0)).filter((id) => id > 0 && id !== owner.tg_id))]
     : [];
+  const inList = (chunk) => chunk.map(() => '?').join(',');
+  // What the owners set on their gifts, by owner and ref (with their hidden gifts, which only the owner gets).
+  const metaOf = {};
+  const metaRows = async (ids) => {
+    for (let i = 0; i < ids.length; i += D1_CHUNK) {
+      const chunk = ids.slice(i, i + D1_CHUNK);
+      const rows = (await env.DB.prepare(`SELECT * FROM visual_gift_meta WHERE tg_id IN (${inList(chunk)})`).bind(...chunk).all()).results || [];
+      for (const r of rows) (metaOf[r.tg_id] = metaOf[r.tg_id] || {})[r.ref] = r;
+    }
+  };
+  await metaRows([...check, owner.tg_id]);
+  const metaFor = (tgId, ref) => (metaOf[tgId] || {})[ref];
+  const isHidden = (tgId, ref) => !!(metaFor(tgId, ref) && metaFor(tgId, ref).hidden);
+  // The settings an app shows on a gift; only the owner learns which are hidden.
+  const shownMeta = (tgId, ref, forOwner) => {
+    const m = metaFor(tgId, ref);
+    if (!m) return null;
+    const out = {};
+    if (m.pinned_at > 0) out.pin = m.pinned_at;
+    const u = uniqueLook(m.unique_look);
+    if (u) out.u = u;
+    if (forOwner && m.hidden) out.hidden = true;
+    return Object.keys(out).length ? out : null;
+  };
+
   const users = {};
   // When each list last changed: shown as the date of the gifts in it.
   const usersDate = {};
+  const usersMeta = {};
   for (let i = 0; i < check.length; i += D1_CHUNK) {
     const chunk = check.slice(i, i + D1_CHUNK);
-    const rows = (await env.DB.prepare(`SELECT tg_id, gifts, changed_at FROM visual_gifts WHERE updated_at >= ? AND tg_id IN (${chunk.map(() => '?').join(',')})`)
+    const rows = (await env.DB.prepare(`SELECT tg_id, gifts, changed_at FROM visual_gifts WHERE updated_at >= ? AND tg_id IN (${inList(chunk)})`)
       .bind(t - VISUAL_GIFT_DAYS * 86400, ...chunk).all()).results || [];
     for (const r of rows) {
       try {
-        users[r.tg_id] = JSON.parse(r.gifts);
+        const list = JSON.parse(r.gifts).filter((id) => !isHidden(r.tg_id, `o${id}`));
+        users[r.tg_id] = list;
         usersDate[r.tg_id] = r.changed_at || 0;
+        for (const id of list) {
+          const m = shownMeta(r.tg_id, `o${id}`, false);
+          if (m) (usersMeta[r.tg_id] = usersMeta[r.tg_id] || {})[id] = m;
+        }
       } catch {
         // A broken row is skipped.
       }
     }
   }
+  // A received gift as an app gets it; an anonymous giver is named only to the recipient.
+  const receivedRow = (r, forOwner) => {
+    const m = metaFor(r.to_id, `r${r.id}`);
+    const anonymous = !!(m && m.anonymous);
+    const out = { id: r.id, gift: r.gift_id, from: anonymous && !forOwner ? 0 : r.from_id, date: r.created_at };
+    if (m && m.text) out.text = m.text;
+    if (anonymous) out.anon = true;
+    const shown = shownMeta(r.to_id, `r${r.id}`, forOwner);
+    if (shown) Object.assign(out, shown);
+    return out;
+  };
   const received = {};
-  const receivedRow = (r) => ({ id: r.id, gift: r.gift_id, from: r.from_id, date: r.created_at });
   for (let i = 0; i < check.length; i += D1_CHUNK) {
     const chunk = check.slice(i, i + D1_CHUNK);
-    const rows = (await env.DB.prepare(`SELECT id, to_id, from_id, gift_id, created_at FROM visual_gift_received WHERE to_id IN (${chunk.map(() => '?').join(',')}) ORDER BY id DESC`)
+    const rows = (await env.DB.prepare(`SELECT id, to_id, from_id, gift_id, created_at FROM visual_gift_received WHERE to_id IN (${inList(chunk)}) ORDER BY id DESC`)
       .bind(...chunk).all()).results || [];
-    for (const r of rows) (received[r.to_id] = received[r.to_id] || []).push(receivedRow(r));
+    for (const r of rows) {
+      if (!isHidden(r.to_id, `r${r.id}`)) (received[r.to_id] = received[r.to_id] || []).push(receivedRow(r, false));
+    }
   }
-  const mineReceived = ((await env.DB.prepare('SELECT id, from_id, gift_id, created_at FROM visual_gift_received WHERE to_id = ? ORDER BY id DESC').bind(owner.tg_id).all()).results || []).map(receivedRow);
-  const mine = await env.DB.prepare('SELECT gifts FROM visual_gifts WHERE tg_id = ?').bind(owner.tg_id).first();
-  const reply = { users, usersDate, received, mine: mine ? JSON.parse(mine.gifts) : [], mineReceived };
+  const mineReceived = ((await env.DB.prepare('SELECT id, to_id, from_id, gift_id, created_at FROM visual_gift_received WHERE to_id = ? ORDER BY id DESC').bind(owner.tg_id).all()).results || []).map((r) => receivedRow(r, true));
+  const mine = await ownGiftList(env, owner.tg_id);
+  const mineMeta = {};
+  for (const id of mine) {
+    const m = shownMeta(owner.tg_id, `o${id}`, true);
+    if (m) mineMeta[id] = m;
+  }
+  // The gifts worn as a status: the account's own and the checked people's (a hidden gift is not shown worn).
+  const worn = {};
+  const wornIds = [owner.tg_id, ...check];
+  for (let i = 0; i < wornIds.length; i += D1_CHUNK) {
+    const chunk = wornIds.slice(i, i + D1_CHUNK);
+    const rows = (await env.DB.prepare(`SELECT tg_id, ref FROM visual_gift_worn WHERE tg_id IN (${inList(chunk)})`).bind(...chunk).all()).results || [];
+    for (const r of rows) {
+      if (r.tg_id !== owner.tg_id && isHidden(r.tg_id, r.ref)) continue;
+      const gift = await ownedGift(env, r.tg_id, r.ref);
+      if (!gift) continue;
+      const m = metaFor(r.tg_id, r.ref);
+      worn[r.tg_id] = { ref: r.ref, gift, u: m ? uniqueLook(m.unique_look) : null };
+    }
+  }
+  const reply = { users, usersDate, usersMeta, received, mine, mineMeta, mineReceived, worn };
   if (sent !== null) reply.sent = sent;
+  if (upgraded) reply.upgraded = upgraded;
+  if (transferred !== null) reply.transferred = transferred;
   return json(reply);
 }
 
