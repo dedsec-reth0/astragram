@@ -334,6 +334,10 @@ public struct AstraVisualGiftAction {
     public let wear: (() -> Void)?
     public let isWorn: Bool
     public let setHidden: ((Bool) -> Void)?
+    /// The "…" menu of one's own gift: (title, icon, destructive, action).
+    public var menu: [(title: String, icon: String, isDestructive: Bool, action: () -> Void)] = []
+    /// A free upgrade, revealed with Telegram's upgrade animation: the gift's item as a unique one, or nil.
+    public var upgrade: (() -> Signal<ProfileGiftsContext.State.StarGift?, NoError>)?
 }
 
 public func astraVisualGiftAction(context: AccountContext, peerId: EnginePeer.Id, item: ProfileGiftsContext.State.StarGift, push: @escaping (ViewController) -> Void = { _ in }, open: @escaping (ProfileGiftsContext.State.StarGift) -> Void = { _ in }) -> AstraVisualGiftAction? {
@@ -344,24 +348,89 @@ public func astraVisualGiftAction(context: AccountContext, peerId: EnginePeer.Id
             return nil
         }
         let isWorn = AstraVisualGifts.wornEntry(context: context)?.ref == entry.ref
-        return AstraVisualGiftAction(title: isRussian ? "Управлять подарком" : "Manage Gift", action: {
-            // After the gift's screen has gone.
-            Queue.mainQueue().after(0.4, {
-                astraManageVisualGift(context: context, entry: entry, push: push, open: open)
-            })
-        }, wear: {
-            Queue.mainQueue().after(0.4, {
-                astraWearVisualGift(context: context, entry: isWorn ? nil : entry)
-            })
+        func text(_ ru: String, _ en: String) -> String {
+            return isRussian ? ru : en
+        }
+        // After the gift's screen has gone.
+        let later: (@escaping () -> Void) -> () -> Void = { f in
+            return {
+                Queue.mainQueue().after(0.4, f)
+            }
+        }
+        var action = AstraVisualGiftAction(title: entry.meta.unique == nil ? text("Улучшить бесплатно", "Upgrade for Free") : text("Готово", "Done"), action: {}, wear: later {
+            astraWearVisualGift(context: context, entry: isWorn ? nil : entry)
         }, isWorn: isWorn, setHidden: { hidden in
             AstraVisualGifts.setHidden(context: context, entry: entry, hidden: hidden, completion: { result in
                 if case .done = result {
-                    astraToast(context: context, hidden ? (isRussian ? "Подарок скрыт: его видите только вы" : "The gift is hidden: only you see it") : (isRussian ? "Подарок снова виден в профиле" : "The gift shows on your profile again"))
+                    astraToast(context: context, hidden ? text("Подарок скрыт: его видите только вы", "The gift is hidden: only you see it") : text("Подарок снова виден в профиле", "The gift shows on your profile again"))
                 } else {
                     astraChangeFailed(context: context, result, isRussian: isRussian)
                 }
             })
         })
+        var menu: [(title: String, icon: String, isDestructive: Bool, action: () -> Void)] = []
+        menu.append((isWorn ? text("Снять", "Take Off") : text("Носить", "Wear"), isWorn ? "Premium/Collectible/Unwear" : "Premium/Collectible/Wear", false, later {
+            astraWearVisualGift(context: context, entry: isWorn ? nil : entry)
+        }))
+        if !entry.meta.isHidden {
+            menu.append((entry.meta.isPinned ? text("Открепить", "Unpin") : text("Закрепить", "Pin"), entry.meta.isPinned ? "Chat/Context Menu/Unpin" : "Chat/Context Menu/Pin", false, later {
+                AstraVisualGifts.setPinned(context: context, entry: entry, pinned: !entry.meta.isPinned, completion: { result in
+                    astraChangeFailed(context: context, result, isRussian: isRussian)
+                })
+            }))
+        }
+        menu.append((entry.meta.isHidden ? text("Показать в профиле", "Show on Profile") : text("Скрыть из профиля", "Hide from Profile"), entry.meta.isHidden ? "Peer Info/ShowIcon" : "Peer Info/HideIcon", false, later {
+            action.setHidden?(!entry.meta.isHidden)
+        }))
+        menu.append((text("Передать", "Transfer"), "Chat/Context Menu/Replace", false, later {
+            astraTransferVisualGift(context: context, entry: entry, push: push)
+        }))
+        menu.append((text("Убрать навсегда", "Remove for Good"), "Chat/Context Menu/Delete", true, later {
+            if let received = entry.received {
+                AstraVisualGifts.hideReceived(context: context, id: received.id, completion: { _ in })
+            } else {
+                AstraVisualGifts.removeMine(context: context, gift: entry.gift)
+            }
+        }))
+        action.menu = menu
+        let fromPeer = item.fromPeer
+        action.upgrade = {
+            return Signal { subscriber in
+                AstraVisualGifts.upgrade(context: context, entry: entry, completion: { result in
+                    guard case let .upgraded(look) = result else {
+                        if case .notUpgradable = result {
+                            astraToast(context: context, text("У этого подарка в Telegram нет уникальных версий", "Telegram has no unique versions of this gift"))
+                        } else {
+                            astraToast(context: context, text("Не получилось улучшить. Проверьте интернет и попробуйте ещё раз", "Couldn't upgrade. Check the connection and try again"))
+                        }
+                        subscriber.putNext(nil)
+                        subscriber.putCompletion()
+                        return
+                    }
+                    AstraHaptics.success()
+                    let _ = (combineLatest(
+                        context.engine.payments.cachedStarGifts() |> filter { $0 != nil } |> take(1),
+                        AstraVisualGifts.attributes(context: context, giftIds: [entry.gift])
+                    )
+                    |> take(1)
+                    |> deliverOnMainQueue).start(next: { catalog, attributes in
+                        var updated = entry
+                        updated.meta.unique = look
+                        for gift in catalog ?? [] {
+                            if case let .generic(gift) = gift, gift.id == entry.gift, let unique = AstraVisualGifts.uniqueGift(gift: gift, look: look, attributes: attributes[entry.gift] ?? [], ownerPeerId: accountPeerId) {
+                                subscriber.putNext(AstraVisualGifts.item(gift: gift, entry: updated, fromPeer: fromPeer, unique: unique))
+                                subscriber.putCompletion()
+                                return
+                            }
+                        }
+                        subscriber.putNext(nil)
+                        subscriber.putCompletion()
+                    })
+                })
+                return EmptyDisposable
+            }
+        }
+        return action
     }
     guard peerId.namespace == Namespaces.Peer.CloudUser else {
         return nil
@@ -410,87 +479,6 @@ private func astraChangeFailed(context: AccountContext, _ result: AstraVisualGif
     case .failed:
         astraToast(context: context, isRussian ? "Не получилось. Проверьте интернет и попробуйте ещё раз" : "Couldn't do it. Check the connection and try again")
     }
-}
-
-/// The menu of one of the account's own visual gifts.
-private func astraManageVisualGift(context: AccountContext, entry: AstraVisualGifts.Entry, push: @escaping (ViewController) -> Void, open: @escaping (ProfileGiftsContext.State.StarGift) -> Void) {
-    let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
-    func text(_ ru: String, _ en: String) -> String {
-        return isRussian ? ru : en
-    }
-    let isWorn = AstraVisualGifts.wornEntry(context: context)?.ref == entry.ref
-    let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-    if entry.meta.unique == nil {
-        sheet.addAction(UIAlertAction(title: text("Улучшить бесплатно", "Upgrade for Free"), style: .default, handler: { _ in
-            astraUpgradeVisualGift(context: context, entry: entry, open: open)
-        }))
-    }
-    sheet.addAction(UIAlertAction(title: isWorn ? text("Снять", "Take Off") : text("Надеть", "Wear"), style: .default, handler: { _ in
-        astraWearVisualGift(context: context, entry: isWorn ? nil : entry)
-    }))
-    if !entry.meta.isHidden {
-        sheet.addAction(UIAlertAction(title: entry.meta.isPinned ? text("Открепить", "Unpin") : text("Закрепить", "Pin"), style: .default, handler: { _ in
-            AstraVisualGifts.setPinned(context: context, entry: entry, pinned: !entry.meta.isPinned, completion: { result in
-                astraChangeFailed(context: context, result, isRussian: isRussian)
-            })
-        }))
-    }
-    sheet.addAction(UIAlertAction(title: entry.meta.isHidden ? text("Показать в профиле", "Show on Profile") : text("Скрыть из профиля", "Hide from Profile"), style: .default, handler: { _ in
-        let hidden = !entry.meta.isHidden
-        AstraVisualGifts.setHidden(context: context, entry: entry, hidden: hidden, completion: { result in
-            if case .done = result {
-                astraToast(context: context, hidden ? text("Подарок скрыт: его видите только вы", "The gift is hidden: only you see it") : text("Подарок снова виден в профиле", "The gift shows on your profile again"))
-            } else {
-                astraChangeFailed(context: context, result, isRussian: isRussian)
-            }
-        })
-    }))
-    sheet.addAction(UIAlertAction(title: text("Передать…", "Transfer…"), style: .default, handler: { _ in
-        astraTransferVisualGift(context: context, entry: entry, push: push)
-    }))
-    sheet.addAction(UIAlertAction(title: text("Убрать навсегда", "Remove for Good"), style: .destructive, handler: { _ in
-        if let received = entry.received {
-            AstraVisualGifts.hideReceived(context: context, id: received.id, completion: { _ in })
-        } else {
-            AstraVisualGifts.removeMine(context: context, gift: entry.gift)
-        }
-    }))
-    sheet.addAction(UIAlertAction(title: text("Отмена", "Cancel"), style: .cancel, handler: nil))
-    astraPresent(sheet)
-}
-
-private func astraUpgradeVisualGift(context: AccountContext, entry: AstraVisualGifts.Entry, open: @escaping (ProfileGiftsContext.State.StarGift) -> Void) {
-    let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
-    AstraVisualGifts.upgrade(context: context, entry: entry, completion: { result in
-        switch result {
-        case let .upgraded(look):
-            AstraHaptics.success()
-            astraToast(context: context, isRussian ? "Подарок улучшен: \(look.model), №\(look.number)" : "Gift upgraded: \(look.model), #\(look.number)")
-            // The gift's screen again, now as a unique gift.
-            let accountPeerId = context.account.peerId
-            let _ = (combineLatest(
-                context.engine.payments.cachedStarGifts() |> filter { $0 != nil } |> take(1),
-                AstraVisualGifts.attributes(context: context, giftIds: [entry.gift])
-            )
-            |> take(1)
-            |> deliverOnMainQueue).start(next: { catalog, attributes in
-                guard let updated = AstraVisualGifts.entries(accountPeerId: accountPeerId, peerId: accountPeerId).first(where: { $0.ref == entry.ref }) else {
-                    return
-                }
-                for gift in catalog ?? [] {
-                    if case let .generic(gift) = gift, gift.id == entry.gift {
-                        let unique = AstraVisualGifts.uniqueGift(gift: gift, look: look, attributes: attributes[entry.gift] ?? [], ownerPeerId: accountPeerId)
-                        let peer: EnginePeer? = nil
-                        open(AstraVisualGifts.item(gift: gift, entry: updated, fromPeer: peer, unique: unique))
-                    }
-                }
-            })
-        case .notUpgradable:
-            astraToast(context: context, isRussian ? "У этого подарка в Telegram нет уникальных версий" : "Telegram has no unique versions of this gift")
-        case .failed:
-            astraToast(context: context, isRussian ? "Не получилось улучшить. Проверьте интернет и попробуйте ещё раз" : "Couldn't upgrade. Check the connection and try again")
-        }
-    })
 }
 
 private func astraWearVisualGift(context: AccountContext, entry: AstraVisualGifts.Entry?) {

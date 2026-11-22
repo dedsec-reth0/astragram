@@ -1373,7 +1373,7 @@ extension GiftsListView {
         let controller = GiftViewScreen(
             context: self.context,
             subject: .profileGift(self.peerId, product),
-            customAction: action.map { GiftViewScreen.CustomAction(title: $0.title, action: $0.action, wear: $0.wear, isWorn: $0.isWorn, setHidden: $0.setHidden) }
+            customAction: action.map { GiftViewScreen.CustomAction(title: $0.title, action: $0.action, wear: $0.wear, isWorn: $0.isWorn, setHidden: $0.setHidden, menu: $0.menu.map { GiftViewScreen.CustomAction.MenuItem(title: $0.title, icon: $0.icon, isDestructive: $0.isDestructive, action: $0.action) }, upgrade: $0.upgrade) }
         )
         self.parentController?.push(controller)
     }

@@ -35,6 +35,7 @@ import ComponentDisplayAdapters
 import ChatAvatarNavigationNode
 import MultiScaleTextNode
 import PeerInfoCoverComponent
+import AstraGramUI
 import PeerInfoPaneNode
 import MultilineTextComponent
 import PeerInfoRatingComponent
@@ -120,6 +121,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let backgroundBannerView: UIView
     let backgroundCover = ComponentView<Empty>()
     let giftsCover = ComponentView<Empty>()
+    /// AstraGram: the colors of the gift bubble touched last, worn by the header until another one is touched.
+    private var astraBubbleTint: PeerEmojiStatus?
+    private var astraBubbleGifts: (EnginePeer.Id, Signal<[ProfileGiftsContext.State.StarGift], NoError>)?
     var didSetupBackgroundCover = false
     let buttonsContainerNode: SparseNode
     let buttonsBackgroundNode: NavigationBackgroundNode
@@ -664,7 +668,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let actionButtonKeys: [PeerInfoHeaderButtonKey] = (self.isSettings || self.isMyProfile) ? [] : peerInfoHeaderActionButtons(peer: peer, isSecretChat: isSecretChat, isContact: isContact)
         let buttonKeys: [PeerInfoHeaderButtonKey] = (self.isSettings || self.isMyProfile) ? [] : peerInfoHeaderButtons(peer: peer, cachedData: cachedData, isOpenedFromChat: self.isOpenedFromChat, isExpanded: true, videoCallsEnabled: width > 320.0 && self.videoCallsEnabled, isSecretChat: isSecretChat, isContact: isContact, threadInfo: threadData?.info)
         
-        let backgroundCoverSubject: PeerInfoCoverComponent.Subject?
+        var backgroundCoverSubject: PeerInfoCoverComponent.Subject?
         var backgroundCoverAnimateIn = false
         var backgroundDefaultHeight: CGFloat = 254.0
         var hasBackground = false
@@ -690,6 +694,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
         } else {
             backgroundCoverSubject = nil
+        }
+        if let astraBubbleTint = self.astraBubbleTint, !self.isSettings {
+            backgroundCoverSubject = .status(astraBubbleTint)
+            hasBackground = true
         }
         
         let currentSavedMusic = self.profileMusic(peer: peer, screenData: screenData)
@@ -785,7 +793,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         var hasCoverColor = false
         let regularNavigationContentsSecondaryColor: UIColor
-        if let emojiStatus = peer?.emojiStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, _, _) = emojiStatus.content {
+        // AstraGram: a touched gift bubble's colors stand in for the worn gift's.
+        let astraColorStatus = self.isSettings ? peer?.emojiStatus : (self.astraBubbleTint ?? peer?.emojiStatus)
+        if let emojiStatus = astraColorStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, _, _) = emojiStatus.content {
             let mainColor = UIColor(rgb: UInt32(bitPattern: innerColor))
             let secondaryColor = UIColor(rgb: UInt32(bitPattern: outerColor))
             regularNavigationContentsSecondaryColor = UIColor(white: 1.0, alpha: 0.6).blitOver(mainColor.withMultiplied(hue: 1.0, saturation: 2.2, brightness: 1.5), alpha: 1.0)
@@ -982,7 +992,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             
             headerButtonBackgroundColor = regularHeaderButtonBackgroundColor.mixedWith(collapsedHeaderButtonBackgroundColor, alpha: effectiveTransitionFraction)
             
-            if let status = peer?.emojiStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, patternColorValue, _) = status.content {
+            if let status = astraColorStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, patternColorValue, _) = status.content {
                 let _ = innerColor
                 ratingBackgroundColor = UIColor(white: 1.0, alpha: 1.0).mixedWith(accentRatingBackgroundColor, alpha: effectiveTransitionFraction)
                 
@@ -2541,7 +2551,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         guard let self, case let .unique(gift) = gift.gift else {
                             return
                         }
-                        self.openUniqueGift?(self.view, gift.slug)
+                        // An AstraGram gift has no page of its own.
+                        if !gift.slug.isEmpty {
+                            self.openUniqueGift?(self.view, gift.slug)
+                        }
+                    },
+                    astraBubbleGifts: self.isSettings ? nil : self.astraBubbleGiftsSignal(peerId: peer.id, giftsContext: profileGiftsContext),
+                    astraBubbleTouched: { [weak self] gift in
+                        self?.astraTintWithGift(gift)
                     }
                 )),
                 environment: {},
@@ -2941,6 +2958,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         guard let result = super.hitTest(point, with: event) else {
             return nil
         }
+        // AstraGram: the gift bubbles float over the avatar and the name, and catch the touch first.
+        if !self.isSearching, !self.isSettings, let giftsCoverView = self.giftsCover.view, giftsCoverView.alpha > 0.0, self.editingContentNode.alpha == 0.0, giftsCoverView.point(inside: self.view.convert(point, to: giftsCoverView), with: event) {
+            return giftsCoverView.hitTest(self.view.convert(point, to: giftsCoverView), with: event) ?? giftsCoverView
+        }
         
         if self.isSearching {
             if !result.isDescendant(of: self.searchBarContainer.view) && !result.isDescendant(of: self.searchContainer.view) {
@@ -3056,5 +3077,66 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         let maskAnchorPoint = CGPoint(x: 0.5, y: self.isAvatarExpanded ? 0.37 : 0.5)
         transition.updateAnchorPoint(layer: self.avatarListNode.maskNode.layer, anchorPoint: maskAnchorPoint)
+    }
+}
+
+
+extension PeerInfoHeaderNode {
+    /// AstraGram: the profile's pinned gifts, Telegram's and AstraGram's, for the bubbles (made once per profile).
+    fileprivate func astraBubbleGiftsSignal(peerId: EnginePeer.Id, giftsContext: ProfileGiftsContext) -> Signal<[ProfileGiftsContext.State.StarGift], NoError> {
+        if let (currentPeerId, signal) = self.astraBubbleGifts, currentPeerId == peerId {
+            return signal
+        }
+        let signal = astraVisualGiftsState(context: self.context, peerId: peerId, state: giftsContext.state)
+        |> map { state -> [ProfileGiftsContext.State.StarGift] in
+            return state.gifts.filter { $0.pinnedToTop }
+        }
+        |> distinctUntilChanged(isEqual: { lhs, rhs in
+            return lhs == rhs
+        })
+        self.astraBubbleGifts = (peerId, signal)
+        return signal
+    }
+
+    /// AstraGram: the header takes on a touched bubble's colors: a unique gift's backdrop and pattern, or the bubble's.
+    fileprivate func astraTintWithGift(_ gift: ProfileGiftsContext.State.StarGift) {
+        var colors: (Int32, Int32, Int32, Int32)?
+        var patternFileId: Int64 = 0
+        var modelFileId: Int64 = 0
+        var title = ""
+        switch gift.gift {
+        case let .unique(unique):
+            title = unique.title
+            for attribute in unique.attributes {
+                switch attribute {
+                case let .backdrop(_, _, innerColor, outerColor, patternColor, textColor, _):
+                    colors = (innerColor, outerColor, patternColor, textColor)
+                case let .pattern(_, file, _):
+                    patternFileId = file.fileId.id
+                case let .model(_, file, _, _):
+                    modelFileId = file.fileId.id
+                default:
+                    break
+                }
+            }
+        case let .generic(generic):
+            title = generic.title ?? ""
+            modelFileId = generic.file.fileId.id
+        }
+        if colors == nil {
+            let (inner, outer) = astraGiftBubbleColors(gift: gift)
+            func value(_ color: UIColor) -> Int32 {
+                return Int32(bitPattern: color.rgb)
+            }
+            colors = (value(inner), value(outer), value(outer.withMultipliedBrightnessBy(0.7)), value(.white))
+        }
+        guard let colors else {
+            return
+        }
+        let status = PeerEmojiStatus(content: .starGift(id: 0, fileId: modelFileId, title: title, slug: "", patternFileId: patternFileId, innerColor: colors.0, outerColor: colors.1, patternColor: colors.2, textColor: colors.3), expirationDate: nil)
+        if self.astraBubbleTint != status {
+            self.astraBubbleTint = status
+            self.requestUpdateLayout?(true)
+        }
     }
 }

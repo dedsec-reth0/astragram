@@ -592,7 +592,27 @@ private final class GiftViewSheetContent: CombinedComponent {
                     if let releasedBy = gift.releasedBy {
                         peerIds.append(releasedBy)
                     }
-                    if arguments.canUpgrade || arguments.upgradeStars != nil || arguments.prepaidUpgradeHash != nil {
+                    // AstraGram: a visual gift's free upgrade spins through the same preview.
+                    let astraUpgrades = (getController() as? GiftViewScreen)?.customAction?.upgrade != nil
+                    if astraUpgrades {
+                        self.upgradePreviewDisposable.add((context.engine.payments.starGiftUpgradePreview(giftId: gift.id)
+                        |> deliverOnMainQueue).start(next: { [weak self] upgradePreview in
+                            guard let self, let upgradePreview else {
+                                return
+                            }
+                            self.upgradePreview = upgradePreview
+                            for attribute in upgradePreview.attributes {
+                                switch attribute {
+                                case let .model(_, file, _, _):
+                                    self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                                case let .pattern(_, file, _):
+                                    self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
+                                default:
+                                    break
+                                }
+                            }
+                        }))
+                    } else if arguments.canUpgrade || arguments.upgradeStars != nil || arguments.prepaidUpgradeHash != nil {
                         self.upgradePreviewDisposable.add((context.engine.payments.starGiftUpgradePreview(giftId: gift.id)
                         |> deliverOnMainQueue).start(next: { [weak self] upgradePreview in
                             guard let self, let upgradePreview else {
@@ -2148,6 +2168,23 @@ private final class GiftViewSheetContent: CombinedComponent {
             
             let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
             
+            // AstraGram: a visual gift's own menu.
+            if let customAction = controller.customAction, !customAction.menu.isEmpty {
+                let items: [ContextMenuItem] = customAction.menu.map { item in
+                    return .action(ContextMenuActionItem(text: item.title, textColor: item.isDestructive ? .destructive : .primary, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: item.icon), color: item.isDestructive ? theme.contextMenu.destructiveColor : theme.contextMenu.primaryColor)
+                    }, action: { [weak self] c, _ in
+                        c?.dismiss(completion: {
+                            self?.dismiss(animated: true)
+                            item.action()
+                        })
+                    }))
+                }
+                let contextController = makeContextController(presentationData: presentationData, source: .reference(GiftViewContextReferenceContentSource(controller: controller, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), gesture: nil)
+                controller.presentInGlobalOverlay(contextController)
+                return
+            }
+            
             guard case let .unique(gift) = arguments.gift else {
                 if self.canDeleteGift {
                     let items: [ContextMenuItem] = [
@@ -2594,6 +2631,67 @@ private final class GiftViewSheetContent: CombinedComponent {
             self.revealedAttributes.insert(.model)
             
             self.updated(transition: .easeInOut(duration: 0.2))
+        }
+        
+        /// AstraGram: a visual gift's free upgrade, revealed the way Telegram reveals a paid one.
+        func astraCommitUpgrade(_ upgrade: @escaping () -> Signal<ProfileGiftsContext.State.StarGift?, NoError>) {
+            guard let peerId = self.subject.arguments?.peerId, !self.inProgress else {
+                return
+            }
+            self.inProgress = true
+            self.updated()
+            self.upgradeDisposable = (upgrade()
+            |> take(1)
+            |> deliverOnMainQueue).start(next: { [weak self] result in
+                guard let self else {
+                    return
+                }
+                guard let result, case let .unique(uniqueGift) = result.gift else {
+                    self.inProgress = false
+                    self.updated()
+                    return
+                }
+                let duration = Double.random(in: 1.4 ..< 2.4)
+                let firstDuration = duration * 0.3
+                let secondDuration = duration * 0.3
+                let thirdDuration = duration * 0.4
+                
+                self.canSkip = true
+                self.inProgress = false
+                self.inUpgradePreview = false
+                self.justUpgraded = true
+                self.revealedAttributes = Set()
+                self.revealedNumberDigits = -1
+                for i in 0 ..< "\(uniqueGift.number)".count {
+                    Queue.mainQueue().after(0.2 + Double(i) * 0.3) {
+                        self.revealedNumberDigits += 1
+                        self.updated(transition: .immediate)
+                    }
+                }
+                Queue.mainQueue().after(firstDuration) {
+                    self.revealedAttributes.insert(.backdrop)
+                    self.updated(transition: .immediate)
+                    Queue.mainQueue().after(secondDuration) {
+                        self.revealedAttributes.insert(.pattern)
+                        self.updated(transition: .immediate)
+                        Queue.mainQueue().after(thirdDuration) {
+                            self.revealedAttributes.insert(.model)
+                            self.updated(transition: .immediate)
+                            Queue.mainQueue().after(0.55) {
+                                self.canSkip = false
+                                self.updated(transition: .easeInOut(duration: 0.2))
+                            }
+                            Queue.mainQueue().after(0.6) {
+                                if let controller = self.getController() as? GiftViewScreen {
+                                    controller.animateSuccess()
+                                }
+                            }
+                        }
+                    }
+                }
+                self.subject = .profileGift(peerId, result)
+                self.updated(transition: .spring(duration: 0.4))
+            })
         }
         
         func commitUpgrade() {
@@ -5685,18 +5783,26 @@ private final class GiftViewSheetContent: CombinedComponent {
             let buttonComponent: ButtonComponent
             var buttonTransition = context.transition
             if let controller = controller() as? GiftViewScreen, let customAction = controller.customAction {
+                // AstraGram: once upgraded, the button only closes the screen.
+                let upgraded = customAction.upgrade != nil && uniqueGift != nil
                 buttonComponent = ButtonComponent(
                         background: buttonBackground,
                         content: AnyComponentWithIdentity(
-                            id: AnyHashable("custom"),
-                            component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: customAction.title, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
+                            id: AnyHashable(upgraded ? "custom_done" : "custom"),
+                            component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: upgraded ? strings.Common_Done : customAction.title, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
                         ),
-                        isEnabled: true,
+                        isEnabled: !state.canSkip,
                         displaysProgress: state.inProgress,
                         action: { [weak state] in
                             if let state {
-                                customAction.action()
-                                state.dismiss(animated: true)
+                                if upgraded {
+                                    state.dismiss(animated: true)
+                                } else if let upgrade = customAction.upgrade {
+                                    state.astraCommitUpgrade(upgrade)
+                                } else {
+                                    customAction.action()
+                                    state.dismiss(animated: true)
+                                }
                             }
                         })
             } else if state.canSkip {
@@ -6247,6 +6353,18 @@ private final class GiftViewSheetContent: CombinedComponent {
                     ))
                 }
 
+                rightControlItems.append(GlassControlGroupComponent.Item(
+                    id: AnyHashable("more"),
+                    content: .animation("anim_morewide"),
+                    action: { [weak state] in
+                        guard let state else {
+                            return
+                        }
+                        state.openMore()
+                    }
+                ))
+            }
+            if astraIsVisualGift, let customAction = (controller() as? GiftViewScreen)?.customAction, !customAction.menu.isEmpty, !state.canSkip, !state.inProgress {
                 rightControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("more"),
                     content: .animation("anim_morewide"),
@@ -6994,13 +7112,33 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         public let wear: (() -> Void)?
         public let isWorn: Bool
         public let setHidden: ((Bool) -> Void)?
+        /// AstraGram: the items of the gift's "…" menu.
+        public let menu: [MenuItem]
+        /// AstraGram: a free upgrade, shown with Telegram's own upgrade animation; nil from the signal when it failed.
+        public let upgrade: (() -> Signal<ProfileGiftsContext.State.StarGift?, NoError>)?
         
-        public init(title: String, action: @escaping () -> Void, wear: (() -> Void)? = nil, isWorn: Bool = false, setHidden: ((Bool) -> Void)? = nil) {
+        public struct MenuItem {
+            public let title: String
+            public let icon: String
+            public let isDestructive: Bool
+            public let action: () -> Void
+            
+            public init(title: String, icon: String, isDestructive: Bool = false, action: @escaping () -> Void) {
+                self.title = title
+                self.icon = icon
+                self.isDestructive = isDestructive
+                self.action = action
+            }
+        }
+        
+        public init(title: String, action: @escaping () -> Void, wear: (() -> Void)? = nil, isWorn: Bool = false, setHidden: ((Bool) -> Void)? = nil, menu: [MenuItem] = [], upgrade: (() -> Signal<ProfileGiftsContext.State.StarGift?, NoError>)? = nil) {
             self.title = title
             self.action = action
             self.wear = wear
             self.isWorn = isWorn
             self.setHidden = setHidden
+            self.menu = menu
+            self.upgrade = upgrade
         }
     }
     

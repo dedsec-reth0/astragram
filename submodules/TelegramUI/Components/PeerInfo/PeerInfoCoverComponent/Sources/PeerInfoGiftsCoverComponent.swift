@@ -35,6 +35,10 @@ public final class PeerInfoGiftsCoverComponent: Component {
     public let sideInsets: PeerInfoSideInsets
     public let bottomHeight: CGFloat
     public let action: (ProfileGiftsContext.State.StarGift) -> Void
+    /// AstraGram: the pinned gifts shown as jelly bubbles (Telegram's and AstraGram's), in place of the gift icons.
+    public let astraBubbleGifts: Signal<[ProfileGiftsContext.State.StarGift], NoError>?
+    /// AstraGram: a bubble was touched (the header takes on the gift's colors).
+    public let astraBubbleTouched: ((ProfileGiftsContext.State.StarGift) -> Void)?
     
     public init(
         context: AccountContext,
@@ -52,7 +56,9 @@ public final class PeerInfoGiftsCoverComponent: Component {
         titleCenterX: CGFloat?,
         sideInsets: PeerInfoSideInsets,
         bottomHeight: CGFloat,
-        action: @escaping (ProfileGiftsContext.State.StarGift) -> Void
+        action: @escaping (ProfileGiftsContext.State.StarGift) -> Void,
+        astraBubbleGifts: Signal<[ProfileGiftsContext.State.StarGift], NoError>? = nil,
+        astraBubbleTouched: ((ProfileGiftsContext.State.StarGift) -> Void)? = nil
     ) {
         self.context = context
         self.peerId = peerId
@@ -70,6 +76,8 @@ public final class PeerInfoGiftsCoverComponent: Component {
         self.sideInsets = sideInsets
         self.bottomHeight = bottomHeight
         self.action = action
+        self.astraBubbleGifts = astraBubbleGifts
+        self.astraBubbleTouched = astraBubbleTouched
     }
     
     public static func ==(lhs: PeerInfoGiftsCoverComponent, rhs: PeerInfoGiftsCoverComponent) -> Bool {
@@ -122,8 +130,17 @@ public final class PeerInfoGiftsCoverComponent: Component {
         private var currentSize: CGSize?
         private var component: PeerInfoGiftsCoverComponent?
         private var state: EmptyComponentState?
+        fileprivate var componentValue: PeerInfoGiftsCoverComponent? {
+            return self.component
+        }
+        fileprivate var stateValue: EmptyComponentState? {
+            return self.state
+        }
+        fileprivate var isUpdatingValue: Bool {
+            return self.isUpdating
+        }
                 
-        private var giftsDisposable: Disposable?
+        fileprivate var giftsDisposable: Disposable?
         private var gifts: [ProfileGiftsContext.State.StarGift] = []
         private var appliedGiftIds: [Int64] = []
         
@@ -135,6 +152,11 @@ public final class PeerInfoGiftsCoverComponent: Component {
         private var isCurrentlyInHierarchy = false
         
         private var isUpdating = false
+        
+        fileprivate var astraBubbles: AstraGiftBubblesView?
+        fileprivate var astraBubbleItems: [ProfileGiftsContext.State.StarGift] = []
+        fileprivate var astraBubbleHomes: [PositionGenerator.Position] = []
+        fileprivate var astraBubbleLayoutKey: String = ""
         
         override public init(frame: CGRect) {
             super.init(frame: frame)
@@ -234,6 +256,9 @@ public final class PeerInfoGiftsCoverComponent: Component {
         }
         
         public override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+            if let bubbles = self.astraBubbles, bubbles.alpha > 0.1, bubbles.point(inside: self.convert(point, to: bubbles), with: event) {
+                return true
+            }
             for (_, iconLayer) in self.iconLayers {
                 if iconLayer.frame.contains(point) {
                     return true
@@ -329,6 +354,9 @@ public final class PeerInfoGiftsCoverComponent: Component {
             }
             self.appliedGiftIds = giftIds
             
+            if let astraBubbleGifts = component.astraBubbleGifts {
+                return self.updateAstraBubbles(component: component, gifts: astraBubbleGifts, availableSize: availableSize)
+            }
             if self.giftsDisposable == nil {
                 self.giftsDisposable = combineLatest(
                     queue: Queue.mainQueue(),
@@ -449,6 +477,7 @@ public final class PeerInfoGiftsCoverComponent: Component {
     public func makeView() -> View {
         return View(frame: CGRect())
     }
+
     
     public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
@@ -981,5 +1010,91 @@ private final class GiftAccessibilityElement: UIAccessibilityElement {
     
     override func accessibilityActivate() -> Bool {
         return self.activate?() ?? false
+    }
+}
+
+
+extension PeerInfoGiftsCoverComponent.View {
+    /// AstraGram: the pinned gifts as jelly bubbles around the avatar.
+    fileprivate func updateAstraBubbles(component: PeerInfoGiftsCoverComponent, gifts: Signal<[ProfileGiftsContext.State.StarGift], NoError>, availableSize: CGSize) -> CGSize {
+        if self.giftsDisposable == nil {
+            self.giftsDisposable = (gifts |> deliverOnMainQueue).start(next: { [weak self] gifts in
+                guard let self else {
+                    return
+                }
+                self.astraBubbleItems = Array(gifts.prefix(10))
+                if !self.isUpdatingValue {
+                    self.stateValue?.updated(transition: .immediate)
+                }
+            })
+        }
+        let bubbles: AstraGiftBubblesView
+        if let current = self.astraBubbles {
+            bubbles = current
+        } else {
+            bubbles = AstraGiftBubblesView(frame: CGRect(origin: .zero, size: availableSize))
+            self.addSubview(bubbles)
+            self.astraBubbles = bubbles
+        }
+        bubbles.touched = { [weak self] gift in
+            self?.componentValue?.astraBubbleTouched?(gift)
+        }
+        bubbles.opened = { [weak self] gift in
+            self?.componentValue?.action(gift)
+        }
+        bubbles.frame = CGRect(origin: .zero, size: availableSize)
+        // A pulled bubble reaches past the header, over the profile's fields.
+        self.clipsToBounds = false
+        
+        var avatarCenter = component.avatarCenter
+        if avatarCenter.y < 0.0 {
+            avatarCenter.y = component.statusBarHeight + 75.0
+        }
+        let itemSize = CGSize(width: AstraGiftBubblesView.radius * 2.0, height: AstraGiftBubblesView.radius * 2.0)
+        let layoutKey = "\(availableSize.width) \(component.defaultHeight) \(self.astraBubbleItems.count) \(component.sideInsets.stripLeft) \(component.sideInsets.stripRight)"
+        if layoutKey != self.astraBubbleLayoutKey && !self.astraBubbleItems.isEmpty {
+            self.astraBubbleLayoutKey = layoutKey
+            var excludeRects: [CGRect] = []
+            if component.statusBarHeight > 0.0 {
+                excludeRects.append(CGRect(origin: .zero, size: CGSize(width: availableSize.width, height: component.statusBarHeight + 4.0)))
+            }
+            excludeRects.append(contentsOf: peerInfoGiftsCoverSideExclusionRects(width: availableSize.width, height: component.defaultHeight, statusBarHeight: component.statusBarHeight, topLeftButtonsSize: component.topLeftButtonsSize, topRightButtonsSize: component.topRightButtonsSize, sideInsets: component.sideInsets))
+            if component.bottomHeight > 0.0 {
+                excludeRects.append(CGRect(origin: CGPoint(x: 0.0, y: component.defaultHeight - component.bottomHeight), size: CGSize(width: availableSize.width, height: component.bottomHeight)))
+            }
+            let generator = PositionGenerator(
+                containerSize: CGSize(width: availableSize.width, height: component.defaultHeight),
+                centerFrame: component.avatarSize.centered(around: avatarCenter),
+                exclusionZones: excludeRects,
+                minimumDistance: itemSize.width + 8.0,
+                edgePadding: 4.0,
+                seed: UInt(self.astraBubbleItems.count) &+ 7
+            )
+            self.astraBubbleHomes = generator.generatePositions(count: max(10, self.astraBubbleItems.count), itemSize: itemSize)
+        }
+        let homes = self.astraBubbleHomes.map { getAbsolutePosition(position: $0, centerPoint: avatarCenter) }
+        let items = self.astraBubbleItems.enumerated().map { index, gift -> AstraGiftBubblesView.Item in
+            let id: AnyHashable
+            switch gift.gift {
+            case let .unique(unique):
+                id = "u\(unique.id)"
+            case let .generic(generic):
+                id = "g\(generic.id)_\(gift.date)_\(index)"
+            }
+            return AstraGiftBubblesView.Item(id: id, gift: gift)
+        }
+        bubbles.update(
+            context: component.context,
+            items: items,
+            homes: homes,
+            avatarCenter: avatarCenter,
+            avatarRadius: component.avatarSize.width / 2.0,
+            area: CGRect(x: 0.0, y: component.statusBarHeight, width: availableSize.width, height: max(0.0, component.defaultHeight - component.statusBarHeight))
+        )
+        // As the header collapses into the bar, the bubbles fade into the avatar.
+        let fraction = max(0.0, min(1.0, component.avatarTransitionFraction * 1.6))
+        bubbles.alpha = 1.0 - fraction
+        bubbles.isUserInteractionEnabled = fraction < 0.5
+        return availableSize
     }
 }
