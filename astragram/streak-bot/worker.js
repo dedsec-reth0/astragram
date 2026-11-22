@@ -30,6 +30,42 @@ async function kvSet(env, key, value) {
     .bind(key, String(value), now()).run();
 }
 
+// The admin's inbox: a private group with topics, set up by the admin's /inbox in it (kv 'inbox': {chat, bug, idea,
+// donate, support} with the topics' thread IDs). Without one, everything goes to the admin's chat with the bot.
+const INBOX_TOPICS = [
+  { key: 'bug', name: '🐞 Ошибки', color: 16478047 },
+  { key: 'idea', name: '💡 Идеи', color: 16766590 },
+  { key: 'donate', name: '💛 Донаты', color: 9367192 },
+  { key: 'support', name: '💬 Поддержка', color: 7322096 },
+];
+// Message IDs in the group and in the admin's chat are separate counters: the group's are kept shifted in `support`.
+const INBOX_KEY = 1e12;
+
+async function inbox(env) {
+  try {
+    const value = JSON.parse((await kvGet(env, 'inbox')) || 'null');
+    return value && Number.isSafeInteger(value.chat) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+// Where a notice of this kind goes: {chat_id, message_thread_id?} plus the `support` key of the sent message's ID.
+async function inboxTarget(env, kind) {
+  const box = await inbox(env);
+  if (box && box[kind]) return { to: { chat_id: box.chat, message_thread_id: box[kind] }, key: (id) => INBOX_KEY + id };
+  return { to: { chat_id: ADMIN_ID }, key: (id) => id };
+}
+
+// Sends to the inbox; should the group be gone (the bot removed, the topic deleted), to the admin's chat instead.
+async function sendInbox(env, kind, body) {
+  const target = await inboxTarget(env, kind);
+  let sent = await tg(env, 'sendMessage', { ...target.to, ...body });
+  if (sent.ok || target.to.chat_id === ADMIN_ID) return { sent, key: sent.ok && sent.result ? target.key(sent.result.message_id) : null };
+  sent = await tg(env, 'sendMessage', { chat_id: ADMIN_ID, ...body });
+  return { sent, key: sent.ok && sent.result ? sent.result.message_id : null };
+}
+
 async function sha256Hex(text) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -483,9 +519,9 @@ async function handleFeedback(request, env) {
   }
   const header = kind === 'idea' ? '💡 Идея' : '🐞 Ошибка';
   const reply = tgId ? '\n\nОтветьте на это сообщение — ответ уйдёт автору в чат с ботом (если он его запускал).' : '';
-  const sent = await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text: `${header} #${id}\nОт: ${who}\n${app}\n\n${text}${reply}` });
-  if (tgId && sent.ok && sent.result) {
-    await env.DB.prepare('INSERT OR REPLACE INTO support (admin_msg_id, user_id, created_at) VALUES (?, ?, ?)').bind(sent.result.message_id, tgId, t).run();
+  const { key } = await sendInbox(env, kind, { text: `${header} #${id}\nОт: ${who}\n${app}\n\n${text}${reply}` });
+  if (tgId && key) {
+    await env.DB.prepare('INSERT OR REPLACE INTO support (admin_msg_id, user_id, created_at) VALUES (?, ?, ?)').bind(key, tgId, t).run();
   }
   return json({ ok: true, id });
 }
@@ -531,7 +567,7 @@ async function handleSuccessfulPayment(env, message) {
     text: ru ? `💛 Спасибо за поддержку AstraGram — ${payment.total_amount} ⭐!` : `💛 Thank you for supporting AstraGram — ${payment.total_amount} ⭐!`,
   });
   const uname = from.username ? ` @${from.username}` : '';
-  await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text: `💛 Донат ${payment.total_amount} ⭐ от ${cleanName(from.first_name)}${uname} (id ${from.id})` });
+  await sendInbox(env, 'donate', { text: `💛 Донат ${payment.total_amount} ⭐ от ${cleanName(from.first_name)}${uname} (id ${from.id})` });
 }
 
 async function handleUnlink(request, env) {
@@ -652,7 +688,12 @@ async function streaksMessage(env, userId, ru) {
 
 async function handleMessage(env, message) {
   const from = message.from;
-  if (!from || from.is_bot || message.chat.type !== 'private') return;
+  if (!from || from.is_bot) return;
+  if (message.chat.type === 'supergroup' && isAdmin(from.id)) {
+    await handleInboxMessage(env, message);
+    return;
+  }
+  if (message.chat.type !== 'private') return;
   const ru = isRussian(from);
   const text = (message.text || '').trim();
   const t = now();
@@ -766,14 +807,20 @@ async function handleSupport(env, message) {
   const from = message.from;
   // Anyone who writes is reachable for broadcasts; never un-stop someone who used /stop.
   await env.DB.prepare('INSERT INTO friends (tg_id, started_at, stopped) VALUES (?, ?, 0) ON CONFLICT (tg_id) DO NOTHING').bind(from.id, now()).run();
-  const fwd = await tg(env, 'forwardMessage', { chat_id: ADMIN_ID, from_chat_id: from.id, message_id: message.message_id });
-  let adminMsgId = fwd.ok && fwd.result ? fwd.result.message_id : null;
+  let target = await inboxTarget(env, 'support');
+  let fwd = await tg(env, 'forwardMessage', { ...target.to, from_chat_id: from.id, message_id: message.message_id });
+  if (!fwd.ok && target.to.chat_id !== ADMIN_ID && !/forward/i.test(fwd.description || '')) {
+    // The group is gone: the admin's chat.
+    target = { to: { chat_id: ADMIN_ID }, key: (id) => id };
+    fwd = await tg(env, 'forwardMessage', { ...target.to, from_chat_id: from.id, message_id: message.message_id });
+  }
+  let adminMsgId = fwd.ok && fwd.result ? target.key(fwd.result.message_id) : null;
   if (!adminMsgId) {
     // Forwarding can be refused (privacy); fall back to a header plus a copy of the content.
     const uname = from.username ? ` @${from.username}` : '';
-    await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text: `💬 ${cleanName(from.first_name)}${uname} (id ${from.id}):` });
-    const copied = await tg(env, 'copyMessage', { chat_id: ADMIN_ID, from_chat_id: from.id, message_id: message.message_id });
-    adminMsgId = copied.ok && copied.result ? copied.result.message_id : null;
+    await tg(env, 'sendMessage', { ...target.to, text: `💬 ${cleanName(from.first_name)}${uname} (id ${from.id}):` });
+    const copied = await tg(env, 'copyMessage', { ...target.to, from_chat_id: from.id, message_id: message.message_id });
+    adminMsgId = copied.ok && copied.result ? target.key(copied.result.message_id) : null;
   }
   if (!adminMsgId) {
     return;
@@ -884,6 +931,54 @@ async function confirmPost(env, message) {
 }
 
 // The admin's chat. Returns true when the message was handled (so no streak/support processing follows).
+// The admin in a group: /inbox makes it the inbox (its topics created once); a reply there to a user's message is
+// relayed to that user, as in the admin's chat.
+async function handleInboxMessage(env, message) {
+  const chat = message.chat.id;
+  const text = (message.text || '').trim();
+  if (/^\/inbox(@\w+)?$/.test(text)) {
+    if (!message.chat.is_forum) {
+      await tg(env, 'sendMessage', { chat_id: chat, text: 'Включите в группе «Темы», затем снова /inbox.' });
+      return;
+    }
+    const old = await inbox(env);
+    const box = { chat };
+    for (const topic of INBOX_TOPICS) {
+      if (old && old.chat === chat && old[topic.key]) {
+        box[topic.key] = old[topic.key];
+        continue;
+      }
+      const made = await tg(env, 'createForumTopic', { chat_id: chat, name: topic.name, icon_color: topic.color });
+      if (!made.ok) {
+        await tg(env, 'sendMessage', { chat_id: chat, text: '⚠️ Не удалось создать темы: сделайте бота администратором с правом «Управление темами».' });
+        return;
+      }
+      box[topic.key] = made.result.message_thread_id;
+    }
+    await kvSet(env, 'inbox', JSON.stringify(box));
+    for (const topic of INBOX_TOPICS) {
+      if (old && old.chat === chat && old[topic.key]) continue;
+      await tg(env, 'sendMessage', { chat_id: chat, message_thread_id: box[topic.key], text: {
+        bug: 'Сюда приходят ошибки из AstraGram → «Ошибки и идеи». Ответьте на сообщение — ответ уйдёт автору.',
+        idea: 'Сюда приходят идеи из AstraGram → «Ошибки и идеи». Ответьте на сообщение — ответ уйдёт автору.',
+        donate: 'Сюда приходят донаты из AstraGram → «Поддержать AstraGram».',
+        support: 'Сюда приходят сообщения, написанные боту. Ответьте на сообщение — ответ уйдёт человеку.',
+      }[topic.key] });
+    }
+    await tg(env, 'setMessageReaction', { chat_id: chat, message_id: message.message_id, reaction: [{ type: 'emoji', emoji: '👍' }] });
+    return;
+  }
+  const box = await inbox(env);
+  if (!box || box.chat !== chat || !message.reply_to_message) return;
+  const row = await env.DB.prepare('SELECT user_id FROM support WHERE admin_msg_id = ?').bind(INBOX_KEY + message.reply_to_message.message_id).first();
+  if (!row) return;
+  const res = await tg(env, 'copyMessage', { chat_id: row.user_id, from_chat_id: chat, message_id: message.message_id });
+  await tg(env, 'setMessageReaction', { chat_id: chat, message_id: message.message_id, reaction: [{ type: 'emoji', emoji: res.ok ? '👍' : '👎' }] });
+  if (!res.ok) {
+    await tg(env, 'sendMessage', { chat_id: chat, message_thread_id: message.message_thread_id, reply_parameters: { message_id: message.message_id }, text: '⚠️ Не доставлено — человек не запускал бота или остановил его.' });
+  }
+}
+
 async function handleAdminMessage(env, message) {
   const text = (message.text || '').trim();
 

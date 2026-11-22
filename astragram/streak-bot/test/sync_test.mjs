@@ -49,6 +49,8 @@ globalThis.fetch = async (url, init) => {
   const body = JSON.parse(init.body);
   sent.push({ method: url.split('/').pop(), ...body });
   if (url.endsWith('/createInvoiceLink')) return { json: async () => ({ ok: true, result: 'https://t.me/$invoice' }) };
+  if (url.endsWith('/createForumTopic')) return { json: async () => ({ ok: true, result: { message_thread_id: 500 + sent.length } }) };
+  if (url.endsWith('/copyMessage')) return { json: async () => ({ ok: true, result: { message_id: nextMessageId++ } }) };
   if (url.endsWith('/sendMessage')) return { json: async () => ({ ok: true, result: { message_id: nextMessageId++ } }) };
   return { json: async () => ({ ok: true, result: {} }) };
 };
@@ -233,6 +235,42 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   check('old data refused', r.status, 403);
   r = await login('hash=00&user=1', 'e'.repeat(48));
   check('junk refused', r.status, 403);
+
+  // 9g. The admin's group with topics becomes the inbox: reports go to their topics, a reply there reaches the author.
+  const WEBHOOK = call({ op: 'sha256', bytes: Array.from(new TextEncoder().encode('x:webhook')) }).slice(0, 48);
+  const update = async (message) => worker.fetch({ url: 'https://bot.example/tg', method: 'POST',
+    headers: { get: (k) => (k === 'x-telegram-bot-api-secret-token' ? WEBHOOK : null) }, json: async () => ({ update_id: 1, message }) }, env);
+  const GROUP = -1001234;
+  const admin = { id: 887825713, first_name: 'Admin', language_code: 'ru' };
+  sent.length = 0;
+  await update({ message_id: 1, from: { id: 5, first_name: 'X' }, chat: { id: GROUP, type: 'supergroup', is_forum: true }, text: '/inbox' });
+  check('only the admin sets the inbox', sent.filter((m) => m.method === 'createForumTopic').length, 0);
+  await update({ message_id: 2, from: admin, chat: { id: GROUP, type: 'supergroup', is_forum: false }, text: '/inbox' });
+  check('topics needed', sent.some((m) => m.chat_id === GROUP && /Темы/.test(m.text || '')), true);
+  sent.length = 0;
+  await update({ message_id: 3, from: admin, chat: { id: GROUP, type: 'supergroup', is_forum: true }, text: '/inbox@infoastragram_bot' });
+  check('four topics made', sent.filter((m) => m.method === 'createForumTopic').map((m) => m.name), ['🐞 Ошибки', '💡 Идеи', '💛 Донаты', '💬 Поддержка']);
+  const box = JSON.parse(q("SELECT value FROM kv WHERE key = 'inbox'")[0].value);
+  check('inbox stored', box.chat, GROUP);
+  sent.length = 0;
+  await update({ message_id: 4, from: admin, chat: { id: GROUP, type: 'supergroup', is_forum: true }, text: '/inbox' });
+  check('again: no new topics', sent.filter((m) => m.method === 'createForumTopic').length, 0);
+  sent.length = 0;
+  r = await post('/api/feedback', { kind: 'idea', text: 'Topics are nice', userId: 200 }, { 'cf-connecting-ip': '9.9.9.9', authorization: 'Bearer ' + TOKENS.C });
+  const notice = sent.find((m) => m.method === 'sendMessage');
+  check('idea goes to its topic', [notice.chat_id, notice.message_thread_id], [GROUP, box.idea]);
+  const noticeId = nextMessageId - 1;
+  sent.length = 0;
+  await update({ message_id: 77, message_thread_id: box.idea, from: admin, chat: { id: GROUP, type: 'supergroup', is_forum: true }, text: 'Thanks!', reply_to_message: { message_id: noticeId } });
+  check('reply in the group reaches the author', sent.filter((m) => m.method === 'copyMessage').map((m) => [m.chat_id, m.from_chat_id, m.message_id]), [[200, GROUP, 77]]);
+  sent.length = 0;
+  await update({ message_id: 78, from: admin, chat: { id: GROUP, type: 'supergroup', is_forum: true }, text: 'chatter' });
+  check('other group messages ignored', sent.length, 0);
+  sent.length = 0;
+  await update({ message_id: 9, from: { id: 200, first_name: 'C', language_code: 'ru' }, chat: { id: 200, type: 'private' }, successful_payment: { currency: 'XTR', total_amount: 50, invoice_payload: 'donate:50' } });
+  const donation = sent.find((m) => /Донат/.test(m.text || ''));
+  check('donation goes to its topic', [donation.chat_id, donation.message_thread_id], [GROUP, box.donate]);
+  q("DELETE FROM kv WHERE key = 'inbox'");
 
   // 10. Unlink forgets the list.
   call({ op: 'reset' });
