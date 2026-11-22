@@ -116,7 +116,7 @@ public enum AstraBadgeSync {
                 case let .users(ids):
                     AstraBadge.setUsers(ids.union([peerId.id._internalGetInt64Value()]), accountPeerId: peerId)
                 case .notLinked:
-                    // Connected once per session; the server learns the token when the bot gets "/start", so the
+                    // Connected once per session; the server may take a moment to know the new token, so the
                     // list is asked again a little later.
                     if AstraBadgeSync.linkTried.contains(peerId) {
                         return
@@ -192,8 +192,8 @@ public enum AstraBadgeSync {
         }
         let title = isRussian ? "Значок AstraGram" : "AstraGram Badge"
         let message = isRussian
-            ? "Другие пользователи AstraGram увидят рядом с вашим именем значок AstraGram, а вы — у них.\n\nДля этого AstraGram подключит бота огоньков AstraGram (в его чат уйдёт одно сообщение «/start») и сообщит его серверу ваш Telegram ID. Сервер отдаёт список ID со значком только приложениям AstraGram, у которых значок тоже включён. Ваше имя не меняется.\n\nЗначок ничего не подтверждает: не доверяйте человеку только из-за него.\n\nИзменить можно в настройках AstraGram → «Оформление»."
-            : "Other AstraGram users will see an AstraGram badge beside your name, and you beside theirs.\n\nFor this AstraGram connects the AstraGram streak bot (one \"/start\" message goes to its chat) and tells its server your Telegram ID. The server gives the list of IDs with the badge only to AstraGram apps that show the badge too. Your name is not changed.\n\nThe badge proves nothing: do not trust someone because of it alone.\n\nYou can change this in AstraGram settings → Look."
+            ? "Другие пользователи AstraGram увидят рядом с вашим именем значок AstraGram, а вы — у них.\n\nДля этого AstraGram подключит бота огоньков AstraGram (без сообщений в его чат) и сообщит его серверу ваш Telegram ID. Сервер отдаёт список ID со значком только приложениям AstraGram, у которых значок тоже включён. Ваше имя не меняется.\n\nЗначок ничего не подтверждает: не доверяйте человеку только из-за него.\n\nИзменить можно в настройках AstraGram → «Оформление»."
+            : "Other AstraGram users will see an AstraGram badge beside your name, and you beside theirs.\n\nFor this AstraGram connects the AstraGram streak bot (with no message in its chat) and tells its server your Telegram ID. The server gives the list of IDs with the badge only to AstraGram apps that show the badge too. Your name is not changed.\n\nThe badge proves nothing: do not trust someone because of it alone.\n\nYou can change this in AstraGram settings → Look."
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: isRussian ? "Не показывать" : "Don't Show", style: .cancel, handler: { _ in
             AstraGramSettings.update { $0.astraBadgeAsked = true; $0.astraBadge = false }

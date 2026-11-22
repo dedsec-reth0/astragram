@@ -211,7 +211,7 @@ final class AstraGiftShopController: UIViewController, UICollectionViewDataSourc
             title: self.text("Подарить «\(title)»?", "Give \"\(title)\"?"),
             message: linked
                 ? self.text("Подарок бесплатный и визуальный: он появится в профиле \(name) с пометкой «AstraGram» и вашим именем, видят его только пользователи AstraGram. В чат с \(name) уйдёт сообщение о подарке.", "The gift is free and visual: it shows on \(name)'s profile with an \"AstraGram\" ribbon and your name, and only AstraGram users see it. A message about the gift goes to your chat with \(name).")
-                : self.text("Подарок бесплатный и визуальный: он появится в профиле \(name) с пометкой «AstraGram» и вашим именем. Для этого AstraGram подключит бота огоньков @\(AstraStreakBot.username) (в его чат уйдёт одно сообщение «/start»): серверу уходят ваш Telegram ID, ID \(name) и номер подарка. В чат с \(name) уйдёт сообщение о подарке.", "The gift is free and visual: it shows on \(name)'s profile with an \"AstraGram\" ribbon and your name. For this AstraGram connects the streak bot @\(AstraStreakBot.username) (one \"/start\" goes to its chat): the server gets your Telegram ID, \(name)'s ID and the gift number."),
+                : self.text("Подарок бесплатный и визуальный: он появится в профиле \(name) с пометкой «AstraGram» и вашим именем. Для этого AstraGram подключит бота огоньков @\(AstraStreakBot.username) (без сообщений в его чат): серверу уходят ваш Telegram ID, ID \(name) и номер подарка. В чат с \(name) уйдёт сообщение о подарке.", "The gift is free and visual: it shows on \(name)'s profile with an \"AstraGram\" ribbon and your name. For this AstraGram connects the streak bot @\(AstraStreakBot.username) (with no message in its chat): the server gets your Telegram ID, \(name)'s ID and the gift number."),
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: self.text("Отмена", "Cancel"), style: .cancel, handler: nil))
@@ -220,7 +220,7 @@ final class AstraGiftShopController: UIViewController, UICollectionViewDataSourc
                 give()
             } else {
                 AstraStreakBot.linkSilently(context: context, completion: { _ in
-                    // The bot learns the token from "/start": the gift goes a moment later.
+                    // The server may take a moment to know the new token: the gift goes a moment later.
                     Queue.mainQueue().after(5.0, {
                         give()
                     })
@@ -277,8 +277,8 @@ final class AstraGiftShopController: UIViewController, UICollectionViewDataSourc
         let alert = UIAlertController(
             title: self.text("Показать подарки другим?", "Show the gifts to others?"),
             message: self.text(
-                "Чтобы другие пользователи AstraGram видели ваши подарки, AstraGram подключит бота огоньков @\(AstraStreakBot.username) (в его чат уйдёт одно сообщение «/start»). Серверу уходят ваш Telegram ID и номера выбранных подарков; он отдаёт их только приложениям AstraGram тех, у кого вы есть в чатах.",
-                "For other AstraGram users to see your gifts, AstraGram connects the streak bot @\(AstraStreakBot.username) (one \"/start\" goes to its chat). The server gets your Telegram ID and the chosen gift numbers, and gives them only to the AstraGram apps of people who have you in their chats."
+                "Чтобы другие пользователи AstraGram видели ваши подарки, AstraGram подключит бота огоньков @\(AstraStreakBot.username) (без сообщений в его чат). Серверу уходят ваш Telegram ID и номера выбранных подарков; он отдаёт их только приложениям AstraGram тех, у кого вы есть в чатах.",
+                "For other AstraGram users to see your gifts, AstraGram connects the streak bot @\(AstraStreakBot.username) (with no message in its chat). The server gets your Telegram ID and the chosen gift numbers, and gives them only to the AstraGram apps of people who have you in their chats."
             ),
             preferredStyle: .alert
         )
@@ -287,7 +287,7 @@ final class AstraGiftShopController: UIViewController, UICollectionViewDataSourc
         }))
         alert.addAction(UIAlertAction(title: self.text("Показывать", "Show"), style: .default, handler: { _ in
             AstraStreakBot.linkSilently(context: context, completion: { _ in
-                // The bot learns the token from "/start": the list goes a moment later.
+                // The server may take a moment to know the new token: the list goes a moment later.
                 Queue.mainQueue().after(5.0, {
                     save()
                 })

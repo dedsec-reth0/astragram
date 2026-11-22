@@ -154,8 +154,9 @@ public enum AstraStreakBot {
         context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: "\(AstraStreakBot.link)?start=l\(token)", forceExternal: false, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
     }
 
-    /// Connects the bot without leaving the app: AstraGram itself sends the bot "/start l<token>" from this account,
-    /// which is what pressing Start on the link would send. The bot's reply stays in the bot's chat.
+    /// Connects the bot without leaving the app and without any message in the bot's chat: AstraGram asks Telegram for
+    /// the bot's web-app data (signed by Telegram, naming this account) and hands it to the server with a new token.
+    /// Should that fail, it falls back to sending the bot "/start l<token>", what pressing Start on the link would send.
     static func linkSilently(context: AccountContext, completion: @escaping (Bool) -> Void) {
         var bytes = [UInt8](repeating: 0, count: 24)
         guard AstraStreakBot.isAvailable, SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
@@ -164,6 +165,7 @@ public enum AstraStreakBot {
         }
         let token = bytes.map { String(format: "%02x", $0) }.joined()
         let account = context.account
+        let engine = context.engine
         // Called exactly once: with the bot found, or with false when it cannot be found (no network, the lookup
         // ending without a result, or no answer in 10 s), so the caller always goes on (the invite is still sent).
         var finished = false
@@ -173,7 +175,7 @@ public enum AstraStreakBot {
                 completion(linked)
             }
         }
-        let _ = (context.engine.peers.resolvePeerByName(name: AstraStreakBot.username, referrer: nil)
+        let _ = (engine.peers.resolvePeerByName(name: AstraStreakBot.username, referrer: nil)
         |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
             guard case let .result(peer) = result else {
                 return .complete()
@@ -187,12 +189,53 @@ public enum AstraStreakBot {
                 finish(false)
                 return
             }
-            AstraStreakBot.setToken(token, accountPeerId: account.peerId)
-            let _ = enqueueMessages(account: account, peerId: peer.id, messages: [.message(text: "/start l\(token)", attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])]).startStandalone()
-            finish(true)
+            let fallback = {
+                AstraStreakBot.setToken(token, accountPeerId: account.peerId)
+                let _ = enqueueMessages(account: account, peerId: peer.id, messages: [.message(text: "/start l\(token)", attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])]).startStandalone()
+                finish(true)
+            }
+            var base = AstraStreakBot.serverURL
+            while base.hasSuffix("/") {
+                base.removeLast()
+            }
+            let _ = (engine.messages.requestWebView(peerId: peer.id, botId: peer.id, url: base + "/webapp", payload: nil, themeParams: nil, fromMenu: false, replyToMessageId: nil, threadId: nil)
+            |> map(Optional.init)
+            |> `catch` { _ -> Signal<RequestWebViewResult?, NoError> in
+                return .single(nil)
+            }
+            |> timeout(10.0, queue: Queue.mainQueue(), alternate: .single(nil))
+            |> take(1)
+            |> deliverOnMainQueue).start(next: { result in
+                guard let result = result, let initData = AstraStreakBot.webAppData(url: result.url) else {
+                    fallback()
+                    return
+                }
+                AstraStreakBot.request(path: "/api/login", token: token, body: ["initData": initData], statusCompletion: { object, _ in
+                    Queue.mainQueue().async {
+                        if object?["ok"] as? Bool == true {
+                            AstraStreakBot.setToken(token, accountPeerId: account.peerId)
+                            finish(true)
+                        } else {
+                            fallback()
+                        }
+                    }
+                })
+            })
         }, completed: {
             finish(false)
         })
+    }
+
+    /// The signed data Telegram puts in a web app's address: "#tgWebAppData=<encoded data>&tgWebAppVersion=...".
+    private static func webAppData(url: String) -> String? {
+        guard let fragment = URLComponents(string: url)?.percentEncodedFragment else {
+            return nil
+        }
+        for part in fragment.components(separatedBy: "&") where part.hasPrefix("tgWebAppData=") {
+            let value = String(part.dropFirst("tgWebAppData=".count))
+            return value.removingPercentEncoding
+        }
+        return nil
     }
 
     static func unlink(accountPeerId: EnginePeer.Id) {
@@ -256,7 +299,7 @@ public enum AstraStreakBot {
             completion(.notLinked)
             return
         }
-        AstraStreakBot.request(path: "/api/badge", token: token, body: ["show": show, "check": check.map { NSNumber(value: $0) }], statusCompletion: { object, status in
+        AstraStreakBot.request(path: "/api/badge", token: token, body: ["show": show, "check": check.map { NSNumber(value: $0) }], statusCompletion: { object, _ in
             if status == 401 {
                 completion(.notLinked)
                 return
@@ -333,7 +376,7 @@ public enum AstraStreakBot {
         func attempt(_ index: Int) {
             let token = tokens[index]
             let isOwn = token == ownToken
-            AstraStreakBot.request(path: "/api/gifts", token: token, body: body, statusCompletion: { object, status in
+            AstraStreakBot.request(path: "/api/gifts", token: token, body: body, statusCompletion: { object, _ in
                 guard let object = object else {
                     // A token the server does not know: the next one on this device.
                     if status == 401 && index + 1 < tokens.count {
