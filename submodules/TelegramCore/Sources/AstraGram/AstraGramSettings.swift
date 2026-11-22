@@ -82,7 +82,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     /// Look: round glass buttons with their labels under them in profiles.
     public var roundProfileButtons: Bool
     /// Look: the profile music as a capsule under the status, above the buttons.
-    public var profileMusicCapsule: Bool
+    /// Stored under a new name (1.0.31): on for everyone once, as in the concept, whatever the old switch said.
+    public var musicCapsule: Bool
     /// Look: the Contacts tab in the tab bar.
     public var contactsTab: Bool
     /// Look: the Calls tab in the tab bar (Telegram's own "Show Calls Tab" switch mirrors it).
@@ -194,7 +195,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         dedsecSilence: false,
         liquidGlassBeta: false,
         roundProfileButtons: false,
-        profileMusicCapsule: false,
+        musicCapsule: true,
         contactsTab: true,
         callsTab: true,
         monochrome: false,
@@ -268,7 +269,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         dedsecSilence: Bool,
         liquidGlassBeta: Bool,
         roundProfileButtons: Bool,
-        profileMusicCapsule: Bool,
+        musicCapsule: Bool,
         contactsTab: Bool,
         callsTab: Bool,
         monochrome: Bool,
@@ -340,7 +341,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.dedsecSilence = dedsecSilence
         self.liquidGlassBeta = liquidGlassBeta
         self.roundProfileButtons = roundProfileButtons
-        self.profileMusicCapsule = profileMusicCapsule
+        self.musicCapsule = musicCapsule
         self.contactsTab = contactsTab
         self.callsTab = callsTab
         self.monochrome = monochrome
@@ -417,7 +418,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.dedsecSilence = try container.decodeIfPresent(Bool.self, forKey: .dedsecSilence) ?? d.dedsecSilence
         self.liquidGlassBeta = try container.decodeIfPresent(Bool.self, forKey: .liquidGlassBeta) ?? d.liquidGlassBeta
         self.roundProfileButtons = try container.decodeIfPresent(Bool.self, forKey: .roundProfileButtons) ?? (try container.decodeIfPresent(Bool.self, forKey: .liquidGlassBeta) ?? d.roundProfileButtons)
-        self.profileMusicCapsule = try container.decodeIfPresent(Bool.self, forKey: .profileMusicCapsule) ?? (try container.decodeIfPresent(Bool.self, forKey: .liquidGlassBeta) ?? d.profileMusicCapsule)
+        self.musicCapsule = try container.decodeIfPresent(Bool.self, forKey: .musicCapsule) ?? d.musicCapsule
         self.contactsTab = try container.decodeIfPresent(Bool.self, forKey: .contactsTab) ?? d.contactsTab
         self.callsTab = try container.decodeIfPresent(Bool.self, forKey: .callsTab) ?? d.callsTab
         self.monochrome = try container.decodeIfPresent(Bool.self, forKey: .monochrome) ?? d.monochrome

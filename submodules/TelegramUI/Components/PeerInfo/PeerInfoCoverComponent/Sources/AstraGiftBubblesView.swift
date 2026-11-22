@@ -41,8 +41,8 @@ final class AstraGiftBubblesView: UIView {
         }
     }
 
-    static let radius: CGFloat = 25.0
-    static let pulledRadius: CGFloat = 92.0
+    static let radius: CGFloat = 20.0
+    static let pulledRadius: CGFloat = 66.0
 
     var touched: ((ProfileGiftsContext.State.StarGift) -> Void)?
     var opened: ((ProfileGiftsContext.State.StarGift) -> Void)?

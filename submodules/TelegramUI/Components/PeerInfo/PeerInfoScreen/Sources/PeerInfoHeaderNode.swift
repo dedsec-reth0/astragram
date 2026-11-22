@@ -224,6 +224,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     var musicBackground: UIView?
     /// AstraGram "Liquid Glass+ (beta)": the capsule behind the music, which sits between the status and the buttons.
     private var astraMusicPillLayer: CALayer?
+    /// AstraGram: the capsule fills as the profile's music plays, as in the concept.
+    private let astraMusicFillLayer = CALayer()
+    private var astraMusicPlaybackDisposable: Disposable?
+    private var astraMusicPlaybackPeerId: EnginePeer.Id?
+    private var astraMusicPlayback: (fraction: Double, secondsLeft: Double, playing: Bool)?
     var music: ComponentView<Empty>?
     var walletBalance: ComponentView<Empty>?
     private var walletBalanceCutoutIcon: (color: UIColor, image: UIImage)?
@@ -465,6 +470,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     }
     
     deinit {
+        self.astraMusicPlaybackDisposable?.dispose()
         self.emojiStatusPackDisposable.dispose()
     }
     
@@ -712,7 +718,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         // AstraGram "Profile Music as a Capsule": the music is a capsule under the status, above the buttons, as in the
         // concept (not a strip under the buttons). The expanded photo keeps the regular layout, and so does a profile
         // without buttons (your own): there is no room between the status and the buttons there.
-        let astraMusicAbove = AstraGramSettings.current.profileMusicCapsule && currentSavedMusic != nil && !self.isAvatarExpanded && !buttonKeys.isEmpty
+        // The capsule itself shows on every profile (on one's own, without buttons, it keeps the strip's place).
+        let astraMusicCapsule = AstraGramSettings.current.musicCapsule && currentSavedMusic != nil && !self.isAvatarExpanded
+        let astraMusicAbove = astraMusicCapsule && !buttonKeys.isEmpty
         // AstraGram: round buttons carry their labels under the circles, below the buttons' frame. The header leaves
         // room under them: its background ends lower, and over an expanded photo the name and the buttons stand higher.
         let astraRoundButtonsExtra: CGFloat = (AstraGramSettings.current.roundProfileButtons && !buttonKeys.isEmpty) ? 12.0 : 0.0
@@ -2728,7 +2736,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
 
         if currentSavedMusic != nil {
             var musicTransition = transition
-            if (hasBackground || self.isAvatarExpanded) && !astraMusicAbove {
+            if (hasBackground || self.isAvatarExpanded) && !astraMusicCapsule {
                 if self.musicBackground == nil {
                     musicTransition = .immediate
                 }
@@ -2829,7 +2837,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     musicFrame.origin.y = (apparentBackgroundHeight - backgroundHeight) + buttonRightOrigin.y - floor((bottomInset + 16.0 + musicSize.height) / 2.0) - astraRoundButtonsOffset
                 }
                 if let musicView = music.view {
-                    if astraMusicAbove {
+                    if astraMusicCapsule {
                         let pillLayer: CALayer
                         if let current = self.astraMusicPillLayer {
                             pillLayer = current
@@ -2847,7 +2855,16 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         pillLayer.frame = CGRect(origin: CGPoint(x: floor((musicSize.width - pillSize.width) / 2.0), y: floor((musicSize.height - pillSize.height) / 2.0)), size: pillSize)
                         pillLayer.cornerRadius = pillSize.height / 2.0
                         pillLayer.backgroundColor = (isOverlay ? UIColor(white: 1.0, alpha: 0.16) : presentationData.theme.list.itemAccentColor.withAlphaComponent(0.1)).cgColor
+                        pillLayer.masksToBounds = true
+                        if self.astraMusicFillLayer.superlayer !== pillLayer {
+                            pillLayer.addSublayer(self.astraMusicFillLayer)
+                        }
+                        self.astraMusicFillLayer.backgroundColor = (isOverlay ? UIColor(white: 1.0, alpha: 0.3) : presentationData.theme.list.itemAccentColor.withAlphaComponent(0.14)).cgColor
                         CATransaction.commit()
+                        if let peer, self.astraMusicPlaybackPeerId != peer.id {
+                            self.astraObserveMusicPlayback(peerId: peer.id)
+                        }
+                        self.astraUpdateMusicFill()
                     } else if let pillLayer = self.astraMusicPillLayer {
                         self.astraMusicPillLayer = nil
                         pillLayer.removeFromSuperlayer()
@@ -3137,6 +3154,70 @@ extension PeerInfoHeaderNode {
         if self.astraBubbleTint != status {
             self.astraBubbleTint = status
             self.requestUpdateLayout?(true)
+        }
+    }
+}
+
+
+extension PeerInfoHeaderNode {
+    /// AstraGram: follows the player while it plays this profile's music.
+    fileprivate func astraObserveMusicPlayback(peerId: EnginePeer.Id) {
+        self.astraMusicPlaybackPeerId = peerId
+        self.astraMusicPlaybackDisposable?.dispose()
+        let accountPeerId = self.context.account.peerId
+        self.astraMusicPlaybackDisposable = (self.context.sharedContext.mediaManager.globalMediaPlayerState
+        |> deliverOnMainQueue).start(next: { [weak self] value in
+            guard let self else {
+                return
+            }
+            var playback: (fraction: Double, secondsLeft: Double, playing: Bool)?
+            if let (account, stateOrLoading, _) = value, account.peerId == accountPeerId, case let .state(state) = stateOrLoading, let location = state.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = location, savedMusicContext.peerId == peerId {
+                let status = state.status
+                if status.duration > 0.0 {
+                    var timestamp = status.timestamp
+                    var playing = false
+                    if case .playing = status.status {
+                        playing = true
+                        timestamp += (CACurrentMediaTime() - status.generationTimestamp) * status.baseRate
+                    }
+                    let fraction = max(0.0, min(1.0, timestamp / status.duration))
+                    playback = (fraction, max(0.0, (status.duration - timestamp) / max(0.1, status.baseRate)), playing)
+                }
+            }
+            self.astraMusicPlayback = playback
+            self.astraUpdateMusicFill()
+        })
+    }
+
+    /// The fill under the capsule's text: where the track is now, running to the end while it plays.
+    fileprivate func astraUpdateMusicFill() {
+        guard let pillLayer = self.astraMusicPillLayer else {
+            return
+        }
+        let fill = self.astraMusicFillLayer
+        let size = pillLayer.bounds.size
+        fill.removeAllAnimations()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        fill.anchorPoint = CGPoint(x: 0.0, y: 0.5)
+        fill.position = CGPoint(x: 0.0, y: size.height / 2.0)
+        guard let playback = self.astraMusicPlayback else {
+            fill.bounds = CGRect(origin: .zero, size: CGSize(width: 0.0, height: size.height))
+            CATransaction.commit()
+            return
+        }
+        let width = size.width * CGFloat(playback.fraction)
+        fill.bounds = CGRect(origin: .zero, size: CGSize(width: width, height: size.height))
+        CATransaction.commit()
+        if playback.playing && playback.secondsLeft > 0.05 {
+            let animation = CABasicAnimation(keyPath: "bounds.size.width")
+            animation.fromValue = width
+            animation.toValue = size.width
+            animation.duration = playback.secondsLeft
+            animation.timingFunction = CAMediaTimingFunction(name: .linear)
+            animation.fillMode = .forwards
+            animation.isRemovedOnCompletion = false
+            fill.add(animation, forKey: "progress")
         }
     }
 }
