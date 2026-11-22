@@ -713,7 +713,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         // AstraGram: the whole profile is one surface in the profile's own color (the cover's edge color), as in the
         // concept; the gifts do not recolor it.
         var astraSurface: UIColor?
-        do {
+        if !self.isSettings {
             if let status = peer?.emojiStatus, case let .starGift(_, _, _, _, _, _, outerColor, _, _) = status.content {
                 astraSurface = UIColor(rgb: UInt32(bitPattern: outerColor))
             } else if let profileColor = peer?.effectiveProfileColor {
