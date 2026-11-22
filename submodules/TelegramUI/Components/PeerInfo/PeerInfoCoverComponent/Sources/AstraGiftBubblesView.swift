@@ -10,7 +10,7 @@ import TextFormat
 /// away, and can be pulled with a finger: a pulled bubble swells into a see-through lens and lets go with a spring.
 /// Touching one tells the header (`touched`), which takes on the gift's colors; holding one opens it. While the
 /// profile's music plays the bubbles pulse and glow on the beat, and every few bars the header moves on to the next
-/// gift's colors (`cycled`). A ring around the avatar glows in the bubbles' colors.
+/// gift's colors, as a light flickering behind the avatar. A ring around the avatar glows in the bubbles' colors.
 final class AstraGiftBubblesView: UIView {
     struct Item {
         let id: AnyHashable
@@ -58,8 +58,6 @@ final class AstraGiftBubblesView: UIView {
 
     var touched: ((ProfileGiftsContext.State.StarGift) -> Void)?
     var opened: ((ProfileGiftsContext.State.StarGift) -> Void)?
-    /// While music plays: the gift whose colors the header takes on next.
-    var cycled: ((ProfileGiftsContext.State.StarGift) -> Void)?
 
     private var context: AccountContext?
     private var bubbles: [Bubble] = []
@@ -76,6 +74,8 @@ final class AstraGiftBubblesView: UIView {
     private var cycleIndex = 0
     private var beatEnergy: CGFloat = 0.0
 
+    /// The light behind the avatar that flickers on the beat, in the gifts' colors one after another.
+    private let flickerLayer = CAGradientLayer()
     private let ringContainer = CALayer()
     private let ringGlow = CAShapeLayer()
     private let ringGradient = CAGradientLayer()
@@ -109,6 +109,13 @@ final class AstraGiftBubblesView: UIView {
         self.ringGradient.mask = self.ringMask
         self.ringContainer.addSublayer(self.ringGradient)
         self.ringContainer.opacity = 0.0
+        self.flickerLayer.type = .radial
+        self.flickerLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
+        self.flickerLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
+        self.flickerLayer.opacity = 0.0
+        // Light: it brightens what is under it and never covers it.
+        self.flickerLayer.compositingFilter = "screenBlendMode"
+        self.layer.addSublayer(self.flickerLayer)
         self.layer.addSublayer(self.ringContainer)
     }
 
@@ -237,6 +244,12 @@ final class AstraGiftBubblesView: UIView {
             }
         }
         self.ringContainer.isHidden = !visible
+        let flickerRadius = self.avatarRadius * 2.6
+        self.flickerLayer.frame = CGRect(x: self.avatarCenter.x - flickerRadius, y: self.avatarCenter.y - flickerRadius, width: flickerRadius * 2.0, height: flickerRadius * 2.0)
+        self.flickerLayer.isHidden = !visible
+        if self.flickerLayer.colors == nil, let first = self.bubbles.first {
+            self.setFlickerColor(AstraGiftBubbleView.colors(gift: first.gift).0, animated: false)
+        }
         CATransaction.commit()
     }
 
@@ -267,7 +280,7 @@ final class AstraGiftBubblesView: UIView {
                 if self.beatsSinceCycle >= 8 && !self.bubbles.isEmpty && self.dragged == nil {
                     self.beatsSinceCycle = 0
                     self.cycleIndex = (self.cycleIndex + 1) % self.bubbles.count
-                    self.cycled?(self.bubbles[self.cycleIndex].gift)
+                    self.setFlickerColor(AstraGiftBubbleView.colors(gift: self.bubbles[self.cycleIndex].gift).0, animated: true)
                 }
             }
         } else {
@@ -275,6 +288,23 @@ final class AstraGiftBubblesView: UIView {
         }
         let kick = self.beatEnergy * self.pulse(at: self.musicTime)
         self.ringContainer.opacity = Float(0.55 + 0.45 * kick)
+        // A flash on every beat with a quick random shimmer on top, gone in silence.
+        let shimmer = 0.85 + 0.15 * sin(self.time * 31.0) * sin(self.time * 17.0)
+        self.flickerLayer.opacity = Float(self.beatEnergy * (0.18 + 0.62 * kick) * shimmer)
+    }
+
+    private func setFlickerColor(_ color: UIColor, animated: Bool) {
+        let bright = color.withMultiplied(hue: 1.0, saturation: 1.3, brightness: 1.4)
+        let colors = [bright.withAlphaComponent(0.9).cgColor, bright.withAlphaComponent(0.35).cgColor, bright.withAlphaComponent(0.0).cgColor]
+        if animated, let previous = self.flickerLayer.colors {
+            let animation = CABasicAnimation(keyPath: "colors")
+            animation.fromValue = previous
+            animation.toValue = colors
+            animation.duration = 0.5
+            self.flickerLayer.add(animation, forKey: "colors")
+        }
+        self.flickerLayer.colors = colors
+        self.flickerLayer.locations = [0.0, 0.45, 1.0]
     }
 
     private func step(dt: CGFloat) {
@@ -434,6 +464,7 @@ final class AstraGiftBubblesView: UIView {
         if let index = self.bubbles.firstIndex(where: { $0 === bubble }) {
             self.cycleIndex = index
             self.beatsSinceCycle = 0
+            self.setFlickerColor(AstraGiftBubbleView.colors(gift: bubble.gift).0, animated: true)
         }
         self.touched?(bubble.gift)
         self.holdTimer?.invalidate()

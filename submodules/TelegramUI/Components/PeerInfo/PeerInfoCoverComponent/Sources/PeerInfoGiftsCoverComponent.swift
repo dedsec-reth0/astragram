@@ -1042,9 +1042,7 @@ extension PeerInfoGiftsCoverComponent.View {
         bubbles.opened = { [weak self] gift in
             self?.componentValue?.action(gift)
         }
-        bubbles.cycled = { [weak self] gift in
-            self?.componentValue?.astraBubbleTouched?(gift)
-        }
+
         bubbles.frame = CGRect(origin: .zero, size: availableSize)
         // A pulled bubble reaches past the header, over the profile's fields.
         self.clipsToBounds = false
