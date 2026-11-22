@@ -729,6 +729,91 @@ public enum AstraLocalPremium {
         }
         return user.withUpdatedEmojiStatus(stored.status)
     }
+
+    // MARK: The name and profile colors
+
+    /// The server takes name and profile colors only from real Premium as well, so with Local Premium the colors picked
+    /// are kept here and shown in place of the server's, on this device only.
+    private struct StoredColors: Codable {
+        var namePreset: Int32?
+        var nameCollectible: PeerCollectibleColor?
+        var backgroundEmojiId: Int64?
+        var profileColor: Int32?
+        var profileBackgroundEmojiId: Int64?
+
+        var nameColor: PeerColor? {
+            if let nameCollectible {
+                return .collectible(nameCollectible)
+            }
+            return self.namePreset.map { .preset(PeerNameColor(rawValue: $0)) }
+        }
+    }
+
+    private static let colors = Atomic<[PeerId: StoredColors?]>(value: [:])
+
+    private static func colorsKey(_ accountPeerId: PeerId) -> String {
+        return "astragram.localPremium.colors.\(accountPeerId.toInt64())"
+    }
+
+    private static func loadedColors(accountPeerId: PeerId) -> StoredColors? {
+        if let cached = AstraLocalPremium.colors.with({ $0[accountPeerId] }) {
+            return cached
+        }
+        var stored: StoredColors?
+        if let data = UserDefaults.standard.data(forKey: AstraLocalPremium.colorsKey(accountPeerId)) {
+            stored = try? JSONDecoder().decode(StoredColors.self, from: data)
+        }
+        let _ = AstraLocalPremium.colors.modify { current in
+            var current = current
+            current[accountPeerId] = .some(stored)
+            return current
+        }
+        return stored
+    }
+
+    /// Keeps the colors picked as the account's name and profile colors on this device.
+    static func setColors(nameColor: PeerColor, backgroundEmojiId: Int64?, profileColor: PeerNameColor?, profileBackgroundEmojiId: Int64?, accountPeerId: PeerId) {
+        var stored = StoredColors()
+        switch nameColor {
+        case let .preset(color):
+            stored.namePreset = color.rawValue
+        case let .collectible(color):
+            stored.nameCollectible = color
+        }
+        stored.backgroundEmojiId = backgroundEmojiId
+        stored.profileColor = profileColor?.rawValue
+        stored.profileBackgroundEmojiId = profileBackgroundEmojiId
+        if let data = try? JSONEncoder().encode(stored) {
+            UserDefaults.standard.set(data, forKey: AstraLocalPremium.colorsKey(accountPeerId))
+        }
+        let _ = AstraLocalPremium.colors.modify { current in
+            var current = current
+            current[accountPeerId] = .some(stored)
+            return current
+        }
+    }
+
+    /// `user` with the emoji status and colors picked on this device, when Local Premium shows it as Premium.
+    static func applyingLocal(_ user: TelegramUser) -> TelegramUser {
+        var user = AstraLocalPremium.applyingEmojiStatus(user)
+        guard AstraLocalPremium.isLocalOnly(user), let stored = AstraLocalPremium.loadedColors(accountPeerId: user.id) else {
+            return user
+        }
+        if let nameColor = stored.nameColor, user.nameColor != nameColor {
+            user = user.withUpdatedNameColor(nameColor)
+        }
+        if user.backgroundEmojiId != stored.backgroundEmojiId {
+            user = user.withUpdatedBackgroundEmojiId(stored.backgroundEmojiId)
+        }
+        let profileColor = stored.profileColor.map { PeerNameColor(rawValue: $0) }
+        if user.profileColor != profileColor {
+            user = user.withUpdatedProfileColor(profileColor)
+        }
+        if user.profileBackgroundEmojiId != stored.profileBackgroundEmojiId {
+            user = user.withUpdatedProfileBackgroundEmojiId(stored.profileBackgroundEmojiId)
+        }
+        return user
+    }
 }
 
 public extension String {
