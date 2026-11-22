@@ -102,6 +102,8 @@ final class AstraGiftBubblesView: UIView {
     /// On a light profile the bubbles are clear soap bubbles; on a dark one, glowing neon jelly (as in the concept).
     private var soap = true
     private var dragged: Bubble?
+    /// Where the bubbles' layer sits among the header's views when none is held.
+    private var restingIndex: Int?
     private var dragPoint: CGPoint = .zero
     private var dragStart: CGPoint = .zero
     private var dragMoved = false
@@ -397,7 +399,7 @@ final class AstraGiftBubblesView: UIView {
                 let dx = bubble.position.x - self.avatarCenter.x
                 let dy = bubble.position.y - self.avatarCenter.y
                 let distance = max(0.001, sqrt(dx * dx + dy * dy))
-                let minDistance = self.avatarRadius * 0.55 + bubble.radius * 0.2
+                let minDistance = self.avatarRadius * 0.35
                 if distance < minDistance {
                     let push = (minDistance - distance) * 70.0
                     force.x += dx / distance * push
@@ -507,7 +509,15 @@ final class AstraGiftBubblesView: UIView {
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        return self.bubble(at: point) != nil || self.dragged != nil
+        if self.dragged != nil {
+            return true
+        }
+        // Behind the avatar a bubble cannot be touched: the avatar takes the touch.
+        let dx = point.x - self.avatarCenter.x, dy = point.y - self.avatarCenter.y
+        if dx * dx + dy * dy < self.avatarRadius * self.avatarRadius {
+            return false
+        }
+        return self.bubble(at: point) != nil
     }
 
     private func setScrollingEnabled(_ enabled: Bool) {
@@ -538,8 +548,13 @@ final class AstraGiftBubblesView: UIView {
         self.dragStart = self.dragPoint
         self.dragMoved = false
         self.bringSubviewToFront(bubble.view)
-        // Above the name and the buttons while it is held.
-        self.superview?.bringSubviewToFront(self)
+        // The bubbles live behind the avatar and the name; a held one comes over everything.
+        if let cover = self.superview, let header = cover.superview {
+            if self.restingIndex == nil {
+                self.restingIndex = header.subviews.firstIndex(of: cover)
+            }
+            header.bringSubviewToFront(cover)
+        }
         self.setScrollingEnabled(false)
         bubble.targetRadius = bubble.baseRadius * 1.25
         self.haptic.impact(.light)
@@ -602,6 +617,14 @@ final class AstraGiftBubblesView: UIView {
         self.dragged = nil
         self.setScrollingEnabled(true)
         self.lensImage = nil
+        // Back behind the avatar once it has shrunk and flown back.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: { [weak self] in
+            guard let self, self.dragged == nil, let index = self.restingIndex, let cover = self.superview, let header = cover.superview else {
+                return
+            }
+            self.restingIndex = nil
+            header.insertSubview(cover, at: min(index, header.subviews.count - 1))
+        })
     }
 
     /// The screen under the bubbles, once, when a bubble starts to be pulled: the lens magnifies it.

@@ -2609,10 +2609,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 if giftsCoverView.superview == nil {
                     self.view.insertSubview(giftsCoverView, aboveSubview: self.backgroundBannerView)
                 }
-                // AstraGram: the bubbles float over the avatar and the name.
-                if !self.isSettings, giftsCoverView.superview === self.view, self.view.subviews.last !== giftsCoverView {
-                    self.view.bringSubviewToFront(giftsCoverView)
-                }
                 if additive {
                     transition.updateFrameAdditive(view: giftsCoverView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: giftsCoverSize))
                 } else {
