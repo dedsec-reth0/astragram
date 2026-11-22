@@ -1042,6 +1042,9 @@ extension PeerInfoGiftsCoverComponent.View {
         bubbles.opened = { [weak self] gift in
             self?.componentValue?.action(gift)
         }
+        bubbles.cycled = { [weak self] gift in
+            self?.componentValue?.astraBubbleTouched?(gift)
+        }
         bubbles.frame = CGRect(origin: .zero, size: availableSize)
         // A pulled bubble reaches past the header, over the profile's fields.
         self.clipsToBounds = false
@@ -1096,5 +1099,10 @@ extension PeerInfoGiftsCoverComponent.View {
         bubbles.alpha = 1.0 - fraction
         bubbles.isUserInteractionEnabled = fraction < 0.5
         return availableSize
+    }
+
+    /// AstraGram: the profile's music started or stopped playing: the bubbles pulse on the beat while it plays.
+    public func astraSetMusicPlaying(_ playing: Bool) {
+        self.astraBubbles?.setMusicPlaying(playing)
     }
 }

@@ -7,8 +7,10 @@ import EmojiTextAttachmentView
 import TextFormat
 
 /// AstraGram: a profile's pinned gifts as jelly bubbles around the avatar. They drift, push each other and the avatar
-/// away, and can be pulled with a finger: a pulled bubble grows and wobbles, and lets go with a spring. Touching one
-/// tells the header (`touched`), which tints the profile's background with the gift's colors; holding one opens it.
+/// away, and can be pulled with a finger: a pulled bubble swells into a see-through lens and lets go with a spring.
+/// Touching one tells the header (`touched`), which takes on the gift's colors; holding one opens it. While the
+/// profile's music plays the bubbles pulse and glow on the beat, and every few bars the header moves on to the next
+/// gift's colors (`cycled`). A ring around the avatar glows in the bubbles' colors.
 final class AstraGiftBubblesView: UIView {
     struct Item {
         let id: AnyHashable
@@ -19,6 +21,8 @@ final class AstraGiftBubblesView: UIView {
         let id: AnyHashable
         var gift: ProfileGiftsContext.State.StarGift
         let view: AstraGiftBubbleView
+        /// The bubble's own resting size (they differ, as in the concept).
+        let baseRadius: CGFloat
         var home: CGPoint = .zero
         var position: CGPoint = .zero
         var velocity: CGPoint = .zero
@@ -30,22 +34,32 @@ final class AstraGiftBubblesView: UIView {
         var deformVelocity: CGPoint = .zero
         let phase: CGFloat = CGFloat.random(in: 0.0 ..< 100.0)
         let speed: CGFloat = CGFloat.random(in: 0.6 ..< 1.1)
+        /// A hair off the beat, so they do not move as one.
+        let beatLag: CGFloat = CGFloat.random(in: 0.0 ..< 0.06)
         var placed = false
 
-        init(id: AnyHashable, gift: ProfileGiftsContext.State.StarGift, view: AstraGiftBubbleView, radius: CGFloat) {
+        init(id: AnyHashable, gift: ProfileGiftsContext.State.StarGift, view: AstraGiftBubbleView, baseRadius: CGFloat) {
             self.id = id
             self.gift = gift
             self.view = view
-            self.radius = radius
-            self.targetRadius = radius
+            self.baseRadius = baseRadius
+            self.radius = 2.0
+            self.targetRadius = baseRadius
         }
     }
 
-    static let radius: CGFloat = 20.0
-    static let pulledRadius: CGFloat = 66.0
+    /// The middle resting size: in the concept a bubble is about 0.4 of the avatar wide, an egg a bit taller than wide.
+    static let radius: CGFloat = 19.0
+    static let eggHeight: CGFloat = 1.2
+    static let pulledRadius: CGFloat = 64.0
+    private static let sizeFactors: [CGFloat] = [1.08, 0.86, 1.0, 0.8, 1.12, 0.92, 0.84, 1.04, 0.9, 0.98]
+    /// Beats a minute of the pulse while music plays.
+    private static let bpm: CGFloat = 112.0
 
     var touched: ((ProfileGiftsContext.State.StarGift) -> Void)?
     var opened: ((ProfileGiftsContext.State.StarGift) -> Void)?
+    /// While music plays: the gift whose colors the header takes on next.
+    var cycled: ((ProfileGiftsContext.State.StarGift) -> Void)?
 
     private var context: AccountContext?
     private var bubbles: [Bubble] = []
@@ -55,10 +69,21 @@ final class AstraGiftBubblesView: UIView {
     private var displayLink: CADisplayLink?
     private var time: CGFloat = 0.0
 
+    private var musicPlaying = false
+    private var musicTime: CGFloat = 0.0
+    private var beatsSinceCycle: Int = 0
+    private var lastBeatIndex: Int = -1
+    private var cycleIndex = 0
+    private var beatEnergy: CGFloat = 0.0
+
+    private let ringContainer = CALayer()
+    private let ringGlow = CAShapeLayer()
+    private let ringGradient = CAGradientLayer()
+    private let ringMask = CAShapeLayer()
+
     private var dragged: Bubble?
     private var dragPoint: CGPoint = .zero
     private var dragStart: CGPoint = .zero
-    private var dragStartTime: Double = 0.0
     private var dragMoved = false
     private var holdTimer: Foundation.Timer?
     private var disabledScrollViews: [UIScrollView] = []
@@ -68,6 +93,23 @@ final class AstraGiftBubblesView: UIView {
         super.init(frame: frame)
         self.isMultipleTouchEnabled = false
         self.isExclusiveTouch = true
+
+        self.ringGlow.fillColor = UIColor.clear.cgColor
+        self.ringGlow.lineWidth = 3.0
+        self.ringGlow.shadowOffset = .zero
+        self.ringGlow.shadowRadius = 8.0
+        self.ringGlow.shadowOpacity = 0.9
+        self.ringContainer.addSublayer(self.ringGlow)
+        self.ringGradient.type = .conic
+        self.ringGradient.startPoint = CGPoint(x: 0.5, y: 0.5)
+        self.ringGradient.endPoint = CGPoint(x: 0.5, y: 0.0)
+        self.ringMask.fillColor = UIColor.clear.cgColor
+        self.ringMask.strokeColor = UIColor.white.cgColor
+        self.ringMask.lineWidth = 3.0
+        self.ringGradient.mask = self.ringMask
+        self.ringContainer.addSublayer(self.ringGradient)
+        self.ringContainer.opacity = 0.0
+        self.layer.addSublayer(self.ringContainer)
     }
 
     required init?(coder: NSCoder) {
@@ -98,6 +140,19 @@ final class AstraGiftBubblesView: UIView {
         }
     }
 
+    /// The profile's music started or stopped: the beat follows it.
+    func setMusicPlaying(_ playing: Bool) {
+        guard self.musicPlaying != playing else {
+            return
+        }
+        self.musicPlaying = playing
+        if playing {
+            self.musicTime = 0.0
+            self.lastBeatIndex = -1
+            self.beatsSinceCycle = 0
+        }
+    }
+
     /// Lays the bubbles out around `avatarCenter`, with their resting places at `homes` (as many as there are items).
     func update(context: AccountContext, items: [Item], homes: [CGPoint], avatarCenter: CGPoint, avatarRadius: CGFloat, area: CGRect) {
         self.context = context
@@ -118,10 +173,10 @@ final class AstraGiftBubblesView: UIView {
                     bubble.view.update(context: context, gift: item.gift)
                 }
             } else {
-                let view = AstraGiftBubbleView(frame: CGRect(origin: .zero, size: CGSize(width: AstraGiftBubblesView.radius * 2.0, height: AstraGiftBubblesView.radius * 2.0)))
+                let baseRadius = AstraGiftBubblesView.radius * AstraGiftBubblesView.sizeFactors[index % AstraGiftBubblesView.sizeFactors.count]
+                let view = AstraGiftBubbleView(frame: CGRect(origin: .zero, size: CGSize(width: baseRadius * 2.0, height: baseRadius * 2.0 * AstraGiftBubblesView.eggHeight)))
                 view.update(context: context, gift: item.gift)
-                bubble = Bubble(id: item.id, gift: item.gift, view: view, radius: 2.0)
-                bubble.targetRadius = AstraGiftBubblesView.radius
+                bubble = Bubble(id: item.id, gift: item.gift, view: view, baseRadius: baseRadius)
                 self.addSubview(view)
             }
             bubble.home = homes[index]
@@ -143,15 +198,83 @@ final class AstraGiftBubblesView: UIView {
             })
         }
         self.bubbles = next
+        self.updateRing()
         self.updateDisplayLink()
         self.layoutBubbles()
+    }
+
+    /// The ring around the avatar, in the bubbles' colors (hidden over an expanded photo).
+    private func updateRing() {
+        let colors = self.bubbles.map { AstraGiftBubbleView.colors(gift: $0.gift).0 }
+        let visible = !colors.isEmpty && self.avatarRadius > 10.0 && self.avatarRadius < 80.0
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if visible {
+            let radius = self.avatarRadius + 1.5
+            let frame = CGRect(x: self.avatarCenter.x - radius - 20.0, y: self.avatarCenter.y - radius - 20.0, width: (radius + 20.0) * 2.0, height: (radius + 20.0) * 2.0)
+            self.ringContainer.frame = frame
+            let path = UIBezierPath(ovalIn: CGRect(x: 20.0, y: 20.0, width: radius * 2.0, height: radius * 2.0)).cgPath
+            self.ringGlow.frame = self.ringContainer.bounds
+            self.ringGlow.path = path
+            self.ringGlow.strokeColor = colors[0].withAlphaComponent(0.6).cgColor
+            self.ringGlow.shadowColor = colors[0].withMultipliedBrightnessBy(1.3).cgColor
+            self.ringGradient.frame = self.ringContainer.bounds
+            self.ringMask.frame = self.ringContainer.bounds
+            self.ringMask.path = path
+            var gradientColors = colors.map { $0.withMultipliedBrightnessBy(1.35).cgColor }
+            if gradientColors.count == 1 {
+                gradientColors.append(UIColor.white.withAlphaComponent(0.8).cgColor)
+            }
+            gradientColors.append(gradientColors[0])
+            self.ringGradient.colors = gradientColors
+            if self.ringContainer.animation(forKey: "spin") == nil {
+                let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+                spin.fromValue = 0.0
+                spin.toValue = CGFloat.pi * 2.0
+                spin.duration = 9.0
+                spin.repeatCount = .infinity
+                self.ringGradient.add(spin, forKey: "spin")
+            }
+        }
+        self.ringContainer.isHidden = !visible
+        CATransaction.commit()
     }
 
     fileprivate func tick(_ link: CADisplayLink) {
         let dt = CGFloat(min(1.0 / 30.0, max(1.0 / 120.0, link.targetTimestamp - link.timestamp)))
         self.time += dt
+        self.updateBeat(dt: dt)
         self.step(dt: dt)
         self.layoutBubbles()
+    }
+
+    /// The pulse: a sharp kick on every beat, fading out between them; silence lets it die away.
+    private func pulse(at time: CGFloat) -> CGFloat {
+        let beat = 60.0 / AstraGiftBubblesView.bpm
+        let phase = (time.truncatingRemainder(dividingBy: beat)) / beat
+        return exp(-phase * 7.0)
+    }
+
+    private func updateBeat(dt: CGFloat) {
+        if self.musicPlaying {
+            self.musicTime += dt
+            self.beatEnergy = min(1.0, self.beatEnergy + dt * 2.0)
+            let beatIndex = Int(self.musicTime / (60.0 / AstraGiftBubblesView.bpm))
+            if beatIndex != self.lastBeatIndex {
+                self.lastBeatIndex = beatIndex
+                self.beatsSinceCycle += 1
+                // Every two bars, the next gift's colors.
+                if self.beatsSinceCycle >= 8 && !self.bubbles.isEmpty && self.dragged == nil {
+                    self.beatsSinceCycle = 0
+                    self.cycleIndex = (self.cycleIndex + 1) % self.bubbles.count
+                    self.cycled?(self.bubbles[self.cycleIndex].gift)
+                }
+            }
+        } else {
+            self.beatEnergy = max(0.0, self.beatEnergy - dt * 1.5)
+        }
+        let kick = self.beatEnergy * self.pulse(at: self.musicTime)
+        self.ringContainer.opacity = Float(0.55 + 0.45 * kick)
     }
 
     private func step(dt: CGFloat) {
@@ -162,18 +285,17 @@ final class AstraGiftBubblesView: UIView {
                 force.x += (self.dragPoint.x - bubble.position.x) * 260.0 - bubble.velocity.x * 22.0
                 force.y += (self.dragPoint.y - bubble.position.y) * 260.0 - bubble.velocity.y * 22.0
             } else {
-                // Home, plus a slow drift.
+                // Home, plus a slow drift (livelier with music).
                 let t = self.time * bubble.speed + bubble.phase
-                let wander = CGPoint(x: sin(t * 0.9) * 7.0 + sin(t * 1.7 + 1.3) * 4.0, y: cos(t * 0.8 + 0.4) * 6.0 + sin(t * 1.3) * 3.0)
+                let drift: CGFloat = 1.0 + self.beatEnergy * 0.6
+                let wander = CGPoint(x: (sin(t * 0.9) * 7.0 + sin(t * 1.7 + 1.3) * 4.0) * drift, y: (cos(t * 0.8 + 0.4) * 6.0 + sin(t * 1.3) * 3.0) * drift)
                 force.x += (bubble.home.x + wander.x - bubble.position.x) * 9.0 - bubble.velocity.x * 3.2
                 force.y += (bubble.home.y + wander.y - bubble.position.y) * 9.0 - bubble.velocity.y * 3.2
-            }
-            // Out of the avatar.
-            if bubble !== self.dragged {
+                // Out of the avatar.
                 let dx = bubble.position.x - self.avatarCenter.x
                 let dy = bubble.position.y - self.avatarCenter.y
                 let distance = max(0.001, sqrt(dx * dx + dy * dy))
-                let minDistance = self.avatarRadius + bubble.radius * 0.55
+                let minDistance = self.avatarRadius + bubble.radius * 0.6
                 if distance < minDistance {
                     let push = (minDistance - distance) * 70.0
                     force.x += dx / distance * push
@@ -190,16 +312,16 @@ final class AstraGiftBubblesView: UIView {
                 let dx = b.position.x - a.position.x
                 let dy = b.position.y - a.position.y
                 let distance = max(0.001, sqrt(dx * dx + dy * dy))
-                let minDistance = (a.radius + b.radius) * 0.92
+                let minDistance = (a.radius + b.radius) * 1.02
                 if distance < minDistance {
                     let overlap = (minDistance - distance)
                     let nx = dx / distance, ny = dy / distance
                     let aWeight: CGFloat = a === self.dragged ? 0.0 : (b === self.dragged ? 1.0 : 0.5)
                     let bWeight: CGFloat = 1.0 - aWeight
-                    a.velocity.x -= nx * overlap * 60.0 * aWeight * dt * 10.0
-                    a.velocity.y -= ny * overlap * 60.0 * aWeight * dt * 10.0
-                    b.velocity.x += nx * overlap * 60.0 * bWeight * dt * 10.0
-                    b.velocity.y += ny * overlap * 60.0 * bWeight * dt * 10.0
+                    a.velocity.x -= nx * overlap * 600.0 * aWeight * dt
+                    a.velocity.y -= ny * overlap * 600.0 * aWeight * dt
+                    b.velocity.x += nx * overlap * 600.0 * bWeight * dt
+                    b.velocity.y += ny * overlap * 600.0 * bWeight * dt
                     // The touching sides flatten a little.
                     a.deformVelocity.x -= nx * overlap * 0.6
                     a.deformVelocity.y -= ny * overlap * 0.6
@@ -245,26 +367,26 @@ final class AstraGiftBubblesView: UIView {
     private func layoutBubbles() {
         for bubble in self.bubbles {
             let view = bubble.view
-            let side = AstraGiftBubblesView.radius * 2.0
-            view.bounds = CGRect(origin: .zero, size: CGSize(width: side, height: side))
+            let kick = self.beatEnergy * self.pulse(at: max(0.0, self.musicTime - bubble.beatLag))
+            view.bounds = CGRect(origin: .zero, size: CGSize(width: bubble.baseRadius * 2.0, height: bubble.baseRadius * 2.0 * AstraGiftBubblesView.eggHeight))
             view.center = bubble.position
-            let scale = bubble.radius / AstraGiftBubblesView.radius
+            let scale = bubble.radius / bubble.baseRadius * (1.0 + 0.1 * kick)
             // Stretch along the deformation's direction, squeeze across it, keeping the area.
             let amount = min(0.35, sqrt(bubble.deform.x * bubble.deform.x + bubble.deform.y * bubble.deform.y))
             let angle = atan2(bubble.deform.y, bubble.deform.x)
-            let wobble = 1.0 + sin(self.time * 2.3 + bubble.phase) * 0.025
             var transform = CGAffineTransform(rotationAngle: angle)
-            transform = transform.scaledBy(x: scale * (1.0 + amount) * wobble, y: scale / (1.0 + amount) / wobble)
+            transform = transform.scaledBy(x: scale * (1.0 + amount), y: scale / (1.0 + amount))
             transform = transform.rotated(by: -angle)
             view.transform = transform
-            view.setPulled(bubble === self.dragged ? min(1.0, max(0.0, (bubble.radius - AstraGiftBubblesView.radius) / (AstraGiftBubblesView.pulledRadius - AstraGiftBubblesView.radius))) : 0.0)
+            let pulled: CGFloat = bubble === self.dragged ? min(1.0, max(0.0, (bubble.radius - bubble.baseRadius) / (AstraGiftBubblesView.pulledRadius - bubble.baseRadius))) : 0.0
+            view.updateShape(time: self.time + bubble.phase, pulled: pulled, glow: 0.35 * self.beatEnergy + 0.65 * kick)
         }
     }
 
     private func bubble(at point: CGPoint) -> Bubble? {
         for bubble in self.bubbles.reversed() {
             let dx = point.x - bubble.position.x
-            let dy = point.y - bubble.position.y
+            let dy = (point.y - bubble.position.y) / AstraGiftBubblesView.eggHeight
             if dx * dx + dy * dy <= (bubble.radius + 8.0) * (bubble.radius + 8.0) {
                 return bubble
             }
@@ -302,14 +424,17 @@ final class AstraGiftBubblesView: UIView {
         self.dragged = bubble
         self.dragPoint = touch.location(in: self)
         self.dragStart = self.dragPoint
-        self.dragStartTime = CACurrentMediaTime()
         self.dragMoved = false
         self.bringSubviewToFront(bubble.view)
         // Above the name and the buttons while it is held.
         self.superview?.bringSubviewToFront(self)
         self.setScrollingEnabled(false)
-        bubble.targetRadius = AstraGiftBubblesView.radius * 1.25
+        bubble.targetRadius = bubble.baseRadius * 1.25
         self.haptic.impact(.light)
+        if let index = self.bubbles.firstIndex(where: { $0 === bubble }) {
+            self.cycleIndex = index
+            self.beatsSinceCycle = 0
+        }
         self.touched?(bubble.gift)
         self.holdTimer?.invalidate()
         self.holdTimer = Foundation.Timer.scheduledTimer(withTimeInterval: 0.55, repeats: false, block: { [weak self] _ in
@@ -359,10 +484,10 @@ final class AstraGiftBubblesView: UIView {
         self.holdTimer?.invalidate()
         self.holdTimer = nil
         if let bubble = self.dragged {
-            bubble.targetRadius = AstraGiftBubblesView.radius
+            bubble.targetRadius = bubble.baseRadius
             if !self.dragMoved {
                 // A tap: a little jelly bounce.
-                bubble.radiusVelocity -= 60.0
+                bubble.radiusVelocity -= 50.0
             }
         }
         self.dragged = nil
@@ -386,55 +511,68 @@ private final class AstraDisplayLinkTarget: NSObject {
     }
 }
 
-/// One jelly bubble: a translucent, glowing body in the gift's colors with a glossy highlight, and the gift inside.
+/// One jelly bubble: a wobbly egg of colored jelly with a glow around it, a gloss, a few sparkles, and the gift inside.
+/// Pulled big, it thins into a see-through lens.
 final class AstraGiftBubbleView: UIView {
-    private let glowLayer = CAGradientLayer()
+    private let glowLayer = CAShapeLayer()
     private let bodyLayer = CAGradientLayer()
+    private let bodyMask = CAShapeLayer()
     private let rimLayer = CAShapeLayer()
     private let shineLayer = CAGradientLayer()
-    private let sparkleLayer = CAGradientLayer()
+    private var sparkleLayers: [CALayer] = []
     private var stickerLayer: InlineStickerItemLayer?
     private var fileId: Int64?
+    private var glowColor: UIColor = .white
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         self.isUserInteractionEnabled = false
 
-        // A halo around the edge only, so the middle stays see-through.
-        self.glowLayer.type = .radial
-        self.glowLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
-        self.glowLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
-        self.glowLayer.locations = [0.0, 0.6, 0.66, 1.0]
+        self.glowLayer.fillColor = UIColor.clear.cgColor
+        self.glowLayer.shadowOffset = .zero
         self.layer.addSublayer(self.glowLayer)
 
         self.bodyLayer.type = .radial
-        self.bodyLayer.startPoint = CGPoint(x: 0.42, y: 0.38)
-        self.bodyLayer.endPoint = CGPoint(x: 1.05, y: 1.05)
+        self.bodyLayer.startPoint = CGPoint(x: 0.42, y: 0.36)
+        self.bodyLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
+        self.bodyLayer.mask = self.bodyMask
         self.layer.addSublayer(self.bodyLayer)
 
         self.rimLayer.fillColor = UIColor.clear.cgColor
-        self.rimLayer.strokeColor = UIColor(white: 1.0, alpha: 0.5).cgColor
-        self.rimLayer.lineWidth = 1.0
+        self.rimLayer.strokeColor = UIColor(white: 1.0, alpha: 0.38).cgColor
+        self.rimLayer.lineWidth = 1.2
         self.layer.addSublayer(self.rimLayer)
 
         self.shineLayer.type = .radial
-        self.shineLayer.colors = [UIColor(white: 1.0, alpha: 0.75).cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor]
+        self.shineLayer.colors = [UIColor(white: 1.0, alpha: 0.7).cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor]
         self.shineLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
         self.shineLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
         self.layer.addSublayer(self.shineLayer)
 
-        self.sparkleLayer.type = .radial
-        self.sparkleLayer.colors = [UIColor(white: 1.0, alpha: 0.5).cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor]
-        self.sparkleLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
-        self.sparkleLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
-        self.layer.addSublayer(self.sparkleLayer)
+        for i in 0 ..< 6 {
+            let sparkle = CALayer()
+            let side: CGFloat = i % 3 == 0 ? 2.2 : 1.5
+            sparkle.bounds = CGRect(origin: .zero, size: CGSize(width: side, height: side))
+            sparkle.cornerRadius = side / 2.0
+            sparkle.backgroundColor = UIColor(white: 1.0, alpha: 0.75).cgColor
+            let twinkle = CABasicAnimation(keyPath: "opacity")
+            twinkle.fromValue = 0.15
+            twinkle.toValue = 1.0
+            twinkle.duration = Double.random(in: 0.8 ..< 1.6)
+            twinkle.autoreverses = true
+            twinkle.repeatCount = .infinity
+            twinkle.beginTime = CACurrentMediaTime() + Double.random(in: 0.0 ..< 1.0)
+            sparkle.add(twinkle, forKey: "twinkle")
+            self.layer.addSublayer(sparkle)
+            self.sparkleLayers.append(sparkle)
+        }
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// The gift's colors: a unique gift's backdrop; a regular gift gets one of the bubble colors of the video.
+    /// The gift's colors: a unique gift's backdrop; a regular gift gets one of the concept's bubble colors.
     static func colors(gift: ProfileGiftsContext.State.StarGift) -> (UIColor, UIColor) {
         switch gift.gift {
         case let .unique(unique):
@@ -452,17 +590,18 @@ final class AstraGiftBubbleView: UIView {
     }
 
     func update(context: AccountContext, gift: ProfileGiftsContext.State.StarGift) {
-        let (inner, outer) = AstraGiftBubbleView.colors(gift: gift)
-        // See-through in the middle, denser and lighter at the edge, like a drop of jelly.
+        var (inner, outer) = AstraGiftBubbleView.colors(gift: gift)
+        // The concept's jelly is vivid even for a muted backdrop.
+        inner = inner.withMultiplied(hue: 1.0, saturation: 1.35, brightness: 1.25)
+        outer = outer.withMultiplied(hue: 1.0, saturation: 1.3, brightness: 1.3)
         self.bodyLayer.colors = [
-            inner.withMultipliedBrightnessBy(1.3).withAlphaComponent(0.28).cgColor,
-            inner.withAlphaComponent(0.42).cgColor,
-            inner.withMultipliedBrightnessBy(1.15).withAlphaComponent(0.7).cgColor,
-            outer.withMultipliedBrightnessBy(1.35).withAlphaComponent(0.9).cgColor
+            inner.withMultipliedBrightnessBy(1.2).withAlphaComponent(0.62).cgColor,
+            inner.withAlphaComponent(0.74).cgColor,
+            outer.withAlphaComponent(0.9).cgColor
         ]
-        self.bodyLayer.locations = [0.0, 0.5, 0.82, 1.0]
-        let glow = inner.withMultipliedBrightnessBy(1.3)
-        self.glowLayer.colors = [glow.withAlphaComponent(0.0).cgColor, glow.withAlphaComponent(0.0).cgColor, glow.withAlphaComponent(0.6).cgColor, glow.withAlphaComponent(0.0).cgColor]
+        self.bodyLayer.locations = [0.0, 0.55, 1.0]
+        self.glowColor = inner
+        self.glowLayer.shadowColor = inner.cgColor
 
         var file: TelegramMediaFile?
         switch gift.gift {
@@ -480,7 +619,6 @@ final class AstraGiftBubbleView: UIView {
         }
         self.fileId = file.fileId.id
         self.stickerLayer?.removeFromSuperlayer()
-        let side = AstraGiftBubblesView.radius * 2.0 * 0.66
         let layer = InlineStickerItemLayer(
             context: .account(context),
             userLocation: .other,
@@ -492,8 +630,8 @@ final class AstraGiftBubbleView: UIView {
             unique: true,
             placeholderColor: UIColor(white: 1.0, alpha: 0.2),
             // Sharp when the bubble is pulled to its full size.
-            pointSize: CGSize(width: side * 3.2, height: side * 3.2),
-            loopCount: 1
+            pointSize: CGSize(width: 96.0, height: 96.0),
+            loopCount: nil
         )
         layer.isVisibleForAnimations = true
         self.layer.insertSublayer(layer, below: self.rimLayer)
@@ -501,30 +639,70 @@ final class AstraGiftBubbleView: UIView {
         self.setNeedsLayout()
     }
 
-    /// 0 at rest, 1 fully pulled: the gift plays and the glow grows.
-    func setPulled(_ value: CGFloat) {
-        self.glowLayer.opacity = Float(0.85 + 0.15 * value)
+    /// The wobbly egg outline in `bounds`: wider at the bottom, its edge rippling slowly.
+    private func blobPath(in rect: CGRect, time: CGFloat, wobble: CGFloat) -> CGPath {
+        let count = 18
+        let cx = rect.midX, cy = rect.midY
+        let rx = rect.width / 2.0, ry = rect.height / 2.0
+        var points: [CGPoint] = []
+        for i in 0 ..< count {
+            let a = CGFloat(i) / CGFloat(count) * .pi * 2.0
+            let ripple = 1.0 + wobble * (0.035 * sin(2.0 * a + time * 1.3) + 0.025 * sin(3.0 * a - time * 0.9 + 1.7) + 0.015 * sin(5.0 * a + time * 2.1))
+            let y = sin(a)
+            // An egg: the top a little narrower than the bottom.
+            let eggX = 1.0 + 0.07 * y
+            points.append(CGPoint(x: cx + cos(a) * rx * eggX * ripple, y: cy + sin(a) * ry * ripple))
+        }
+        let path = CGMutablePath()
+        // Catmull-Rom through the points, closed.
+        for i in 0 ..< count {
+            let p0 = points[(i - 1 + count) % count], p1 = points[i], p2 = points[(i + 1) % count], p3 = points[(i + 2) % count]
+            if i == 0 {
+                path.move(to: p1)
+            }
+            let c1 = CGPoint(x: p1.x + (p2.x - p0.x) / 6.0, y: p1.y + (p2.y - p0.y) / 6.0)
+            let c2 = CGPoint(x: p2.x - (p3.x - p1.x) / 6.0, y: p2.y - (p3.y - p1.y) / 6.0)
+            path.addCurve(to: p2, control1: c1, control2: c2)
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    /// Redraws the outline (it ripples), the lens look when pulled and the glow on the beat.
+    func updateShape(time: CGFloat, pulled: CGFloat, glow: CGFloat) {
+        let bounds = self.bounds
+        let path = self.blobPath(in: bounds, time: time, wobble: 1.0 + pulled * 1.5)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        self.glowLayer.shadowPath = path
+        self.glowLayer.shadowRadius = bounds.width * 0.28 + glow * bounds.width * 0.25
+        self.glowLayer.shadowOpacity = Float(0.75 + 0.25 * glow)
+        self.bodyMask.path = path
+        self.rimLayer.path = path
+        // Pulled big, the jelly thins out: the profile shows through it, as through a lens.
+        self.bodyLayer.opacity = Float(1.0 - 0.4 * pulled)
+        CATransaction.commit()
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         let bounds = self.bounds
-        let path = UIBezierPath(ovalIn: bounds).cgPath
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        let halo = bounds.width * 0.28
-        self.glowLayer.frame = bounds.insetBy(dx: -halo, dy: -halo)
+        self.glowLayer.frame = bounds
         self.bodyLayer.frame = bounds
-        let mask = CAShapeLayer()
-        mask.path = path
-        self.bodyLayer.mask = mask
+        self.bodyMask.frame = bounds
         self.rimLayer.frame = bounds
-        self.rimLayer.path = UIBezierPath(ovalIn: bounds.insetBy(dx: 0.5, dy: 0.5)).cgPath
-        self.shineLayer.frame = CGRect(x: bounds.width * 0.16, y: bounds.height * 0.1, width: bounds.width * 0.42, height: bounds.height * 0.3)
-        self.sparkleLayer.frame = CGRect(x: bounds.width * 0.6, y: bounds.height * 0.66, width: bounds.width * 0.2, height: bounds.height * 0.16)
-        let side = bounds.width * 0.66
-        self.stickerLayer?.frame = CGRect(x: (bounds.width - side) / 2.0, y: (bounds.height - side) / 2.0, width: side, height: side)
+        self.shineLayer.frame = CGRect(x: bounds.width * 0.18, y: bounds.height * 0.1, width: bounds.width * 0.36, height: bounds.height * 0.22)
+        let positions: [CGPoint] = [CGPoint(x: 0.28, y: 0.62), CGPoint(x: 0.72, y: 0.7), CGPoint(x: 0.4, y: 0.8), CGPoint(x: 0.66, y: 0.3), CGPoint(x: 0.24, y: 0.4), CGPoint(x: 0.56, y: 0.86)]
+        for (i, sparkle) in self.sparkleLayers.enumerated() {
+            sparkle.position = CGPoint(x: bounds.width * positions[i].x, y: bounds.height * positions[i].y)
+        }
+        // The gift is small in its bubble, a little above the middle.
+        let side = bounds.width * 0.46
+        self.stickerLayer?.frame = CGRect(x: (bounds.width - side) / 2.0, y: bounds.height * 0.44 - side / 2.0, width: side, height: side)
         CATransaction.commit()
+        self.updateShape(time: 0.0, pulled: 0.0, glow: 0.0)
     }
 }
 

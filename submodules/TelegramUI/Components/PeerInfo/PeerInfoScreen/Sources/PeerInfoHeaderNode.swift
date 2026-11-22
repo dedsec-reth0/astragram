@@ -2810,7 +2810,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                                     ),
                                     AnyComponentWithIdentity(
                                         id: "label",
-                                        component: AnyComponent(MarqueeComponent(attributedText: musicString, maxWidth: max(1.0, musicBandWidth - 96.0)))
+                                        component: AnyComponent(MarqueeComponent(attributedText: musicString, maxWidth: astraMusicCapsule ? max(1.0, min(musicBandWidth - 96.0, 200.0)) : max(1.0, musicBandWidth - 96.0)))
                                     ),
                                     AnyComponentWithIdentity(
                                         id: "arrow",
@@ -2830,6 +2830,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     containerSize: CGSize(width: musicBandWidth, height: musicHeight)
                 )
                 var musicFrame = CGRect(origin: CGPoint(x: stripLeft, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0) + 1.0 - UIScreenPixel), size: musicSize)
+                if astraMusicCapsule && !astraMusicAbove {
+                    // Without buttons (one's own profile) the capsule stands clear of the header's edge, between the
+                    // status and the bottom.
+                    musicFrame.origin.y -= 14.0
+                }
                 if astraMusicAbove {
                     // The capsule stands in the middle of the gap between the status and the buttons; round buttons
                     // begin a little above their frame, so the middle is higher with them.
@@ -2848,8 +2853,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         if pillLayer.superlayer !== musicView.layer {
                             musicView.layer.insertSublayer(pillLayer, at: 0)
                         }
-                        let textWidth = min(max(1.0, musicBandWidth - 96.0), ceil(musicString.boundingRect(with: CGSize(width: 10000.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).width))
-                        let pillSize = CGSize(width: min(musicSize.width, textWidth + 58.0), height: 24.0)
+                        // Compact, as in the concept: a long title scrolls inside.
+                        let textWidth = min(max(1.0, min(musicBandWidth - 96.0, 200.0)), ceil(musicString.boundingRect(with: CGSize(width: 10000.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).width))
+                        let pillSize = CGSize(width: min(musicSize.width, textWidth + 58.0), height: 26.0)
                         CATransaction.begin()
                         CATransaction.setDisableActions(true)
                         pillLayer.frame = CGRect(origin: CGPoint(x: floor((musicSize.width - pillSize.width) / 2.0), y: floor((musicSize.height - pillSize.height) / 2.0)), size: pillSize)
@@ -3186,6 +3192,7 @@ extension PeerInfoHeaderNode {
             }
             self.astraMusicPlayback = playback
             self.astraUpdateMusicFill()
+            (self.giftsCover.view as? PeerInfoGiftsCoverComponent.View)?.astraSetMusicPlaying(playback?.playing == true)
         })
     }
 
