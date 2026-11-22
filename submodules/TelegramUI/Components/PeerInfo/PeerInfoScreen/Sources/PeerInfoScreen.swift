@@ -6114,6 +6114,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         for (_, section) in self.regularSections {
             section.astraTint = cardColor
         }
+        if self.paneContainerNode.astraTint != color {
+            self.paneContainerNode.astraTint = color
+        }
         self.updateBackgroundColor()
         if themeChanged {
             // Not from inside the header's layout, which reports the color.
