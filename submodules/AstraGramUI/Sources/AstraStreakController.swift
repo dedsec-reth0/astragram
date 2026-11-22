@@ -299,7 +299,7 @@ public enum AstraStreakBot {
             completion(.notLinked)
             return
         }
-        AstraStreakBot.request(path: "/api/badge", token: token, body: ["show": show, "check": check.map { NSNumber(value: $0) }], statusCompletion: { object, _ in
+        AstraStreakBot.request(path: "/api/badge", token: token, body: ["show": show, "check": check.map { NSNumber(value: $0) }], statusCompletion: { object, status in
             if status == 401 {
                 completion(.notLinked)
                 return
@@ -376,7 +376,7 @@ public enum AstraStreakBot {
         func attempt(_ index: Int) {
             let token = tokens[index]
             let isOwn = token == ownToken
-            AstraStreakBot.request(path: "/api/gifts", token: token, body: body, statusCompletion: { object, _ in
+            AstraStreakBot.request(path: "/api/gifts", token: token, body: body, statusCompletion: { object, status in
                 guard let object = object else {
                     // A token the server does not know: the next one on this device.
                     if status == 401 && index + 1 < tokens.count {
