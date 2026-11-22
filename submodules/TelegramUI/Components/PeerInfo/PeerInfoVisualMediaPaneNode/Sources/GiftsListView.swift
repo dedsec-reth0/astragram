@@ -678,13 +678,7 @@ final class GiftsListView: UIView {
                                 } else if product.astraIsVisual {
                                     // AstraGram: a visual gift opens Telegram's gift screen on its own, with AstraGram's
                                     // action (take it off, give one like it) in place of the purchase buttons.
-                                    let action = astraVisualGiftAction(context: self.context, peerId: self.peerId, item: product)
-                                    let controller = GiftViewScreen(
-                                        context: self.context,
-                                        subject: .profileGift(self.peerId, product),
-                                        customAction: action.map { GiftViewScreen.CustomAction(title: $0.title, action: $0.action) }
-                                    )
-                                    self.parentController?.push(controller)
+                                    self.astraOpenVisualGift(product)
                                 } else {
                                     let allSubjects: [GiftViewScreen.Subject] = (self.starsProducts ?? []).filter { !$0.astraIsVisual }.map { .profileGift(self.peerId, $0) }
                                     let index = self.starsProducts?.filter({ !$0.astraIsVisual }).firstIndex(where: { $0 == product }) ?? 0
@@ -1363,5 +1357,24 @@ private final class ReorderGestureRecognizer: UIGestureRecognizer {
                 self.state = .failed
             }
         }
+    }
+}
+
+
+extension GiftsListView {
+    /// AstraGram: a visual gift opens Telegram's gift screen on its own, with AstraGram's action (manage it, give one
+    /// like it) in place of the purchase buttons.
+    func astraOpenVisualGift(_ product: ProfileGiftsContext.State.StarGift) {
+        let action = astraVisualGiftAction(context: self.context, peerId: self.peerId, item: product, push: { [weak self] controller in
+            self?.parentController?.push(controller)
+        }, open: { [weak self] item in
+            self?.astraOpenVisualGift(item)
+        })
+        let controller = GiftViewScreen(
+            context: self.context,
+            subject: .profileGift(self.peerId, product),
+            customAction: action.map { GiftViewScreen.CustomAction(title: $0.title, action: $0.action, wear: $0.wear, isWorn: $0.isWorn, setHidden: $0.setHidden) }
+        )
+        self.parentController?.push(controller)
     }
 }

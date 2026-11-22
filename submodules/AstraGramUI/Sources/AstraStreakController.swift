@@ -317,26 +317,66 @@ public enum AstraStreakBot {
         var users: [Int64: [Int64]]
         /// When each of those lists last changed.
         var usersDate: [Int64: Int32] = [:]
+        /// What those people set on their own gifts (pinned, upgraded), by Telegram ID and gift.
+        var usersMeta: [Int64: [Int64: AstraGiftMeta]] = [:]
         /// The visual gifts the people asked about were given by others, by Telegram ID.
         var received: [Int64: [AstraReceivedGift]]
         /// The account's own list as the server keeps it; nil when another account's token asked.
         var mine: [Int64]?
+        /// What the account set on its own gifts; nil when another account's token asked.
+        var mineMeta: [Int64: AstraGiftMeta]?
         /// The gifts others gave this account; nil when another account's token asked.
         var mineReceived: [AstraReceivedGift]?
+        /// The gifts worn as a status, by Telegram ID (nil from a server before wearing).
+        var worn: [Int64: AstraWornGift]?
         /// The server's ID of the gift this call gave (`send`).
         var sent: Int64?
-        /// The HTTP status of a refused call (429: the day's gifts are used up).
+        /// The look an upgrade gave (`upgrade`).
+        var upgraded: AstraUniqueLook?
+        /// The gift's new server ID after `transfer`.
+        var transferred: Int64?
+        /// The HTTP status of a refused call (429: the day's gifts are used up; 409: too many pinned).
         var status: Int = 200
     }
 
-    /// Sends the account's visual gifts (`set`), gives a gift (`send`), takes received gifts off (`hide`), and gets the
-    /// visual gifts of `check` (the people in the account's chats and contacts); nil when the server did not answer or
-    /// the bot is not connected. With none of `set`, `send` and `hide`, another account's token on this device does for
-    /// asking (`tokenForLookup`); the answer's own lists are then that account's and are left out.
+    /// What one call to the gifts API does besides asking (`check`).
+    struct VisualGiftsChange {
+        /// Replaces the account's own list.
+        var set: [Int64]?
+        /// Gives a gift, with a caption and the giver's name hidden from everyone but the recipient.
+        var send: (to: Int64, gift: Int64, text: String, anonymous: Bool)?
+        /// Takes received gifts off for good.
+        var hide: [Int64] = []
+        /// Pins or hides gifts on the profile, by ref.
+        var meta: [(ref: String, pinned: Bool?, hidden: Bool?)] = []
+        /// Upgrades a gift to the look given (names from Telegram's list for the gift).
+        var upgrade: (ref: String, model: String, pattern: String, backdrop: String)?
+        /// Passes a gift on to someone else.
+        var transfer: (ref: String, to: Int64, text: String, anonymous: Bool)?
+        /// Wears a gift as the status (`.some(nil)` takes it off).
+        var wear: String??
+
+        var changesOwnData: Bool {
+            return self.set != nil || self.send != nil || !self.hide.isEmpty || !self.meta.isEmpty || self.upgrade != nil || self.transfer != nil || self.wear != nil
+        }
+    }
+
     static func visualGifts(accountPeerId: EnginePeer.Id, set: [Int64]?, send: (to: Int64, gift: Int64)? = nil, hide: [Int64] = [], check: [Int64], completion: @escaping (VisualGiftsResult?) -> Void) {
+        var change = VisualGiftsChange()
+        change.set = set
+        change.send = send.map { (to: $0.to, gift: $0.gift, text: "", anonymous: false) }
+        change.hide = hide
+        AstraStreakBot.visualGifts(accountPeerId: accountPeerId, change: change, check: check, completion: completion)
+    }
+
+    /// Changes the account's visual gifts (`change`) and gets the visual gifts of `check` (the people in the account's
+    /// chats and contacts); nil when the server did not answer or the bot is not connected. With no change, another
+    /// account's token on this device does for asking (`tokenForLookup`); the answer's own lists are then that account's
+    /// and are left out.
+    static func visualGifts(accountPeerId: EnginePeer.Id, change: VisualGiftsChange, check: [Int64], completion: @escaping (VisualGiftsResult?) -> Void) {
         let ownToken = AstraStreakBot.token(accountPeerId: accountPeerId)
         let tokens: [String]
-        if set != nil || send != nil || !hide.isEmpty {
+        if change.changesOwnData {
             tokens = ownToken.map { [$0] } ?? []
         } else {
             tokens = AstraStreakBot.tokensForLookup(accountPeerId: accountPeerId)
@@ -347,14 +387,35 @@ public enum AstraStreakBot {
         }
         // Gift IDs are 64-bit: they go as strings, which JavaScript cannot round.
         var body: [String: Any] = ["check": check.map { NSNumber(value: $0) }]
-        if let set {
+        if let set = change.set {
             body["gifts"] = set.map { "\($0)" }
         }
-        if let send {
-            body["send"] = ["to": NSNumber(value: send.to), "gift": "\(send.gift)"]
+        if let send = change.send {
+            body["send"] = ["to": NSNumber(value: send.to), "gift": "\(send.gift)", "text": send.text, "anonymous": send.anonymous]
         }
-        if !hide.isEmpty {
-            body["hide"] = hide.map { NSNumber(value: $0) }
+        if !change.hide.isEmpty {
+            body["hide"] = change.hide.map { NSNumber(value: $0) }
+        }
+        if !change.meta.isEmpty {
+            body["meta"] = change.meta.map { item -> [String: Any] in
+                var value: [String: Any] = ["ref": item.ref]
+                if let pinned = item.pinned {
+                    value["pinned"] = pinned
+                }
+                if let hidden = item.hidden {
+                    value["hidden"] = hidden
+                }
+                return value
+            }
+        }
+        if let upgrade = change.upgrade {
+            body["upgrade"] = ["ref": upgrade.ref, "model": upgrade.model, "pattern": upgrade.pattern, "backdrop": upgrade.backdrop]
+        }
+        if let transfer = change.transfer {
+            body["transfer"] = ["ref": transfer.ref, "to": NSNumber(value: transfer.to), "text": transfer.text, "anonymous": transfer.anonymous]
+        }
+        if let wear = change.wear {
+            body["wear"] = wear.map { ["ref": $0] as Any } ?? NSNull()
         }
         func int64(_ item: Any?) -> Int64? {
             if let string = item as? String {
@@ -365,13 +426,32 @@ public enum AstraStreakBot {
         func ids(_ value: Any?) -> [Int64] {
             return (value as? [Any] ?? []).compactMap(int64)
         }
+        func look(_ value: Any?) -> AstraUniqueLook? {
+            guard let value = value as? [String: Any], let number = int64(value["n"]), let model = value["m"] as? String, let pattern = value["p"] as? String, let backdrop = value["b"] as? String else {
+                return nil
+            }
+            return AstraUniqueLook(number: Int32(clamping: number), model: model, pattern: pattern, backdrop: backdrop)
+        }
+        func meta(_ value: [String: Any]) -> AstraGiftMeta {
+            return AstraGiftMeta(pinnedAt: int64(value["pin"]).map { Int32(clamping: $0) }, hidden: (value["hidden"] as? Bool) == true ? true : nil, unique: look(value["u"]))
+        }
         func receivedList(_ value: Any?) -> [AstraReceivedGift] {
             return (value as? [[String: Any]] ?? []).compactMap { item in
                 guard let id = int64(item["id"]), let gift = int64(item["gift"]), let from = int64(item["from"]) else {
                     return nil
                 }
-                return AstraReceivedGift(id: id, gift: gift, from: from, date: Int32(clamping: int64(item["date"]) ?? 0))
+                let text = (item["text"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                return AstraReceivedGift(id: id, gift: gift, from: from, date: Int32(clamping: int64(item["date"]) ?? 0), text: text, anonymous: (item["anon"] as? Bool) == true ? true : nil, meta: meta(item))
             }
+        }
+        func metaMap(_ value: Any?) -> [Int64: AstraGiftMeta] {
+            var result: [Int64: AstraGiftMeta] = [:]
+            for (gift, item) in value as? [String: Any] ?? [:] {
+                if let gift = Int64(gift), let item = item as? [String: Any] {
+                    result[gift] = meta(item)
+                }
+            }
+            return result
         }
         func attempt(_ index: Int) {
             let token = tokens[index]
@@ -381,7 +461,7 @@ public enum AstraStreakBot {
                     // A token the server does not know: the next one on this device.
                     if status == 401 && index + 1 < tokens.count {
                         attempt(index + 1)
-                    } else if status == 429 || status == 400 {
+                    } else if status == 429 || status == 400 || status == 409 {
                         completion(VisualGiftsResult(users: [:], received: [:], mine: nil, mineReceived: nil, sent: nil, status: status))
                     } else {
                         completion(nil)
@@ -400,20 +480,42 @@ public enum AstraStreakBot {
                         usersDate[user] = Int32(clamping: date)
                     }
                 }
+                var usersMeta: [Int64: [Int64: AstraGiftMeta]] = [:]
+                for (user, value) in object["usersMeta"] as? [String: Any] ?? [:] {
+                    if let user = Int64(user) {
+                        usersMeta[user] = metaMap(value)
+                    }
+                }
                 var received: [Int64: [AstraReceivedGift]] = [:]
                 for (user, gifts) in object["received"] as? [String: Any] ?? [:] {
                     if let user = Int64(user) {
                         received[user] = receivedList(gifts)
                     }
                 }
-                completion(VisualGiftsResult(
+                var worn: [Int64: AstraWornGift]?
+                if let value = object["worn"] as? [String: Any] {
+                    var result: [Int64: AstraWornGift] = [:]
+                    for (user, item) in value {
+                        if let user = Int64(user), let item = item as? [String: Any], let ref = item["ref"] as? String, let gift = int64(item["gift"]) {
+                            result[user] = AstraWornGift(ref: ref, gift: gift, unique: look(item["u"]))
+                        }
+                    }
+                    worn = result
+                }
+                var result = VisualGiftsResult(
                     users: users,
                     usersDate: usersDate,
+                    usersMeta: usersMeta,
                     received: received,
                     mine: isOwn ? ids(object["mine"]) : nil,
+                    mineMeta: isOwn ? metaMap(object["mineMeta"]) : nil,
                     mineReceived: isOwn ? receivedList(object["mineReceived"]) : nil,
+                    worn: worn,
                     sent: int64(object["sent"])
-                ))
+                )
+                result.upgraded = look((object["upgraded"] as? [String: Any])?["u"])
+                result.transferred = int64(object["transferred"])
+                completion(result)
             })
         }
         attempt(0)

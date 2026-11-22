@@ -4850,8 +4850,40 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
                 }
                 
+                // AstraGram: a visual gift (it has a custom action) offers only its own wearing.
+                let astraCustomAction = (controller() as? GiftViewScreen)?.customAction
                 if let uniqueGift {
-                    if displaysHeaderButtons {
+                    if let astraCustomAction, let astraWear = astraCustomAction.wear {
+                    let buttonHeight = headerButtonHeight
+                    var buttonColor: UIColor = UIColor(rgb: 0xffffff, alpha: 0.1)
+                    if case let .color(color) = buttonsBackground {
+                        buttonColor = color
+                    }
+                    let buttonWidth = context.availableSize.width - sideInset * 2.0
+                    let wearButton = wearButton.update(
+                        component: HeaderButtonComponent(
+                            title: astraCustomAction.isWorn ? strings.Gift_View_Header_TakeOff : strings.Gift_View_Header_Wear,
+                            buttonColor: buttonColor,
+                            iconName: astraCustomAction.isWorn ? "Premium/Collectible/Unwear" : "Premium/Collectible/Wear",
+                            action: { [weak state] in
+                                astraWear()
+                                state?.dismiss(animated: true)
+                            }
+                        ),
+                        environment: {},
+                        availableSize: CGSize(width: buttonWidth, height: buttonHeight),
+                        transition: context.transition
+                    )
+                    headerComponents.append({
+                        context.add(wearButton
+                            .position(CGPoint(x: sideInset + buttonWidth / 2.0, y: headerHeight - buttonHeight / 2.0 - headerButtonsBottomInset))
+                            .appear(.default(scale: true, alpha: true))
+                            .disappear(.default(scale: true, alpha: true))
+                        )
+                    })
+                    } else if astraCustomAction != nil {
+                        // Another user's visual gift: no buttons.
+                    } else if displaysHeaderButtons {
                         var canTransfer = true
                         var canResell = true
                         
@@ -5618,6 +5650,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     controller.openChatTheme?()
                                 } else if let addressToOpen {
                                     state?.openAddress(addressToOpen)
+                                } else if let customAction = (controller() as? GiftViewScreen)?.customAction {
+                                    // AstraGram: a visual gift is hidden through AstraGram's server.
+                                    customAction.setHidden?(!toggledSavedToProfile)
+                                    state?.dismiss(animated: true)
                                 } else {
                                     state?.updateSavedToProfile(toggledSavedToProfile)
                                     Queue.mainQueue().after(0.6, {
@@ -6195,7 +6231,9 @@ private final class GiftViewSheetContent: CombinedComponent {
             ))
             
             var rightControlItems: [GlassControlGroupComponent.Item] = []
-            if uniqueGift != nil && !showWearPreview && !isDismantled {
+            // AstraGram: a visual gift has none of Telegram's menu (sharing, crafting, selling).
+            let astraIsVisualGift = (controller() as? GiftViewScreen)?.customAction != nil
+            if uniqueGift != nil && !showWearPreview && !isDismantled && !astraIsVisualGift {
                 if let _ = component.subject.arguments?.canCraftDate {
                     rightControlItems.append(GlassControlGroupComponent.Item(
                         id: AnyHashable("craft"),
@@ -6220,7 +6258,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
                 ))
             }
-            if uniqueGift == nil && !showUpgradePreview && state.canDeleteGift {
+            if uniqueGift == nil && !showUpgradePreview && state.canDeleteGift && !astraIsVisualGift {
                 rightControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("more"),
                     content: .animation("anim_morewide"),
@@ -6952,10 +6990,17 @@ public class GiftViewScreen: ViewControllerComponentContainer {
     public struct CustomAction {
         public let title: String
         public let action: () -> Void
+        /// AstraGram: a visual gift's own wearing and hiding, in place of Telegram's (nil: not offered).
+        public let wear: (() -> Void)?
+        public let isWorn: Bool
+        public let setHidden: ((Bool) -> Void)?
         
-        public init(title: String, action: @escaping () -> Void) {
+        public init(title: String, action: @escaping () -> Void, wear: (() -> Void)? = nil, isWorn: Bool = false, setHidden: ((Bool) -> Void)? = nil) {
             self.title = title
             self.action = action
+            self.wear = wear
+            self.isWorn = isWorn
+            self.setHidden = setHidden
         }
     }
     

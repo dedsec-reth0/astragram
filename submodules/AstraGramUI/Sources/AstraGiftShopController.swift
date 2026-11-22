@@ -189,8 +189,8 @@ final class AstraGiftShopController: UIViewController, UICollectionViewDataSourc
         let isRussian = self.isRussian
         let name = giftTo.compactDisplayTitle
         let title = gift.title ?? self.text("подарок", "gift")
-        let give = { [weak self] in
-            AstraVisualGifts.give(context: context, to: giftTo.id, gift: gift.id, completion: { result in
+        let give = { [weak self] (caption: String, anonymous: Bool) in
+            AstraVisualGifts.give(context: context, to: giftTo.id, gift: gift.id, text: caption, anonymous: anonymous, completion: { result in
                 let text: String
                 switch result {
                 case .given:
@@ -207,27 +207,25 @@ final class AstraGiftShopController: UIViewController, UICollectionViewDataSourc
             })
         }
         let linked = AstraStreakBot.isLinked(accountPeerId: context.account.peerId)
-        let alert = UIAlertController(
+        astraAskCaption(
             title: self.text("Подарить «\(title)»?", "Give \"\(title)\"?"),
             message: linked
-                ? self.text("Подарок бесплатный и визуальный: он появится в профиле \(name) с пометкой «AstraGram» и вашим именем, видят его только пользователи AstraGram. В чат с \(name) уйдёт сообщение о подарке.", "The gift is free and visual: it shows on \(name)'s profile with an \"AstraGram\" ribbon and your name, and only AstraGram users see it. A message about the gift goes to your chat with \(name).")
-                : self.text("Подарок бесплатный и визуальный: он появится в профиле \(name) с пометкой «AstraGram» и вашим именем. Для этого AstraGram подключит бота огоньков @\(AstraStreakBot.username) (без сообщений в его чат): серверу уходят ваш Telegram ID, ID \(name) и номер подарка. В чат с \(name) уйдёт сообщение о подарке.", "The gift is free and visual: it shows on \(name)'s profile with an \"AstraGram\" ribbon and your name. For this AstraGram connects the streak bot @\(AstraStreakBot.username) (with no message in its chat): the server gets your Telegram ID, \(name)'s ID and the gift number."),
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: self.text("Отмена", "Cancel"), style: .cancel, handler: nil))
-        alert.addAction(UIAlertAction(title: self.text("Подарить", "Give"), style: .default, handler: { _ in
-            if linked {
-                give()
-            } else {
-                AstraStreakBot.linkSilently(context: context, completion: { _ in
-                    // The server may take a moment to know the new token: the gift goes a moment later.
-                    Queue.mainQueue().after(5.0, {
-                        give()
+                ? self.text("Подарок бесплатный и визуальный: он появится в профиле \(name) с пометкой «AstraGram», видят его только пользователи AstraGram. Анонимно — ваше имя увидит только \(name). В чат с \(name) уйдёт сообщение о подарке.", "The gift is free and visual: it shows on \(name)'s profile with an \"AstraGram\" ribbon, and only AstraGram users see it. Anonymously — only \(name) sees your name. A message about the gift goes to your chat with \(name).")
+                : self.text("Подарок бесплатный и визуальный: он появится в профиле \(name) с пометкой «AstraGram». Для этого AstraGram подключит бота огоньков @\(AstraStreakBot.username) (без сообщений в его чат): серверу уходят ваш Telegram ID, ID \(name), номер подарка и подпись. В чат с \(name) уйдёт сообщение о подарке.", "The gift is free and visual: it shows on \(name)'s profile with an \"AstraGram\" ribbon. For this AstraGram connects the streak bot @\(AstraStreakBot.username) (with no message in its chat): the server gets your Telegram ID, \(name)'s ID, the gift number and the caption."),
+            isRussian: isRussian,
+            done: { caption, anonymous in
+                if linked {
+                    give(caption, anonymous)
+                } else {
+                    AstraStreakBot.linkSilently(context: context, completion: { _ in
+                        // The server may take a moment to know the new token: the gift goes a moment later.
+                        Queue.mainQueue().after(5.0, {
+                            give(caption, anonymous)
+                        })
                     })
-                })
+                }
             }
-        }))
-        self.present(alert, animated: true)
+        )
     }
 
     private func toggle(_ id: Int64) {
@@ -326,26 +324,49 @@ public func astraOpenGiftShop(context: AccountContext, giftTo: EnginePeer? = nil
     top.present(navigation, animated: true)
 }
 
-/// The action of a visual gift's screen: take it off one's own profile, or give a gift to the profile's owner.
-public func astraVisualGiftAction(context: AccountContext, peerId: EnginePeer.Id, item: ProfileGiftsContext.State.StarGift) -> (title: String, action: () -> Void)? {
+/// The action of a visual gift's screen: on one's own profile, a menu with what Telegram's own gifts can do (upgrade,
+/// wear, pin, hide, pass on, remove); on someone else's, giving them a gift. `push` shows a screen (picking whom to pass
+/// the gift to), `open` the gift's screen again (after an upgrade, to show what it became).
+public struct AstraVisualGiftAction {
+    public let title: String
+    public let action: () -> Void
+    /// The gift's screen offers wearing it (one's own gifts).
+    public let wear: (() -> Void)?
+    public let isWorn: Bool
+    public let setHidden: ((Bool) -> Void)?
+}
+
+public func astraVisualGiftAction(context: AccountContext, peerId: EnginePeer.Id, item: ProfileGiftsContext.State.StarGift, push: @escaping (ViewController) -> Void = { _ in }, open: @escaping (ProfileGiftsContext.State.StarGift) -> Void = { _ in }) -> AstraVisualGiftAction? {
     let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
     let accountPeerId = context.account.peerId
     if peerId == accountPeerId {
         guard let entry = AstraVisualGifts.entry(accountPeerId: accountPeerId, peerId: peerId, item: item) else {
             return nil
         }
-        return (title: isRussian ? "Убрать из профиля" : "Remove from Profile", action: {
-            if let received = entry.received {
-                AstraVisualGifts.hideReceived(context: context, id: received.id, completion: { _ in })
-            } else {
-                AstraVisualGifts.removeMine(context: context, gift: entry.gift)
-            }
+        let isWorn = AstraVisualGifts.wornEntry(context: context)?.ref == entry.ref
+        return AstraVisualGiftAction(title: isRussian ? "Управлять подарком" : "Manage Gift", action: {
+            // After the gift's screen has gone.
+            Queue.mainQueue().after(0.4, {
+                astraManageVisualGift(context: context, entry: entry, push: push, open: open)
+            })
+        }, wear: {
+            Queue.mainQueue().after(0.4, {
+                astraWearVisualGift(context: context, entry: isWorn ? nil : entry)
+            })
+        }, isWorn: isWorn, setHidden: { hidden in
+            AstraVisualGifts.setHidden(context: context, entry: entry, hidden: hidden, completion: { result in
+                if case .done = result {
+                    astraToast(context: context, hidden ? (isRussian ? "Подарок скрыт: его видите только вы" : "The gift is hidden: only you see it") : (isRussian ? "Подарок снова виден в профиле" : "The gift shows on your profile again"))
+                } else {
+                    astraChangeFailed(context: context, result, isRussian: isRussian)
+                }
+            })
         })
     }
     guard peerId.namespace == Namespaces.Peer.CloudUser else {
         return nil
     }
-    return (title: isRussian ? "Подарить бесплатно" : "Give a Free Gift", action: {
+    return AstraVisualGiftAction(title: isRussian ? "Подарить бесплатно" : "Give a Free Gift", action: {
         let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
         |> deliverOnMainQueue).start(next: { peer in
             guard let peer else {
@@ -356,5 +377,194 @@ public func astraVisualGiftAction(context: AccountContext, peerId: EnginePeer.Id
                 astraOpenGiftShop(context: context, giftTo: peer)
             })
         })
+    }, wear: nil, isWorn: false, setHidden: nil)
+}
+
+private func astraToast(context: AccountContext, _ text: String) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    context.sharedContext.mainWindow?.present(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: text, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }), on: .root, blockInteraction: false, completion: {})
+}
+
+private func astraPresent(_ controller: UIViewController) {
+    guard let top = astraTopViewController() else {
+        return
+    }
+    // iOS 26 draws an action sheet with a source as a narrow popover even on an iPhone: a source only on an iPad.
+    if UIDevice.current.userInterfaceIdiom == .pad, let popover = controller.popoverPresentationController {
+        popover.sourceView = top.view
+        popover.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.maxY - 60.0, width: 1.0, height: 1.0)
+        popover.permittedArrowDirections = []
+    }
+    top.present(controller, animated: true)
+}
+
+/// A failed change of a gift, said in a toast.
+private func astraChangeFailed(context: AccountContext, _ result: AstraVisualGifts.ChangeResult, isRussian: Bool) {
+    switch result {
+    case .done:
+        break
+    case .limit:
+        astraToast(context: context, isRussian ? "На сегодня подарки закончились: можно дарить до 20 в день" : "No more gifts today: up to 20 a day")
+    case .pinLimit:
+        astraToast(context: context, isRussian ? "Закрепить можно не больше \(AstraVisualGifts.maxPinned) подарков" : "You can pin up to \(AstraVisualGifts.maxPinned) gifts")
+    case .failed:
+        astraToast(context: context, isRussian ? "Не получилось. Проверьте интернет и попробуйте ещё раз" : "Couldn't do it. Check the connection and try again")
+    }
+}
+
+/// The menu of one of the account's own visual gifts.
+private func astraManageVisualGift(context: AccountContext, entry: AstraVisualGifts.Entry, push: @escaping (ViewController) -> Void, open: @escaping (ProfileGiftsContext.State.StarGift) -> Void) {
+    let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
+    func text(_ ru: String, _ en: String) -> String {
+        return isRussian ? ru : en
+    }
+    let isWorn = AstraVisualGifts.wornEntry(context: context)?.ref == entry.ref
+    let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+    if entry.meta.unique == nil {
+        sheet.addAction(UIAlertAction(title: text("Улучшить бесплатно", "Upgrade for Free"), style: .default, handler: { _ in
+            astraUpgradeVisualGift(context: context, entry: entry, open: open)
+        }))
+    }
+    sheet.addAction(UIAlertAction(title: isWorn ? text("Снять", "Take Off") : text("Надеть", "Wear"), style: .default, handler: { _ in
+        astraWearVisualGift(context: context, entry: isWorn ? nil : entry)
+    }))
+    if !entry.meta.isHidden {
+        sheet.addAction(UIAlertAction(title: entry.meta.isPinned ? text("Открепить", "Unpin") : text("Закрепить", "Pin"), style: .default, handler: { _ in
+            AstraVisualGifts.setPinned(context: context, entry: entry, pinned: !entry.meta.isPinned, completion: { result in
+                astraChangeFailed(context: context, result, isRussian: isRussian)
+            })
+        }))
+    }
+    sheet.addAction(UIAlertAction(title: entry.meta.isHidden ? text("Показать в профиле", "Show on Profile") : text("Скрыть из профиля", "Hide from Profile"), style: .default, handler: { _ in
+        let hidden = !entry.meta.isHidden
+        AstraVisualGifts.setHidden(context: context, entry: entry, hidden: hidden, completion: { result in
+            if case .done = result {
+                astraToast(context: context, hidden ? text("Подарок скрыт: его видите только вы", "The gift is hidden: only you see it") : text("Подарок снова виден в профиле", "The gift shows on your profile again"))
+            } else {
+                astraChangeFailed(context: context, result, isRussian: isRussian)
+            }
+        })
+    }))
+    sheet.addAction(UIAlertAction(title: text("Передать…", "Transfer…"), style: .default, handler: { _ in
+        astraTransferVisualGift(context: context, entry: entry, push: push)
+    }))
+    sheet.addAction(UIAlertAction(title: text("Убрать навсегда", "Remove for Good"), style: .destructive, handler: { _ in
+        if let received = entry.received {
+            AstraVisualGifts.hideReceived(context: context, id: received.id, completion: { _ in })
+        } else {
+            AstraVisualGifts.removeMine(context: context, gift: entry.gift)
+        }
+    }))
+    sheet.addAction(UIAlertAction(title: text("Отмена", "Cancel"), style: .cancel, handler: nil))
+    astraPresent(sheet)
+}
+
+private func astraUpgradeVisualGift(context: AccountContext, entry: AstraVisualGifts.Entry, open: @escaping (ProfileGiftsContext.State.StarGift) -> Void) {
+    let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
+    AstraVisualGifts.upgrade(context: context, entry: entry, completion: { result in
+        switch result {
+        case let .upgraded(look):
+            AstraHaptics.success()
+            astraToast(context: context, isRussian ? "Подарок улучшен: \(look.model), №\(look.number)" : "Gift upgraded: \(look.model), #\(look.number)")
+            // The gift's screen again, now as a unique gift.
+            let accountPeerId = context.account.peerId
+            let _ = (combineLatest(
+                context.engine.payments.cachedStarGifts() |> filter { $0 != nil } |> take(1),
+                AstraVisualGifts.attributes(context: context, giftIds: [entry.gift])
+            )
+            |> take(1)
+            |> deliverOnMainQueue).start(next: { catalog, attributes in
+                guard let updated = AstraVisualGifts.entries(accountPeerId: accountPeerId, peerId: accountPeerId).first(where: { $0.ref == entry.ref }) else {
+                    return
+                }
+                for gift in catalog ?? [] {
+                    if case let .generic(gift) = gift, gift.id == entry.gift {
+                        let unique = AstraVisualGifts.uniqueGift(gift: gift, look: look, attributes: attributes[entry.gift] ?? [], ownerPeerId: accountPeerId)
+                        let peer: EnginePeer? = nil
+                        open(AstraVisualGifts.item(gift: gift, entry: updated, fromPeer: peer, unique: unique))
+                    }
+                }
+            })
+        case .notUpgradable:
+            astraToast(context: context, isRussian ? "У этого подарка в Telegram нет уникальных версий" : "Telegram has no unique versions of this gift")
+        case .failed:
+            astraToast(context: context, isRussian ? "Не получилось улучшить. Проверьте интернет и попробуйте ещё раз" : "Couldn't upgrade. Check the connection and try again")
+        }
     })
+}
+
+private func astraWearVisualGift(context: AccountContext, entry: AstraVisualGifts.Entry?) {
+    let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
+    AstraVisualGifts.wear(context: context, entry: entry, completion: { result in
+        guard case .done = result else {
+            astraChangeFailed(context: context, result, isRussian: isRussian)
+            return
+        }
+        if entry == nil {
+            astraToast(context: context, isRussian ? "Подарок снят" : "The gift is off")
+            return
+        }
+        AstraHaptics.success()
+        // What people without AstraGram see is the account's own Telegram status, set apart from the gift.
+        let alert = UIAlertController(
+            title: isRussian ? "Подарок надет" : "Gift On",
+            message: isRussian
+                ? "Пользователи AstraGram видят этот подарок рядом с вашим именем. Остальные видят ваш обычный статус Telegram — его можно выбрать отдельно: нажмите на статус рядом со своим именем в профиле или в списке чатов."
+                : "AstraGram users see this gift beside your name. Everyone else sees your own Telegram status — pick it separately: tap the status beside your name on your profile or in the chat list.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
+        astraPresent(alert)
+    })
+}
+
+/// Asks for a caption and whether to hide the giver's name, then calls `done`.
+private func astraAskCaption(title: String, message: String, isRussian: Bool, done: @escaping (_ text: String, _ anonymous: Bool) -> Void) {
+    let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+    alert.addTextField { field in
+        field.placeholder = isRussian ? "Подпись (необязательно)" : "Caption (optional)"
+        field.autocapitalizationType = .sentences
+    }
+    let text = { () -> String in
+        return String((alert.textFields?.first?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).prefix(255))
+    }
+    alert.addAction(UIAlertAction(title: isRussian ? "От своего имени" : "With My Name", style: .default, handler: { _ in
+        done(text(), false)
+    }))
+    alert.addAction(UIAlertAction(title: isRussian ? "Анонимно" : "Anonymously", style: .default, handler: { _ in
+        done(text(), true)
+    }))
+    alert.addAction(UIAlertAction(title: isRussian ? "Отмена" : "Cancel", style: .cancel, handler: nil))
+    astraPresent(alert)
+}
+
+private func astraTransferVisualGift(context: AccountContext, entry: AstraVisualGifts.Entry, push: @escaping (ViewController) -> Void) {
+    let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
+    let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(context: context, filter: [.onlyPrivateChats, .excludeBots, .excludeSavedMessages, .excludeSecretChats, .excludeRecent, .doNotSearchMessages], hasContactSelector: false, title: isRussian ? "Передать подарок" : "Transfer Gift"))
+    controller.peerSelected = { [weak controller] peer, _ in
+        controller?.dismiss()
+        // A person, not a bot or Telegram's service account.
+        guard case let .user(user) = peer, user.botInfo == nil, peer.id != context.account.peerId, peer.id.id._internalGetInt64Value() != 777000 else {
+            return
+        }
+        let name = peer.compactDisplayTitle
+        Queue.mainQueue().after(0.4, {
+            astraAskCaption(
+                title: isRussian ? "Передать подарок \(name)?" : "Transfer the gift to \(name)?",
+                message: isRussian ? "Подарок уйдёт из вашего профиля в профиль \(name) вместе с улучшением. В чат с \(name) уйдёт сообщение о подарке." : "The gift leaves your profile for \(name)'s, with its upgrade. A message about it goes to your chat with \(name).",
+                isRussian: isRussian,
+                done: { text, anonymous in
+                    AstraVisualGifts.transfer(context: context, entry: entry, to: peer.id, text: text, anonymous: anonymous, completion: { result in
+                        if case .done = result {
+                            AstraHaptics.success()
+                            astraToast(context: context, isRussian ? "Подарок передан \(name)" : "The gift went to \(name)")
+                        } else {
+                            astraChangeFailed(context: context, result, isRussian: isRussian)
+                        }
+                    })
+                }
+            )
+        })
+    }
+    push(controller)
 }
