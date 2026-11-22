@@ -13,6 +13,9 @@ import os
 import shutil
 import sqlite3
 import subprocess
+import hmac
+import time
+import urllib.parse
 import sys
 import tempfile
 
@@ -38,6 +41,18 @@ def handle(req):
     op = req['op']
     if op == 'sha256':
         return hashlib.sha256(bytes(req['bytes'])).hexdigest()
+    if op == 'hmac':
+        return list(hmac.new(bytes(req['key']), bytes(req['bytes']), hashlib.sha256).digest())
+    if op == 'webappdata':
+        # Signed the way Telegram's documentation describes (bot token 'x', as in the test env).
+        fields = {'auth_date': str(int(time.time()) - req.get('age', 0)), 'query_id': 'AAE',
+                  'user': json.dumps({'id': req['id'], 'first_name': 'Тест'}, ensure_ascii=False, separators=(',', ':'))}
+        check = '\n'.join(f'{k}={v}' for k, v in sorted(fields.items()))
+        secret = hmac.new(b'WebAppData', b'x', hashlib.sha256).digest()
+        fields['hash'] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+        if req.get('forge'):
+            fields['user'] = fields['user'].replace(str(req['id']), str(req['forge']))
+        return urllib.parse.urlencode(fields)
     if op == 'reset':
         # The server refuses a sync within 20 s of the last one.
         db.execute('UPDATE owners SET last_sync = 0')

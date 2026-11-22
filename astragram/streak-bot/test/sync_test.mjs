@@ -15,7 +15,21 @@ globalThis.crypto = { subtle: { digest: async (_alg, data) => {
   const out = new Uint8Array(32);
   for (let i = 0; i < 32; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
   return out.buffer;
-} } };
+},
+  importKey: async (_f, keyBytes) => Array.from(keyBytes),
+  sign: async (_alg, key, data) => new Uint8Array(call({ op: 'hmac', key, bytes: Array.from(data) })).buffer,
+} };
+globalThis.URLSearchParams = class {
+  constructor(s) {
+    this.list = s.split('&').filter(Boolean).map((p) => {
+      const i = p.indexOf('=');
+      const dec = (x) => decodeURIComponent(x.replace(/\+/g, ' '));
+      return i < 0 ? [dec(p), ''] : [dec(p.slice(0, i)), dec(p.slice(i + 1))];
+    });
+  }
+  get(k) { const e = this.list.find((x) => x[0] === k); return e ? e[1] : null; }
+  [Symbol.iterator]() { return this.list[Symbol.iterator](); }
+};
 globalThis.URL = class {
   constructor(u) {
     const m = u.match(/^(https?:\/\/[^/]+)(\/[^?]*)?/);
@@ -206,6 +220,19 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   await sync('A', { v: 2, pairs: [{ ...pair(1, 20400), restored: [20419, 20420, 99999, 1, 'x'] }] });
   r = await sync('B', { v: 2, pairs: [pair(1, 20400)] });
   check('restored days shared', (r.body.restored || []).filter((x) => x.friend === 1).map((x) => x.day).sort(), [20419]);
+
+  // 9f. Linking with Telegram's signed web-app data: no message to the bot.
+  const D = 'd'.repeat(48);
+  const login = (initData, token = D) => post('/api/login', { initData }, { authorization: 'Bearer ' + token });
+  r = await login(call({ op: 'webappdata', id: 300 }));
+  check('signed login links', [r.status, r.body.id], [200, 300]);
+  check('owner row for the new token', q('SELECT tg_id FROM owners WHERE token_hash = ?', [call({ op: 'sha256', bytes: Array.from(new TextEncoder().encode(D)) })])[0].tg_id, 300);
+  r = await login(call({ op: 'webappdata', id: 300, forge: 100 }), 'e'.repeat(48));
+  check('changed user refused', r.status, 403);
+  r = await login(call({ op: 'webappdata', id: 300, age: 3600 }), 'e'.repeat(48));
+  check('old data refused', r.status, 403);
+  r = await login('hash=00&user=1', 'e'.repeat(48));
+  check('junk refused', r.status, 403);
 
   // 10. Unlink forgets the list.
   call({ op: 'reset' });

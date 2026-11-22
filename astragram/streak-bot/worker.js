@@ -551,6 +551,66 @@ async function handleUnlink(request, env) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// Linking without the bot's chat: the app asks Telegram for the bot's web-app data (messages.requestSimpleWebView),
+// which Telegram signs with a key made from the bot token and which names the account. Nothing is sent to the bot's
+// chat. The app's new token (in Authorization) is tied to the Telegram ID the signed data names.
+const LOGIN_MAX_AGE = 600;
+
+async function hmac(keyBytes, text) {
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(text)));
+}
+
+// The user ({id, first_name, ...}) the web-app data names, or null when the signature or its age does not hold.
+async function verifiedWebAppUser(env, initData, t) {
+  if (typeof initData !== 'string' || initData.length > 4096) return null;
+  const params = new URLSearchParams(initData);
+  const hash = params.get('hash');
+  if (!hash || !/^[0-9a-f]{64}$/.test(hash)) return null;
+  const lines = [];
+  for (const [key, value] of params) {
+    if (key !== 'hash') lines.push(`${key}=${value}`);
+  }
+  lines.sort();
+  const secret = await hmac(new TextEncoder().encode('WebAppData'), env.BOT_TOKEN);
+  const signed = [...await hmac(secret, lines.join('\n'))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  if (signed !== hash) return null;
+  const authDate = Number(params.get('auth_date'));
+  if (!Number.isFinite(authDate) || Math.abs(t - authDate) > LOGIN_MAX_AGE) return null;
+  try {
+    const user = JSON.parse(params.get('user') || '');
+    return user && Number.isSafeInteger(user.id) && user.id > 0 ? user : null;
+  } catch {
+    return null;
+  }
+}
+
+async function handleLogin(request, env) {
+  const auth = request.headers.get('authorization') || '';
+  const match = auth.match(/^Bearer ([0-9a-f]{48})$/);
+  if (!match) return json({ ok: false, error: 'token' }, 400);
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ ok: false, error: 'body' }, 400);
+  }
+  const t = now();
+  const user = await verifiedWebAppUser(env, body && body.initData, t);
+  if (!user) return json({ ok: false, error: 'signature' }, 403);
+  await linkOwner(env, await sha256Hex(match[1]), user.id, user.first_name, t);
+  return json({ ok: true, id: user.id });
+}
+
+// Up to 5 linked devices per account (a phone and an iPad must not keep unlinking each other): the oldest go.
+async function linkOwner(env, hash, tgId, firstName, t) {
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM owners WHERE tg_id = ? AND token_hash NOT IN (SELECT token_hash FROM owners WHERE tg_id = ? ORDER BY created_at DESC LIMIT 4)').bind(tgId, tgId),
+    env.DB.prepare('INSERT OR REPLACE INTO owners (token_hash, tg_id, name, created_at) VALUES (?, ?, ?, ?)').bind(hash, tgId, cleanName(firstName), t),
+  ]);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 // The bot
 
 async function streaksMessage(env, userId, ru) {
@@ -599,12 +659,7 @@ async function handleMessage(env, message) {
 
   const link = text.match(/^\/start l([0-9a-f]{48})$/);
   if (link) {
-    const hash = await sha256Hex(link[1]);
-    // Up to 5 linked devices per account (a phone and an iPad must not keep unlinking each other): the oldest go.
-    await env.DB.batch([
-      env.DB.prepare('DELETE FROM owners WHERE tg_id = ? AND token_hash NOT IN (SELECT token_hash FROM owners WHERE tg_id = ? ORDER BY created_at DESC LIMIT 4)').bind(from.id, from.id),
-      env.DB.prepare('INSERT OR REPLACE INTO owners (token_hash, tg_id, name, created_at) VALUES (?, ?, ?, ?)').bind(hash, from.id, cleanName(from.first_name), t),
-    ]);
+    await linkOwner(env, await sha256Hex(link[1]), from.id, from.first_name, t);
     await tg(env, 'sendMessage', {
       chat_id: from.id,
       text: ru
@@ -1009,6 +1064,9 @@ export default {
     if (request.method === 'POST' && url.pathname === '/api/feedback') return handleFeedback(request, env);
     if (request.method === 'POST' && url.pathname === '/api/donate') return handleDonate(request, env);
     if (request.method === 'POST' && url.pathname === '/api/unlink') return handleUnlink(request, env);
+    if (request.method === 'POST' && url.pathname === '/api/login') return handleLogin(request, env);
+    // The page the signed web-app data is requested for: the app reads the data from the address and never opens it.
+    if (url.pathname === '/webapp') return new Response('<!doctype html><title>AstraGram</title>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
     if (url.pathname === '/setup') return handleSetup(url, env);
     if (url.pathname === '/') return new Response('AstraGram streak bot', { headers: { 'content-type': 'text/plain; charset=utf-8' } });
     return new Response('not found', { status: 404 });
