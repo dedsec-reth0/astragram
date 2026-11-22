@@ -1,0 +1,81 @@
+name: Channel post
+
+# Posts an update to the Telegram channel @astragram_news through the AstraGram bot (@infoastragram_bot, an admin of
+# the channel with "post messages" rights). A post is a folder posts/<version>/ with
+#   cover.jpg   - the picture (1280x720)
+#   caption.txt - the text, plain, up to 1024 characters (longer text goes out as a separate message after the photo)
+# Adding a new caption.txt to this branch posts it once. Re-post by hand with "Run workflow" and the folder name.
+
+on:
+  push:
+    branches: [tiktok-videos]
+    paths: ['posts/**']
+  workflow_dispatch:
+    inputs:
+      post:
+        description: 'Folder under posts/ to post again (for example 1.0.29)'
+        required: true
+
+concurrency:
+  group: channel-post
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BOT_TOKEN: ${{ secrets.STREAK_BOT_TOKEN }}
+      CHANNEL: '@astragram_news'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Find new posts
+        id: find
+        env:
+          BEFORE: ${{ github.event.before }}
+          INPUT_POST: ${{ github.event.inputs.post }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_POST:-}" ]; then
+            dirs="posts/$INPUT_POST"
+          elif [ -z "${BEFORE:-}" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            dirs=$(git ls-files 'posts/*/caption.txt' | xargs -r -n1 dirname)
+          else
+            dirs=$(git diff --name-only --diff-filter=A "$BEFORE" HEAD -- 'posts/*/caption.txt' | xargs -r -n1 dirname)
+          fi
+          echo "dirs=$(echo $dirs)" >> "$GITHUB_OUTPUT"
+          echo "Posts to send: ${dirs:-none}"
+
+      - name: Send
+        if: steps.find.outputs.dirs != ''
+        env:
+          DIRS: ${{ steps.find.outputs.dirs }}
+        run: |
+          set -euo pipefail
+          [ -n "$BOT_TOKEN" ] || { echo "::error::STREAK_BOT_TOKEN secret is missing"; exit 1; }
+          api="https://api.telegram.org/bot$BOT_TOKEN"
+          for d in $DIRS; do
+            [ -f "$d/caption.txt" ] || { echo "::error::$d/caption.txt not found"; exit 1; }
+            len=$(python3 -c "import sys;print(len(open(sys.argv[1],encoding='utf-8').read().strip()))" "$d/caption.txt")
+            echo "$d: caption $len characters"
+            if [ -f "$d/cover.jpg" ] && [ "$len" -le 1024 ]; then
+              res=$(curl -sS -X POST "$api/sendPhoto" --form-string "chat_id=$CHANNEL" -F "photo=@$d/cover.jpg" --form-string "caption=$(cat "$d/caption.txt")")
+            elif [ -f "$d/cover.jpg" ]; then
+              res=$(curl -sS -X POST "$api/sendPhoto" --form-string "chat_id=$CHANNEL" -F "photo=@$d/cover.jpg")
+              echo "$res" | jq -e '.ok' >/dev/null || { echo "::error::$d photo: $(echo "$res" | jq -r '.description')"; exit 1; }
+              res=$(curl -sS -X POST "$api/sendMessage" --form-string "chat_id=$CHANNEL" --form-string "text=$(cat "$d/caption.txt")")
+            else
+              res=$(curl -sS -X POST "$api/sendMessage" --form-string "chat_id=$CHANNEL" --form-string "text=$(cat "$d/caption.txt")")
+            fi
+            if echo "$res" | jq -e '.ok' >/dev/null; then
+              echo "::notice::$d posted: https://t.me/astragram_news/$(echo "$res" | jq -r '.result.message_id')"
+            else
+              echo "::error::$d: $(echo "$res" | jq -r '.description')"; exit 1
+            fi
+          done
