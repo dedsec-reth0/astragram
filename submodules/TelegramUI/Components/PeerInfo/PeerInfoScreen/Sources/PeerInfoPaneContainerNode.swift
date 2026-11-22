@@ -947,12 +947,31 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         return result
     }
 
+    private var astraPaneTheme: (tint: UIColor, base: PresentationTheme, theme: PresentationTheme)?
+
+    private func astraPanePresentationData(_ presentationData: PresentationData) -> PresentationData {
+        guard let tint = self.astraTint else {
+            return presentationData
+        }
+        if let current = self.astraPaneTheme, current.tint == tint, current.base === presentationData.theme {
+            return presentationData.withUpdated(theme: current.theme)
+        }
+        // White texts read on a color; a light theme's dark ones would not.
+        let base = presentationData.theme.overallDarkAppearance ? presentationData.theme : defaultDarkColorPresentationTheme
+        let card = tint.mixedWith(.white, alpha: 0.09)
+        let list = base.list.withUpdated(blocksBackgroundColor: tint, plainBackgroundColor: tint, itemBlocksBackgroundColor: card)
+        let theme = PresentationTheme(name: base.name, index: base.index, referenceTheme: base.referenceTheme, overallDarkAppearance: base.overallDarkAppearance, intro: base.intro, passcode: base.passcode, rootController: base.rootController, list: list, chatList: base.chatList, chat: base.chat, actionSheet: base.actionSheet, contextMenu: base.contextMenu, inAppNotification: base.inAppNotification, chart: base.chart, preview: base.preview)
+        self.astraPaneTheme = (tint, presentationData.theme, theme)
+        return presentationData.withUpdated(theme: theme)
+    }
+
     /// AstraGram: the profile's surface color (nil: the theme's background).
     var astraTint: UIColor? {
         didSet {
             if let astraTint {
                 self.backgroundColor = astraTint
-            } else if let (size, sideInset, topInset, bottomInset, deviceMetrics, visibleHeight, expansionFraction, presentationData, data, areTabsHidden, disableTabSwitching, navigationHeight) = self.currentParams {
+            }
+            if let (size, sideInset, topInset, bottomInset, deviceMetrics, visibleHeight, expansionFraction, presentationData, data, areTabsHidden, disableTabSwitching, navigationHeight) = self.currentParams {
                 self.update(size: size, sideInset: sideInset, topInset: topInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, expansionFraction: expansionFraction, presentationData: presentationData, data: data, areTabsHidden: areTabsHidden, disableTabSwitching: disableTabSwitching, navigationHeight: navigationHeight, transition: .immediate)
             }
         }
@@ -1003,6 +1022,8 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         }
         
         self.currentParams = (size, sideInset, topInset, bottomInset, deviceMetrics, visibleHeight, expansionFraction, presentationData, data, areTabsHidden, disableTabSwitching, navigationHeight)
+        // AstraGram: on a colored profile the panes (the gifts' background and cards among them) take the surface's color.
+        let presentationData = self.astraPanePresentationData(presentationData)
         
         let backgroundColor: UIColor
         if self.currentPaneKey == .gifts {
