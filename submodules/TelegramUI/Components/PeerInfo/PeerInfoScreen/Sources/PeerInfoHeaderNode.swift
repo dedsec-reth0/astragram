@@ -136,6 +136,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     private let astraFlowOverlay = UIView()
     /// AstraGram: the rest of the profile takes on the flowing color too (nil: back to the theme).
     var astraFlowTintUpdated: ((UIColor?) -> Void)?
+    /// AstraGram: how strong the music's vignette is now (0: none).
+    var astraMusicVignetteUpdated: ((CGFloat) -> Void)?
     private var astraBubbleGifts: (EnginePeer.Id, Signal<[ProfileGiftsContext.State.StarGift], NoError>)?
     var didSetupBackgroundCover = false
     let buttonsContainerNode: SparseNode
@@ -3287,38 +3289,16 @@ extension PeerInfoHeaderNode {
             self.astraMusicMoodAmount = max(target, self.astraMusicMoodAmount - dt / 1.0)
         }
         self.astraMusicMoodTime += dt
-        // Deep blue, teal, green, olive, amber, graphite, wine: each glides into the next.
-        let palette: [UInt32] = [0x24406e, 0x1f5a66, 0x22603e, 0x57581f, 0x7a531c, 0x26282c, 0x6c2442]
-        let position = self.astraMusicMoodTime / 2.8
-        let index = Int(position) % palette.count
-        let fraction = position - floor(position)
-        let eased = fraction * fraction * (3.0 - 2.0 * fraction)
-        let mood = UIColor(rgb: palette[index]).mixedWith(UIColor(rgb: palette[(index + 1) % palette.count]), alpha: eased)
-        let amount = self.astraMusicMoodAmount
-
-        let overlay = self.astraFlowOverlay
-        if overlay.superview !== self.backgroundBannerView {
-            overlay.isUserInteractionEnabled = false
-            overlay.layer.compositingFilter = nil
-            self.backgroundBannerView.addSubview(overlay)
-        }
-        overlay.frame = self.backgroundBannerView.bounds
-        overlay.isHidden = amount <= 0.0
-        // The cover's pattern still shows through a little.
-        overlay.backgroundColor = mood.withAlphaComponent(0.9 * amount)
-
-        if amount <= 0.0 {
-            self.astraMusicMoodColor = nil
-            self.astraFlowTintUpdated?(self.astraSurface)
-            if !self.astraMusicMoodPlaying {
-                self.astraMusicMoodLink?.invalidate()
-                self.astraMusicMoodLink = nil
-            }
-        } else {
-            let base = self.astraSurface ?? ((self.presentationData?.theme.overallDarkAppearance ?? true) ? UIColor.black : UIColor(rgb: 0xefeff4))
-            let color = base.mixedWith(mood, alpha: amount)
-            self.astraMusicMoodColor = color
-            self.astraFlowTintUpdated?(color)
+        // The profile keeps its color; a vignette closes in around the avatar and flickers a little with the beat.
+        let t = self.astraMusicMoodTime
+        let beat = 60.0 / 112.0
+        let phase = t.truncatingRemainder(dividingBy: beat) / beat
+        let flicker = 0.84 + 0.1 * exp(-phase * 6.0) + 0.04 * sin(t * 23.0) + 0.02 * sin(t * 41.0 + 1.0)
+        self.astraMusicVignetteUpdated?(self.astraMusicMoodAmount * flicker)
+        self.astraFlowOverlay.isHidden = true
+        if self.astraMusicMoodAmount <= 0.0 && !self.astraMusicMoodPlaying {
+            self.astraMusicMoodLink?.invalidate()
+            self.astraMusicMoodLink = nil
         }
     }
 

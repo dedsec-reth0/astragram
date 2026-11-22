@@ -32,6 +32,7 @@ final class AstraGiftBubblesView: UIView {
         var restDistance: CGFloat = 0.0
         var nextMoveTime: CGFloat = 0.0
         var snapUntil: CGFloat = 0.0
+        var whirlUntil: CGFloat = 0.0
         var position: CGPoint = .zero
         var velocity: CGPoint = .zero
         var radius: CGFloat
@@ -165,6 +166,9 @@ final class AstraGiftBubblesView: UIView {
             return
         }
         self.musicPlaying = playing
+        for bubble in self.bubbles {
+            bubble.nextMoveTime = self.time + CGFloat.random(in: 2.0 ..< 6.0)
+        }
         if playing {
             self.musicTime = 0.0
             self.lastBeatIndex = -1
@@ -242,7 +246,7 @@ final class AstraGiftBubblesView: UIView {
     /// The ring around the avatar, in the bubbles' colors (hidden over an expanded photo).
     private func updateRing() {
         let colors = self.bubbles.map { AstraGiftBubbleView.colors(gift: $0.gift).0 }
-        let visible = !self.soap && !colors.isEmpty && self.avatarRadius > 10.0 && self.avatarRadius < 80.0
+        let visible = false && !colors.isEmpty
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         if visible {
@@ -299,10 +303,20 @@ final class AstraGiftBubblesView: UIView {
             if beatIndex != self.lastBeatIndex {
                 self.lastBeatIndex = beatIndex
                 self.beatsSinceCycle += 1
-                // Every two bars, the next gift's colors.
-                if self.beatsSinceCycle >= 8 && !self.bubbles.isEmpty && self.dragged == nil {
+                // Every bar the bubbles whirl a third of the way around the avatar, clockwise, and hang there until
+                // the next one (as in the concept).
+                if self.beatsSinceCycle >= 4 && !self.bubbles.isEmpty {
                     self.beatsSinceCycle = 0
-                    self.cycleIndex = (self.cycleIndex + 1) % self.bubbles.count
+                    let turn = CGFloat.random(in: 1.7 ..< 2.4)
+                    for bubble in self.bubbles where bubble !== self.dragged {
+                        if bubble.restDistance <= 0.0 {
+                            bubble.restAngle = bubble.homeAngle
+                        }
+                        bubble.restAngle += turn + CGFloat.random(in: -0.25 ..< 0.25)
+                        bubble.restDistance = self.avatarRadius * CGFloat.random(in: 1.05 ..< 1.8)
+                        bubble.whirlUntil = self.time + 0.75
+                        bubble.nextMoveTime = self.time + 30.0
+                    }
                 }
             }
         } else {
@@ -374,8 +388,9 @@ final class AstraGiftBubblesView: UIView {
                 // A soft, slow pull: it glides there rather than jumps.
                 // (Let go, or just out of the avatar, it snaps back with a bounce first.)
                 let snapping = self.time < bubble.snapUntil
-                let pull: CGFloat = snapping ? 26.0 : 1.6
-                let damping: CGFloat = snapping ? 5.5 : 2.4
+                let whirling = self.time < bubble.whirlUntil
+                let pull: CGFloat = snapping ? 26.0 : (whirling ? 30.0 : 1.6)
+                let damping: CGFloat = snapping ? 5.5 : (whirling ? 8.0 : 2.4)
                 force.x += (rest.x + wander.x - bubble.position.x) * pull - bubble.velocity.x * damping
                 force.y += (rest.y + wander.y - bubble.position.y) * pull - bubble.velocity.y * damping
                 // Not deep into the avatar (its edge is fine).
@@ -441,7 +456,7 @@ final class AstraGiftBubblesView: UIView {
             bubble.radiusVelocity += radiusForce * dt
             bubble.radius = max(1.0, bubble.radius + bubble.radiusVelocity * dt)
             // Squash and stretch along the motion, a spring that keeps wobbling after it stops.
-            let speedFactor: CGFloat = 0.00045
+            let speedFactor: CGFloat = 0.0006
             let target = CGPoint(x: bubble.velocity.x * speedFactor, y: bubble.velocity.y * speedFactor)
             let deformForce = CGPoint(x: (target.x - bubble.deform.x) * 220.0 - bubble.deformVelocity.x * 9.0, y: (target.y - bubble.deform.y) * 220.0 - bubble.deformVelocity.y * 9.0)
             bubble.deformVelocity.x += deformForce.x * dt
@@ -667,7 +682,7 @@ final class AstraGiftBubbleView: UIView {
 
         self.rimLayer.fillColor = UIColor.clear.cgColor
         self.rimLayer.strokeColor = UIColor(white: 1.0, alpha: 0.38).cgColor
-        self.rimLayer.lineWidth = 1.2
+        self.rimLayer.lineWidth = 1.6
         self.layer.addSublayer(self.rimLayer)
 
         self.shineLayer.type = .radial
@@ -739,7 +754,7 @@ final class AstraGiftBubbleView: UIView {
                 inner.mixedWith(.white, alpha: 0.25).withAlphaComponent(0.62).cgColor
             ]
             self.bodyLayer.locations = [0.0, 0.6, 1.0]
-            self.rimLayer.strokeColor = UIColor(white: 1.0, alpha: 0.6).cgColor
+            self.rimLayer.strokeColor = inner.mixedWith(.white, alpha: 0.7).withAlphaComponent(0.95).cgColor
         } else {
             self.bodyLayer.colors = [
                 inner.withMultipliedBrightnessBy(1.2).withAlphaComponent(0.62).cgColor,
@@ -747,7 +762,7 @@ final class AstraGiftBubbleView: UIView {
                 outer.withAlphaComponent(0.9).cgColor
             ]
             self.bodyLayer.locations = [0.0, 0.55, 1.0]
-            self.rimLayer.strokeColor = UIColor(white: 1.0, alpha: 0.38).cgColor
+            self.rimLayer.strokeColor = inner.mixedWith(.white, alpha: 0.55).withAlphaComponent(0.95).cgColor
         }
         self.spillLayer.isHidden = self.soap
         self.glowColor = inner
@@ -786,6 +801,11 @@ final class AstraGiftBubbleView: UIView {
             loopCount: nil
         )
         layer.isVisibleForAnimations = true
+        // A dark edge around the gift, so that it stands out from a bubble of its own color.
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOffset = .zero
+        layer.shadowRadius = 1.6
+        layer.shadowOpacity = 0.75
         self.layer.insertSublayer(layer, below: self.rimLayer)
         self.stickerLayer = layer
         self.setNeedsLayout()

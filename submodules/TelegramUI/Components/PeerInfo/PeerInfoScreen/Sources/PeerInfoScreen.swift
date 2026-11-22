@@ -1710,6 +1710,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.headerNode.astraFlowTintUpdated = { [weak self] color in
             self?.astraApplyFlowTint(color)
         }
+        self.headerNode.astraMusicVignetteUpdated = { [weak self] amount in
+            self?.astraApplyMusicVignette(amount)
+        }
         self.headerNode.requestUpdateLayout = { [weak self] animated in
             guard let strongSelf = self else {
                 return
@@ -6090,6 +6093,41 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     /// AstraGram: the profile's flowing color (the background and the cards), as in the concept.
     private var astraFlowTint: UIColor?
     
+    /// AstraGram: while the profile's music plays the edges of the screen darken around the avatar and flicker a little.
+    private var astraVignetteLayer: CAGradientLayer?
+
+    fileprivate func astraApplyMusicVignette(_ amount: CGFloat) {
+        if amount <= 0.001 {
+            self.astraVignetteLayer?.removeFromSuperlayer()
+            self.astraVignetteLayer = nil
+            return
+        }
+        let vignette: CAGradientLayer
+        if let current = self.astraVignetteLayer {
+            vignette = current
+        } else {
+            vignette = CAGradientLayer()
+            vignette.type = .radial
+            vignette.colors = [UIColor(white: 0.0, alpha: 0.0).cgColor, UIColor(white: 0.0, alpha: 0.12).cgColor, UIColor(white: 0.0, alpha: 0.5).cgColor, UIColor(white: 0.0, alpha: 0.78).cgColor]
+            vignette.locations = [0.0, 0.32, 0.7, 1.0]
+            vignette.zPosition = 1000.0
+            self.layer.addSublayer(vignette)
+            self.astraVignetteLayer = vignette
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let bounds = self.bounds
+        if vignette.frame != bounds {
+            vignette.frame = bounds
+            // Centered on the avatar, reaching the bottom corners.
+            let center = CGPoint(x: 0.5, y: 150.0 / max(1.0, bounds.height))
+            vignette.startPoint = center
+            vignette.endPoint = CGPoint(x: center.x + 1.05, y: center.y + 1.0)
+        }
+        vignette.opacity = Float(amount)
+        CATransaction.commit()
+    }
+
     /// The cards are glass over the surface: a little lighter on a dark profile, a little deeper on a light one.
     private func astraCardColor(_ surface: UIColor) -> UIColor {
         // See-through, so the cards follow the surface as its color moves (with the music).
