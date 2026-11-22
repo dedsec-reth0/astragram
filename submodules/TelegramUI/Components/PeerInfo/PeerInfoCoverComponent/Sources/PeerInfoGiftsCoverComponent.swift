@@ -158,6 +158,7 @@ public final class PeerInfoGiftsCoverComponent: Component {
         private var isUpdating = false
         
         fileprivate var astraBubbles: AstraGiftBubblesView?
+        fileprivate var astraBubblesHidden = false
         fileprivate var astraBubbleItems: [ProfileGiftsContext.State.StarGift] = []
         fileprivate var astraBubbleHomes: [PositionGenerator.Position] = []
         fileprivate var astraBubbleLayoutKey: String = ""
@@ -1040,17 +1041,8 @@ extension PeerInfoGiftsCoverComponent.View {
             self.addSubview(bubbles)
             self.astraBubbles = bubbles
         }
-        bubbles.touched = { [weak self] gift in
-            self?.componentValue?.astraBubbleTouched?(gift)
-        }
         bubbles.opened = { [weak self] gift in
             self?.componentValue?.action(gift)
-        }
-        bubbles.tintChanged = { [weak self] color in
-            self?.componentValue?.astraTintChanged?(color)
-        }
-        if self.astraBubbleItems.isEmpty {
-            component.astraTintChanged?(nil)
         }
 
         bubbles.frame = CGRect(origin: .zero, size: availableSize)
@@ -1100,17 +1092,29 @@ extension PeerInfoGiftsCoverComponent.View {
             homes: homes,
             avatarCenter: avatarCenter,
             avatarRadius: component.avatarSize.width / 2.0,
-            area: CGRect(x: 0.0, y: component.statusBarHeight, width: availableSize.width, height: max(0.0, component.defaultHeight - component.statusBarHeight))
+            area: CGRect(x: 0.0, y: component.statusBarHeight, width: availableSize.width, height: max(0.0, component.defaultHeight - component.statusBarHeight)),
+            soap: !component.context.sharedContext.currentPresentationData.with({ $0 }).theme.overallDarkAppearance
         )
         // As the header collapses into the bar, the bubbles fade into the avatar.
         let fraction = max(0.0, min(1.0, component.avatarTransitionFraction * 1.6))
-        bubbles.alpha = 1.0 - fraction
-        bubbles.isUserInteractionEnabled = fraction < 0.5
+        bubbles.alpha = self.astraBubblesHidden ? 0.0 : 1.0 - fraction
+        bubbles.isUserInteractionEnabled = fraction < 0.5 && !self.astraBubblesHidden
         return availableSize
     }
 
     /// AstraGram: the profile's music started or stopped playing: the bubbles pulse on the beat while it plays.
     public func astraSetMusicPlaying(_ playing: Bool) {
         self.astraBubbles?.setMusicPlaying(playing)
+    }
+
+    /// AstraGram: the bubbles fade away while the photo is expanded.
+    public func astraSetBubblesHidden(_ hidden: Bool) {
+        guard let bubbles = self.astraBubbles, self.astraBubblesHidden != hidden else {
+            return
+        }
+        self.astraBubblesHidden = hidden
+        UIView.animate(withDuration: 0.2, animations: {
+            bubbles.layer.opacity = hidden ? 0.0 : 1.0
+        })
     }
 }

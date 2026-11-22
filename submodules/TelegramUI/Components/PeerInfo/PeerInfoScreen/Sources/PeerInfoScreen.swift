@@ -5760,8 +5760,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     sectionNode = PeerInfoScreenItemSectionContainerNode()
                     self.regularSections[sectionId] = sectionNode
                     if let tint = self.astraFlowTint {
-                        let isDark = self.presentationData.theme.overallDarkAppearance
-                        sectionNode.astraTint = isDark ? tint.withMultiplied(hue: 1.0, saturation: 0.9, brightness: 0.62) : tint.mixedWith(.white, alpha: 0.72)
+                        sectionNode.astraTint = self.astraCardColor(tint)
                     }
                     self.scrollNode.insertSubnode(sectionNode, belowSubnode: self.paneContainerNode)
                     wasAdded = true
@@ -5778,7 +5777,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         contentHeight -= 16.0
                     }
                 }
-                let sectionHeight = sectionNode.update(context: self.context, width: sectionWidth, safeInsets: UIEdgeInsets(), hasCorners: !insets.left.isZero, presentationData: self.presentationData, items: sectionItems, transition: transition)
+                let sectionHeight = sectionNode.update(context: self.context, width: sectionWidth, safeInsets: UIEdgeInsets(), hasCorners: !insets.left.isZero, presentationData: self.astraSectionPresentationData, items: sectionItems, transition: transition)
                 let sectionFrame = CGRect(origin: CGPoint(x: insets.left, y: contentHeight), size: CGSize(width: sectionWidth, height: sectionHeight))
                 if additive {
                     transition.updateFrameAdditive(node: sectionNode, frame: sectionFrame)
@@ -6091,26 +6090,45 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     /// AstraGram: the profile's flowing color (the background and the cards), as in the concept.
     private var astraFlowTint: UIColor?
     
-    fileprivate func astraApplyFlowTint(_ color: UIColor?) {
-        self.astraFlowTint = color
-        let isDark = self.presentationData.theme.overallDarkAppearance
-        let cardColor: UIColor? = color.flatMap { color in
-            return isDark ? color.withMultiplied(hue: 1.0, saturation: 0.9, brightness: 0.62) : color.mixedWith(.white, alpha: 0.72)
+    /// The cards are glass over the surface: a little lighter on a dark profile, a little deeper on a light one.
+    private func astraCardColor(_ surface: UIColor) -> UIColor {
+        if self.presentationData.theme.overallDarkAppearance {
+            return surface.mixedWith(.white, alpha: 0.09)
+        } else {
+            return surface.mixedWith(UIColor(rgb: 0x2a1a6e), alpha: 0.16)
         }
+    }
+
+    /// On a colored surface the cards' texts are white, as in the concept: a light theme's dark texts would not read.
+    private var astraSectionPresentationData: PresentationData {
+        if self.astraFlowTint != nil {
+            return self.presentationData.withUpdated(theme: astraSurfaceTheme)
+        }
+        return self.presentationData
+    }
+
+    fileprivate func astraApplyFlowTint(_ color: UIColor?) {
+        let themeChanged = (self.astraFlowTint == nil) != (color == nil)
+        self.astraFlowTint = color
+        let cardColor: UIColor? = color.flatMap { self.astraCardColor($0) }
         for (_, section) in self.regularSections {
             section.astraTint = cardColor
         }
         self.updateBackgroundColor()
+        if themeChanged {
+            // Not from inside the header's layout, which reports the color.
+            DispatchQueue.main.async { [weak self] in
+                self?.requestLayout(animated: false)
+            }
+        }
     }
     
     private func updateBackgroundColor() {
-        if let tint = self.astraFlowTint, self.paneContainerNode.currentPaneKey != .gifts {
-            let isDark = self.presentationData.theme.overallDarkAppearance
-            let color = isDark ? tint.withMultiplied(hue: 1.0, saturation: 0.95, brightness: 0.42) : tint.mixedWith(.white, alpha: 0.55)
+        if let tint = self.astraFlowTint {
             if let expansionBackgroundView = self.expansionBackgroundView {
-                expansionBackgroundView.backgroundColor = color
+                expansionBackgroundView.backgroundColor = tint
             } else {
-                self.backgroundColor = color
+                self.backgroundColor = tint
             }
             return
         }
@@ -7797,3 +7815,6 @@ struct ClearPeerHistory {
         }
     }
 }
+
+/// AstraGram: the texts of the cards on a colored profile: white, the links too (a blue link does not read on a color).
+private let astraSurfaceTheme: PresentationTheme = customizeDefaultDarkPresentationTheme(theme: defaultDarkPresentationTheme, editing: false, title: nil, accentColor: UIColor(rgb: 0xffffff), backgroundColors: [], bubbleColors: [], animateBubbleColors: false, wallpaper: nil, baseColor: nil)

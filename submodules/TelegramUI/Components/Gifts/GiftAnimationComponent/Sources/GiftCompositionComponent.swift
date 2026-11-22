@@ -672,11 +672,11 @@ public final class GiftCompositionComponent: Component {
                         self.previewBackdropIndex = -1
                         self.animateBackdropSwipe = true
                     }
-                    if self.previewPatternIndex != -1, case let .pattern(_, file, _) = self.previewPatterns[Int(self.previewPatternIndex)] {
+                    if self.previewPatternIndex >= 0, Int(self.previewPatternIndex) < self.previewPatterns.count, case let .pattern(_, file, _) = self.previewPatterns[Int(self.previewPatternIndex)] {
                         patternFile = file
                         files[file.fileId.id] = file
                     }
-                    if self.previewBackdropIndex != -1, case let .backdrop(_, _, innerColorValue, outerColorValue, patternColorValue, _, _) = self.previewBackdrops[Int(self.previewBackdropIndex)] {
+                    if self.previewBackdropIndex >= 0, Int(self.previewBackdropIndex) < self.previewBackdrops.count, case let .backdrop(_, _, innerColorValue, outerColorValue, patternColorValue, _, _) = self.previewBackdrops[Int(self.previewBackdropIndex)] {
                         backgroundColor = UIColor(rgb: UInt32(bitPattern: outerColorValue))
                         secondBackgroundColor = UIColor(rgb: UInt32(bitPattern: innerColorValue))
                         patternColor = UIColor(rgb: UInt32(bitPattern: patternColorValue))
@@ -709,6 +709,16 @@ public final class GiftCompositionComponent: Component {
                     self.previewModels = models
                     self.previewPatterns = patterns
                     self.previewBackdrops = backdrops
+                }
+                // AstraGram: a new set of variants can be shorter than the one the indices were counting through.
+                if Int(self.previewModelIndex) >= self.previewModels.count || self.previewModelIndex < 0 {
+                    self.previewModelIndex = 0
+                }
+                if Int(self.previewPatternIndex) >= self.previewPatterns.count {
+                    self.previewPatternIndex = self.previewPatterns.isEmpty ? -1 : 0
+                }
+                if Int(self.previewBackdropIndex) >= self.previewBackdrops.count {
+                    self.previewBackdropIndex = self.previewBackdrops.isEmpty ? -1 : 0
                 }
                 
                 for case let .model(_, file, _, _) in self.previewModels where !self.fetchedFiles.contains(file.fileId.id) {

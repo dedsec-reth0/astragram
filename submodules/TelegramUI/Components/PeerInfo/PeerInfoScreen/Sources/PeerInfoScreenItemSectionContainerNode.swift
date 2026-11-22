@@ -65,7 +65,8 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
         }
         let card = self.astraCardRect
         let path = UIBezierPath(rect: CGRect(x: 0.0, y: 0.0, width: self.astraWidth, height: card.minY))
-        path.append(UIBezierPath(roundedRect: card, cornerRadius: 26.0))
+        // A hair inside the items' own corner images, whose edge is painted in the theme's background.
+        path.append(UIBezierPath(roundedRect: card.insetBy(dx: 0.75, dy: 0.75), cornerRadius: 25.25))
         path.append(UIBezierPath(rect: CGRect(x: 0.0, y: card.maxY, width: self.astraWidth, height: max(0.0, self.astraContentHeight - card.maxY))))
         let mask = (self.itemContainerNode.layer.mask as? CAShapeLayer) ?? CAShapeLayer()
         mask.frame = CGRect(x: 0.0, y: 0.0, width: self.astraWidth, height: self.astraContentHeight)

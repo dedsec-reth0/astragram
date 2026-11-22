@@ -123,6 +123,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let giftsCover = ComponentView<Empty>()
     /// AstraGram: the colors of the gift bubble touched last, worn by the header until another one is touched.
     private var astraBubbleTint: PeerEmojiStatus?
+    /// AstraGram: the color of the profile's surface last given to the screen.
+    private var astraSurface: UIColor?
+    private var astraSurfaceReported = false
     /// AstraGram: recolors the header's background (its luminance and pattern kept) with the profile's flowing color.
     private let astraFlowOverlay = UIView()
     /// AstraGram: the rest of the profile takes on the flowing color too (nil: back to the theme).
@@ -707,9 +710,20 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         } else {
             backgroundCoverSubject = nil
         }
-        if let astraBubbleTint = self.astraBubbleTint, !self.isSettings {
-            backgroundCoverSubject = .status(astraBubbleTint)
-            hasBackground = true
+        // AstraGram: the whole profile is one surface in the profile's own color (the cover's edge color), as in the
+        // concept; the gifts do not recolor it.
+        var astraSurface: UIColor?
+        if !self.isSettings {
+            if let status = peer?.emojiStatus, case let .starGift(_, _, _, _, _, _, outerColor, _, _) = status.content {
+                astraSurface = UIColor(rgb: UInt32(bitPattern: outerColor))
+            } else if let profileColor = peer?.effectiveProfileColor {
+                astraSurface = self.context.peerNameColors.getProfile(profileColor, dark: presentationData.theme.overallDarkAppearance).main
+            }
+        }
+        if self.astraSurface != astraSurface || !self.astraSurfaceReported {
+            self.astraSurface = astraSurface
+            self.astraSurfaceReported = true
+            self.astraFlowTintUpdated?(astraSurface)
         }
         
         let currentSavedMusic = self.profileMusic(peer: peer, screenData: screenData)
@@ -2595,6 +2609,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     transition.updateFrame(view: giftsCoverView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: giftsCoverSize))
                 }
                 navigationTransition.updateAlpha(layer: giftsCoverView.layer, alpha: backgroundBannerAlpha)
+                // AstraGram: no bubbles over an expanded photo, as in the concept.
+                giftsCoverView.astraSetBubblesHidden(self.isAvatarExpanded)
                 if backgroundCoverAnimateIn {
                     if !self.isAvatarExpanded {
                         giftsCoverView.willAnimateIn()
@@ -2849,6 +2865,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     // status and the bottom.
                     musicFrame.origin.y -= 14.0
                 }
+                // The equalizer belongs to the capsule only (not to the strip under an expanded photo).
+                self.astraEqualizerLayer.isHidden = !astraMusicCapsule
                 if astraMusicAbove {
                     // The capsule stands in the middle of the gap between the status and the buttons; round buttons
                     // begin a little above their frame, so the middle is higher with them.
