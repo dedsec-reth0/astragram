@@ -315,6 +315,9 @@ private final class AttachButtonComponent: CombinedComponent {
             case .astraStreak:
                 name = strings.baseLanguageCode.lowercased().hasPrefix("ru") ? "Огонёк" : "Streak"
                 imageName = "Chat/Attach Menu/Streak"
+            case .astraTranslate:
+                name = strings.baseLanguageCode.lowercased().hasPrefix("ru") ? "Перевод" : "Translate"
+                imageName = "Chat/Context Menu/Translate"
             }
 
             let tintColor: UIColor
@@ -2308,6 +2311,8 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                 accessibilityTitle = self.presentationData.strings.Attachment_Article
             case .astraStreak:
                 accessibilityTitle = self.presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru") ? "Огонёк" : "Streak"
+            case .astraTranslate:
+                accessibilityTitle = self.presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru") ? "Перевод моих сообщений" : "Translate My Messages"
             }
             buttonView.isAccessibilityElement = true
             buttonView.accessibilityLabel = accessibilityTitle

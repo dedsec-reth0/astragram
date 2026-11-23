@@ -976,23 +976,6 @@ func infoItems(
         }))
     }
 
-    // AstraGram: "Translate my messages" in this chat (any chat one can write to, not one's own Saved Messages).
-    if let peer = data.peer, peer.id != context.account.peerId, !isMyProfile {
-        let isRussian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
-        let peerId = peer.id
-        let current = AstraOutgoingTranslation.language(peerId: peerId)
-        let text = current.flatMap { AstraOutgoingTranslation.languageName($0, russian: isRussian) } ?? (isRussian ? "Выключен" : "Off")
-        items[.astraInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.translateOutgoing", label: isRussian ? "Перевод моих сообщений" : "Translate My Messages", text: text, textColor: .accent, action: { _, _ in
-            AstraOutgoingTranslation.presentPicker(context: context, peerId: peerId, present: { controller in
-                interaction.getController()?.present(controller, in: .window(.root))
-            }, completion: {
-                interaction.requestLayout(true)
-            })
-        }, requestLayout: { animated in
-            interaction.requestLayout(animated)
-        }))
-    }
-
     // AstraGram: the numeric ID (in the Bot API form), tap to copy.
     if AstraGramSettings.current.showPeerId, let peer = data.peer, !isMyProfile {
         let rawId = peer.id.id._internalGetInt64Value()

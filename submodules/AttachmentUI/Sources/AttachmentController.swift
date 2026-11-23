@@ -39,6 +39,8 @@ public enum AttachmentButtonType: Equatable {
     case standalone
     /// AstraGram: the streak (огонёк) with the person of the chat.
     case astraStreak
+    /// AstraGram: translate the user's messages in this chat before they are sent.
+    case astraTranslate
 
     public var key: String {
         switch self {
@@ -76,6 +78,8 @@ public enum AttachmentButtonType: Equatable {
             return "standalone"
         case .astraStreak:
             return "astraStreak"
+        case .astraTranslate:
+            return "astraTranslate"
         }
     }
 
@@ -179,6 +183,12 @@ public enum AttachmentButtonType: Equatable {
             }
         case .astraStreak:
             if case .astraStreak = rhs {
+                return true
+            } else {
+                return false
+            }
+        case .astraTranslate:
+            if case .astraTranslate = rhs {
                 return true
             } else {
                 return false

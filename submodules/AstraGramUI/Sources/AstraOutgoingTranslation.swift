@@ -51,39 +51,4 @@ public enum AstraOutgoingTranslation {
         }
         return russian ? language.ru : language.en
     }
-
-    /// Picks the language for a chat (or turns translation off), in Telegram's own action sheet.
-    public static func presentPicker(context: AccountContext, peerId: EnginePeer.Id, present: @escaping (ViewController) -> Void, completion: @escaping () -> Void) {
-        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let russian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
-        let actionSheet = ActionSheetController(presentationData: presentationData)
-        let current = AstraOutgoingTranslation.language(peerId: peerId)
-        var items: [ActionSheetItem] = [
-            ActionSheetTextItem(title: russian ? "Перед отправкой ваше сообщение переводится на выбранный язык, и в чат уходит перевод." : "Before sending, your message is translated into the chosen language, and the translation is sent.")
-        ]
-        for language in AstraOutgoingTranslation.languages {
-            items.append(ActionSheetCheckboxItem(title: russian ? language.ru : language.en, label: "", value: language.code == current, action: { [weak actionSheet] _ in
-                actionSheet?.dismissAnimated()
-                AstraOutgoingTranslation.setLanguage(language.code, peerId: peerId)
-                completion()
-            }))
-        }
-        var groups = [ActionSheetItemGroup(items: items)]
-        if current != nil {
-            groups.append(ActionSheetItemGroup(items: [
-                ActionSheetButtonItem(title: russian ? "Не переводить" : "Don't Translate", color: .destructive, action: { [weak actionSheet] in
-                    actionSheet?.dismissAnimated()
-                    AstraOutgoingTranslation.setLanguage(nil, peerId: peerId)
-                    completion()
-                })
-            ]))
-        }
-        groups.append(ActionSheetItemGroup(items: [
-            ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
-                actionSheet?.dismissAnimated()
-            })
-        ]))
-        actionSheet.setItemGroups(groups)
-        present(actionSheet)
-    }
 }

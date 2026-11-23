@@ -302,6 +302,10 @@ extension ChatControllerImpl {
                 if !isScheduledMessages, let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.id != self.context.account.peerId, user.id.namespace == Namespaces.Peer.CloudUser, !user.isDeleted, !isServicePeer(user), user.botInfo == nil, !user.flags.contains(.isSupport) {
                     availableButtons.append(.astraStreak)
                 }
+                // AstraGram: "Translate my messages" in this chat.
+                if !isScheduledMessages, banSendText == nil, let peerId = self.chatLocation.peerId, peerId != self.context.account.peerId, peerId.namespace != Namespaces.Peer.SecretChat {
+                    availableButtons.append(.astraTranslate)
+                }
             case .edit, .bot:
                 break
             }
@@ -1065,6 +1069,18 @@ extension ChatControllerImpl {
                             }
                         }
                         return true
+                    case .astraTranslate:
+                        if let hostView = strongSelf.attachmentController?.view {
+                            // The menu opens above the tab bar, from where the "Translate" tab is.
+                            let anchor = UIView(frame: CGRect(x: hostView.bounds.width * 0.5 - 1.0, y: hostView.bounds.height - hostView.safeAreaInsets.bottom - 80.0, width: 2.0, height: 2.0))
+                            anchor.isUserInteractionEnabled = false
+                            hostView.addSubview(anchor)
+                            strongSelf.astraOpenTranslateMenu(sourceView: anchor, inAttachment: strongSelf.attachmentController)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 60.0, execute: { [weak anchor] in
+                                anchor?.removeFromSuperview()
+                            })
+                        }
+                        return false
                     case .astraStreak:
                         if let peerId = strongSelf.presentationInterfaceState.chatLocation.peerId {
                             strongSelf.attachmentController?.dismiss(animated: true)

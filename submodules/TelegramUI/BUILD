@@ -285,6 +285,7 @@ swift_library(
         "//submodules/ChatMessageBackground:ChatMessageBackground",
         "//submodules/PeerInfoUI/CreateExternalMediaStreamScreen:CreateExternalMediaStreamScreen",
         "//submodules/TranslateUI:TranslateUI",
+        "//submodules/TelegramUI/Components/TranslationLanguagesContextMenuContent",
         "//submodules/BrowserUI:BrowserUI",
         "//submodules/PremiumUI:PremiumUI",
         "//submodules/Components/HierarchyTrackingLayer:HierarchyTrackingLayer",
