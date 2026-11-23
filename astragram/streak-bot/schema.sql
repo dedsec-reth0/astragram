@@ -176,3 +176,11 @@ CREATE TABLE IF NOT EXISTS visual_gift_worn (
   ref TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
+
+-- The Premium look of an AstraGram user with Local Premium (emoji status, name and profile colours, as JSON): other
+-- AstraGram apps show it on that user; everyone else sees the user as Telegram does.
+CREATE TABLE IF NOT EXISTS premium_look (
+  tg_id INTEGER PRIMARY KEY,
+  look TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);

@@ -793,6 +793,37 @@ public enum AstraLocalPremium {
         }
     }
 
+    /// The account's Local Premium look as other AstraGram apps get it (nil: Local Premium is off, or the account has
+    /// real Premium and Telegram shows its look to everyone already). An emoji status of a gift is left out: worn
+    /// gifts travel on their own.
+    public static func sharedLook(account: TelegramUser) -> [String: Any]? {
+        guard AstraLocalPremium.isLocalOnly(account) else {
+            return nil
+        }
+        var look: [String: Any] = [:]
+        if let status = AstraLocalPremium.loadedEmojiStatus(accountPeerId: account.id)?.status, case let .emoji(fileId) = status.content {
+            look["status"] = "\(fileId)"
+            if let until = status.expirationDate {
+                look["statusUntil"] = NSNumber(value: until)
+            }
+        }
+        if let colors = AstraLocalPremium.loadedColors(accountPeerId: account.id) {
+            if let preset = colors.namePreset {
+                look["nameColor"] = NSNumber(value: preset)
+            }
+            if let id = colors.backgroundEmojiId {
+                look["backgroundEmoji"] = "\(id)"
+            }
+            if let profile = colors.profileColor {
+                look["profileColor"] = NSNumber(value: profile)
+            }
+            if let id = colors.profileBackgroundEmojiId {
+                look["profileBackgroundEmoji"] = "\(id)"
+            }
+        }
+        return look
+    }
+
     /// `user` with the emoji status and colors picked on this device, when Local Premium shows it as Premium.
     static func applyingLocal(_ user: TelegramUser) -> TelegramUser {
         var user = AstraLocalPremium.applyingEmojiStatus(user)

@@ -329,6 +329,8 @@ public enum AstraStreakBot {
         var mineReceived: [AstraReceivedGift]?
         /// The gifts worn as a status, by Telegram ID (nil from a server before wearing).
         var worn: [Int64: AstraWornGift]?
+        /// The Local Premium looks of the account and of the people asked about (nil from an older server).
+        var premiumLooks: [Int64: AstraPremiumLooks.Look]?
         /// The server's ID of the gift this call gave (`send`).
         var sent: Int64?
         /// The look an upgrade gave (`upgrade`).
@@ -355,14 +357,17 @@ public enum AstraStreakBot {
         var transfer: (ref: String, to: Int64, text: String, anonymous: Bool)?
         /// Wears a gift as the status (`.some(nil)` takes it off).
         var wear: String??
+        /// The account's Local Premium look (`.some(nil)` takes it off); sent only with the account's own connection.
+        var premiumLook: [String: Any]??
 
         var changesOwnData: Bool {
             return self.set != nil || self.send != nil || !self.hide.isEmpty || !self.meta.isEmpty || self.upgrade != nil || self.transfer != nil || self.wear != nil
         }
     }
 
-    static func visualGifts(accountPeerId: EnginePeer.Id, set: [Int64]?, send: (to: Int64, gift: Int64)? = nil, hide: [Int64] = [], check: [Int64], completion: @escaping (VisualGiftsResult?) -> Void) {
+    static func visualGifts(accountPeerId: EnginePeer.Id, set: [Int64]?, send: (to: Int64, gift: Int64)? = nil, hide: [Int64] = [], premiumLook: [String: Any]?? = nil, check: [Int64], completion: @escaping (VisualGiftsResult?) -> Void) {
         var change = VisualGiftsChange()
+        change.premiumLook = premiumLook
         change.set = set
         change.send = send.map { (to: $0.to, gift: $0.gift, text: "", anonymous: false) }
         change.hide = hide
@@ -456,6 +461,10 @@ public enum AstraStreakBot {
         func attempt(_ index: Int) {
             let token = tokens[index]
             let isOwn = token == ownToken
+            var body = body
+            if isOwn, let premiumLook = change.premiumLook {
+                body["premiumLook"] = premiumLook.map { $0 as Any } ?? NSNull()
+            }
             AstraStreakBot.request(path: "/api/gifts", token: token, body: body, statusCompletion: { object, status in
                 guard let object = object else {
                     // A token the server does not know: the next one on this device.
@@ -502,6 +511,16 @@ public enum AstraStreakBot {
                     }
                     worn = result
                 }
+                var premiumLooks: [Int64: AstraPremiumLooks.Look]?
+                if let value = object["premiumLooks"] as? [String: Any] {
+                    var looks: [Int64: AstraPremiumLooks.Look] = [:]
+                    for (user, item) in value {
+                        if let user = Int64(user), let item = item as? [String: Any] {
+                            looks[user] = AstraPremiumLooks.Look(status: int64(item["status"]), statusUntil: int64(item["statusUntil"]).map { Int32(clamping: $0) }, nameColor: int64(item["nameColor"]).map { Int32(clamping: $0) }, backgroundEmoji: int64(item["backgroundEmoji"]), profileColor: int64(item["profileColor"]).map { Int32(clamping: $0) }, profileBackgroundEmoji: int64(item["profileBackgroundEmoji"]))
+                        }
+                    }
+                    premiumLooks = looks
+                }
                 var result = VisualGiftsResult(
                     users: users,
                     usersDate: usersDate,
@@ -513,6 +532,7 @@ public enum AstraStreakBot {
                     worn: worn,
                     sent: int64(object["sent"])
                 )
+                result.premiumLooks = premiumLooks
                 result.upgraded = look((object["upgraded"] as? [String: Any])?["u"])
                 result.transferred = int64(object["transferred"])
                 completion(result)

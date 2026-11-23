@@ -314,6 +314,14 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   r = await gifts('A', { wear: null, meta: [{ ref: 'o5170145012310081615', pinned: false }], check: [] });
   check('unpinned', r.body.mineMeta['5170145012310081615'], undefined);
 
+  // 9i. Local Premium looks: set, seen by others, junk dropped, turned off.
+  r = await gifts('A', { premiumLook: { status: '5170145012310081615', nameColor: 3, profileColor: 7, bad: 'x', backgroundEmoji: 12.5 }, check: [] });
+  check('own look comes back', r.body.premiumLooks[100], { status: '5170145012310081615', nameColor: 3, profileColor: 7 });
+  r = await gifts('C', { check: [100] });
+  check('others see the look', r.body.premiumLooks[100].profileColor, 7);
+  r = await gifts('A', { premiumLook: null, check: [] });
+  check('turned off', r.body.premiumLooks[100], undefined);
+
   // 10. Unlink forgets the list.
   call({ op: 'reset' });
   await worker.fetch({ url: 'https://bot.example/api/unlink', method: 'POST', headers: { get: (k) => (k === 'authorization' ? 'Bearer ' + TOKENS.A : null) }, json: async () => ({}) }, env);

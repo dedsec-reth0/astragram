@@ -327,7 +327,7 @@ public func updatePeersCustom(transaction: Transaction, peers: [Peer], update: (
         }
         // AstraGram: with Local Premium the emoji status and colors picked on this device replace the server's.
         if let updatedUser = updated as? TelegramUser {
-            updated = AstraWornGifts.applying(AstraLocalPremium.applyingLocal(updatedUser))
+            updated = AstraWornGifts.applying(AstraPremiumLooks.applying(AstraLocalPremium.applyingLocal(updatedUser)))
         }
         
         if let updatedChannel = updated as? TelegramChannel {

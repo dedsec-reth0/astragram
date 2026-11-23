@@ -448,6 +448,23 @@ async function setGiftMeta(env, tgId, ref, fields) {
     .bind(tgId, ref, ...keys.map((k) => fields[k])).run();
 }
 
+// A Local Premium look as stored and sent: only known fields, IDs as decimal strings (64-bit), colours as small ints.
+function premiumLook(value) {
+  if (!value || typeof value !== 'object') return null;
+  const id = (v) => (typeof v === 'string' && /^-?[0-9]{1,20}$/.test(v)) ? v : (Number.isSafeInteger(v) ? String(v) : undefined);
+  const color = (v) => (Number.isInteger(v) && v >= 0 && v < 1000) ? v : undefined;
+  const look = {
+    status: id(value.status),
+    statusUntil: Number.isSafeInteger(value.statusUntil) && value.statusUntil > 0 ? value.statusUntil : undefined,
+    nameColor: color(value.nameColor),
+    backgroundEmoji: id(value.backgroundEmoji),
+    profileColor: color(value.profileColor),
+    profileBackgroundEmoji: id(value.profileBackgroundEmoji),
+  };
+  for (const k of Object.keys(look)) if (look[k] === undefined) delete look[k];
+  return look;
+}
+
 async function handleGifts(request, env) {
   const owner = await ownerFromRequest(request, env);
   if (!owner) return json({ error: 'not linked' }, 401);
@@ -573,6 +590,15 @@ async function handleGifts(request, env) {
       return json({ error: 'bad wear' }, 400);
     }
   }
+  // The account's Local Premium look, shown by other AstraGram apps: {...} or null when it is off.
+  if (body.premiumLook !== undefined) {
+    const look = premiumLook(body.premiumLook);
+    if (look === null) {
+      await env.DB.prepare('DELETE FROM premium_look WHERE tg_id = ?').bind(owner.tg_id).run();
+    } else {
+      await env.DB.prepare('INSERT INTO premium_look (tg_id, look, updated_at) VALUES (?, ?, ?) ON CONFLICT (tg_id) DO UPDATE SET look = excluded.look, updated_at = excluded.updated_at').bind(owner.tg_id, JSON.stringify(look), t).run();
+    }
+  }
   await env.DB.prepare('UPDATE owners SET last_sync = ? WHERE token_hash = ? AND last_sync < ?').bind(t, owner.token_hash, t - 86400).run();
   const check = Array.isArray(body.check)
     ? [...new Set(body.check.slice(0, MAX_BADGE_CHECK).map((id) => int(id, 1, Number.MAX_SAFE_INTEGER, 0)).filter((id) => id > 0 && id !== owner.tg_id))]
@@ -665,7 +691,19 @@ async function handleGifts(request, env) {
       worn[r.tg_id] = { ref: r.ref, gift, u: m ? uniqueLook(m.unique_look) : null };
     }
   }
-  const reply = { users, usersDate, usersMeta, received, mine, mineMeta, mineReceived, worn };
+  // The Local Premium looks of the account and of the checked people.
+  const premiumLooks = {};
+  for (let i = 0; i < wornIds.length; i += D1_CHUNK) {
+    const chunk = wornIds.slice(i, i + D1_CHUNK);
+    const rows = (await env.DB.prepare(`SELECT tg_id, look FROM premium_look WHERE tg_id IN (${inList(chunk)})`).bind(...chunk).all()).results || [];
+    for (const r of rows) {
+      try {
+        const look = premiumLook(JSON.parse(r.look));
+        if (look) premiumLooks[r.tg_id] = look;
+      } catch {}
+    }
+  }
+  const reply = { users, usersDate, usersMeta, received, mine, mineMeta, mineReceived, worn, premiumLooks };
   if (sent !== null) reply.sent = sent;
   if (upgraded) reply.upgraded = upgraded;
   if (transferred !== null) reply.transferred = transferred;
@@ -780,6 +818,7 @@ async function handleUnlink(request, env) {
     env.DB.prepare('DELETE FROM streak_restores WHERE owner_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM badges WHERE tg_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM visual_gifts WHERE tg_id = ?').bind(owner.tg_id),
+    env.DB.prepare('DELETE FROM premium_look WHERE tg_id = ?').bind(owner.tg_id),
     env.DB.prepare('DELETE FROM visual_gift_received WHERE to_id = ? OR from_id = ?').bind(owner.tg_id, owner.tg_id),
   ]);
   return json({ ok: true });

@@ -373,6 +373,9 @@ public enum AstraVisualGifts {
             }
             AstraVisualGifts.applyWorn(context: context)
         }
+        if let premiumLooks = result.premiumLooks {
+            let _ = AstraPremiumLooks.update(premiumLooks, account: context.account).start()
+        }
     }
 
     enum ChangeResult {
@@ -776,9 +779,15 @@ public enum AstraVisualGifts {
             completion(false)
             return
         }
-        let _ = (AstraBadgeSync.candidates(context: context) |> deliverOnMainQueue).start(next: { check in
+        let account = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: accountPeerId))
+        let _ = (combineLatest(AstraBadgeSync.candidates(context: context) |> take(1), account) |> deliverOnMainQueue).start(next: { check, account in
             let mine: [Int64]? = send ? AstraVisualGifts.mine(accountPeerId: accountPeerId) : nil
-            AstraStreakBot.visualGifts(accountPeerId: accountPeerId, set: mine, check: check, completion: { result in
+            // The account's Local Premium look goes along every time (off: taken off), so others see it.
+            var premiumLook: [String: Any]?? = nil
+            if case let .user(user)? = account {
+                premiumLook = .some(AstraLocalPremium.sharedLook(account: user))
+            }
+            AstraStreakBot.visualGifts(accountPeerId: accountPeerId, set: mine, premiumLook: premiumLook, check: check, completion: { result in
                 Queue.mainQueue().async {
                     guard let result = result, result.status == 200 else {
                         completion(false)
