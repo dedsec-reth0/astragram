@@ -82,6 +82,8 @@ public enum AstraVisualGifts {
 
     private static let refreshInterval: Double = 30.0 * 60.0
     private static var timers: [EnginePeer.Id: SwiftSignalKit.Timer] = [:]
+    /// The account (session) each timer was started for: a new login of the same account gets a new one.
+    private static var timerAccountIds: [EnginePeer.Id: ObjectIdentifier] = [:]
     private static let changedPromise = ValuePromise<Int>(0, ignoreRepeated: true)
     private static var revision = 0
 
@@ -352,7 +354,9 @@ public enum AstraVisualGifts {
     }
 
     /// Stores what an answer says about the account's own gifts and about the gifts worn as a status.
-    private static func storeOwn(_ result: AstraStreakBot.VisualGiftsResult, context: AccountContext) {
+    /// `replaceLooks`: whether the answer's Premium looks replace the account's list. Only a refresh asks about the
+    /// people in the chats; the answer to a change (`check: []`) would empty the list and take everyone's look off.
+    private static func storeOwn(_ result: AstraStreakBot.VisualGiftsResult, context: AccountContext, replaceLooks: Bool) {
         let accountPeerId = context.account.peerId
         if let mineReceived = result.mineReceived, mineReceived != AstraVisualGifts.mineReceived(accountPeerId: accountPeerId) {
             AstraVisualGifts.encode(mineReceived, key: AstraVisualGifts.mineReceivedKey(accountPeerId))
@@ -373,7 +377,7 @@ public enum AstraVisualGifts {
             }
             AstraVisualGifts.applyWorn(context: context)
         }
-        if let premiumLooks = result.premiumLooks {
+        if replaceLooks, let premiumLooks = result.premiumLooks {
             let _ = AstraPremiumLooks.update(premiumLooks, account: context.account).start()
         }
     }
@@ -397,7 +401,7 @@ public enum AstraVisualGifts {
                 }
                 switch result.status {
                 case 200:
-                    AstraVisualGifts.storeOwn(result, context: context)
+                    AstraVisualGifts.storeOwn(result, context: context, replaceLooks: false)
                     completion(.done, result)
                 case 429:
                     completion(.limit, nil)
@@ -772,10 +776,17 @@ public enum AstraVisualGifts {
                 }
             })
         }
-        if AstraVisualGifts.timers[peerId] != nil {
-            AstraVisualGifts.refreshIfStale(context: context)
-            return
+        if let existing = AstraVisualGifts.timers[peerId] {
+            if AstraVisualGifts.timerAccountIds[peerId] == ObjectIdentifier(context.account) {
+                AstraVisualGifts.refreshIfStale(context: context)
+                return
+            }
+            // A new login of the same account: the timer holding the old, logged-out context goes.
+            existing.invalidate()
+            AstraVisualGifts.timers[peerId] = nil
+            AstraVisualGifts.lastRefresh[peerId] = nil
         }
+        AstraVisualGifts.timerAccountIds[peerId] = ObjectIdentifier(context.account)
         // The gifts worn as a status, as last known, until the server answers.
         AstraVisualGifts.applyWorn(context: context)
         let timer = SwiftSignalKit.Timer(timeout: AstraVisualGifts.refreshInterval, repeat: true, completion: {
@@ -834,7 +845,7 @@ public enum AstraVisualGifts {
                         AstraVisualGifts.encode(othersMeta, key: AstraVisualGifts.othersMetaKey(accountPeerId))
                         AstraVisualGifts.changed()
                     }
-                    AstraVisualGifts.storeOwn(result, context: context)
+                    AstraVisualGifts.storeOwn(result, context: context, replaceLooks: true)
                     if send {
                         UserDefaults.standard.removeObject(forKey: AstraVisualGifts.unsentKey(accountPeerId))
                         UserDefaults.standard.set(true, forKey: AstraVisualGifts.syncedKey(accountPeerId))

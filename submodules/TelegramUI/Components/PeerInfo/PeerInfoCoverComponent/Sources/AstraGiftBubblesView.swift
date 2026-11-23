@@ -336,6 +336,11 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
     }
 
     fileprivate func tick(_ link: CADisplayLink) {
+        // Invisible (the header collapsed or the photo expanded): no physics and no lens capture. Time stands still
+        // meanwhile, so the bubbles resume without a jump and the lens is retaken on the first visible frame.
+        guard !self.isHidden, self.alpha > 0.01, self.layer.opacity > 0.01 else {
+            return
+        }
         let dt = CGFloat(min(1.0 / 30.0, max(1.0 / 120.0, link.targetTimestamp - link.timestamp)))
         self.time += dt
         // shortcut: the picture under the bubbles is retaken 5 times a second, not every frame (cost); a faster
@@ -805,6 +810,13 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
                     self.disabledScrollViews.append(scrollView)
                 }
                 view = current.superview
+            }
+            // The profile's scroll view is a sibling of the header under the rotation host, not an ancestor.
+            if let host = self.rotationHost {
+                for case let scrollView as UIScrollView in host.subviews where scrollView.panGestureRecognizer.isEnabled {
+                    scrollView.panGestureRecognizer.isEnabled = false
+                    self.disabledScrollViews.append(scrollView)
+                }
             }
         }
     }

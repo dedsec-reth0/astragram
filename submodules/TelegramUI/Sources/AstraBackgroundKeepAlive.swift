@@ -7,6 +7,7 @@ import AVFoundation
 final class AstraBackgroundKeepAlive {
     private var player: AVAudioPlayer?
     private var interruptionObserver: NSObjectProtocol?
+    private var resetObserver: NSObjectProtocol?
 
     /// Whether keeping alive is wanted now (the app is in the background and nothing else uses the audio session).
     private var isRequested = false
@@ -17,7 +18,8 @@ final class AstraBackgroundKeepAlive {
         return self.isRequested && self.player?.isPlaying == true
     }
 
-    /// Called on the main queue when an interruption of the audio session began or ended, so `isActive` may have changed.
+    /// Called on the main queue when an interruption of the audio session began or ended, or media services were reset, so
+    /// `isActive` may have changed.
     var activeUpdated: (() -> Void)?
 
     init() {
@@ -30,11 +32,26 @@ final class AstraBackgroundKeepAlive {
             }
             self.activeUpdated?()
         })
+        // After a media services reset every AVAudioPlayer is invalid and has stopped, and nothing else would restart
+        // the silence while the app sits in the background: the player is recreated at once.
+        self.resetObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main, using: { [weak self] _ in
+            guard let self else {
+                return
+            }
+            self.player = nil
+            if self.isRequested {
+                self.startPlaying()
+            }
+            self.activeUpdated?()
+        })
     }
 
     deinit {
         if let interruptionObserver = self.interruptionObserver {
             NotificationCenter.default.removeObserver(interruptionObserver)
+        }
+        if let resetObserver = self.resetObserver {
+            NotificationCenter.default.removeObserver(resetObserver)
         }
     }
 

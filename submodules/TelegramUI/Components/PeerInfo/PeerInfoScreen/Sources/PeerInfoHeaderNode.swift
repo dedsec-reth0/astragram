@@ -526,6 +526,19 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         }
     }
     
+    override func didEnterHierarchy() {
+        super.didEnterHierarchy()
+        // AstraGram: the music mood resumes when the profile is on screen again (the frame step is clamped, so the
+        // colours do not jump).
+        self.astraMusicMoodLink?.isPaused = false
+    }
+    
+    override func didExitHierarchy() {
+        super.didExitHierarchy()
+        // AstraGram: the music mood sleeps while the profile is covered.
+        self.astraMusicMoodLink?.isPaused = true
+    }
+    
     override func didLoad() {
         super.didLoad()
         
@@ -2920,6 +2933,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     musicFrame.origin.y = (apparentBackgroundHeight - backgroundHeight) + buttonRightOrigin.y - floor((bottomInset + 16.0 + musicSize.height) / 2.0) - astraRoundButtonsOffset
                 }
                 if let musicView = music.view {
+                    // The mood, beat and groove follow the profile's music whether it is drawn as the capsule or
+                    // the strip.
+                    if let peer, self.astraMusicPlaybackPeerId != peer.id {
+                        self.astraObserveMusicPlayback(peerId: peer.id)
+                    }
                     if astraMusicCapsule {
                         let pillLayer: CALayer
                         if let current = self.astraMusicPillLayer {
@@ -2971,9 +2989,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                             bar.position = CGPoint(x: 1.6 + CGFloat(i) * 4.2, y: 12.0)
                         }
                         CATransaction.commit()
-                        if let peer, self.astraMusicPlaybackPeerId != peer.id {
-                            self.astraObserveMusicPlayback(peerId: peer.id)
-                        }
                         self.astraUpdateMusicFill()
                     } else if let pillLayer = self.astraMusicPillLayer {
                         self.astraMusicPillLayer = nil
@@ -3487,6 +3502,12 @@ extension PeerInfoHeaderNode {
     }
 
     fileprivate func astraMusicMoodTick(_ link: CADisplayLink) {
+        // A profile covered by another screen leaves the window but stays alive; recolouring it there only drains
+        // the battery, so the link sleeps until didEnterHierarchy wakes it.
+        if self.view.window == nil {
+            link.isPaused = true
+            return
+        }
         let dt = CGFloat(min(0.1, max(0.0, link.targetTimestamp - link.timestamp)))
         let target: CGFloat = self.astraMusicMoodPlaying ? 1.0 : 0.0
         if self.astraMusicMoodAmount < target {

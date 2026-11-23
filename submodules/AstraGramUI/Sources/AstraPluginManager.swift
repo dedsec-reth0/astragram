@@ -228,8 +228,16 @@ public final class AstraPluginManager {
         return nil
     }
 
+    /// Nil when the call threw or was stopped by the time limit: JavaScriptCore then returns `undefined`, not nil, so
+    /// the exception the context's handler records is what tells a failed call from one that returned nothing.
     private static func call(_ function: JSValue, _ arguments: [Any]) -> JSValue? {
+        let context: JSContext? = function.context
+        context?.exception = nil
         let result: JSValue? = function.call(withArguments: arguments)
+        if context?.exception != nil {
+            context?.exception = nil
+            return nil
+        }
         return result
     }
 
@@ -292,7 +300,9 @@ public final class AstraPluginManager {
         guard let plugin = AstraPluginManager.property(context.globalObject, "plugin") else {
             return .failure(LoadError(message: "plugin object is missing"))
         }
-        context.exceptionHandler = { _, exception in
+        context.exceptionHandler = { ctx, exception in
+            // Recorded so call() can tell a thrown or timed-out call from one that returned `undefined`.
+            ctx?.exception = exception
             let exceptionValue: JSValue? = exception
             #if DEBUG
             NSLog("[AstraPlugin \(id)] error: \(exceptionValue.flatMap { AstraPluginManager.string($0) } ?? "")")

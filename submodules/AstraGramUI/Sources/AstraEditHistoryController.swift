@@ -103,24 +103,27 @@ public func astraEditHistoryController(context: AccountContext, message: EngineM
         presentControllerImpl?(UndoOverlayController(presentationData: presentationData, content: .copy(text: presentationData.strings.Conversation_TextCopied), elevatedLayout: false, action: { _ in return false }))
     })
 
-    var currentEntities: [MessageTextEntity] = []
-    var currentEditDate: Int32?
-    for attribute in message.attributes {
-        if let attribute = attribute as? TextEntitiesMessageAttribute {
-            currentEntities = attribute.entities
-        } else if let attribute = attribute as? EditedMessageAttribute {
-            currentEditDate = attribute.date
-        }
-    }
-    let currentText = message.text
-    let currentDate = currentEditDate ?? message.timestamp
-    let entitiesValue = currentEntities
-
+    // The current version comes from the live message: an edit while the screen is open adds the old text as a
+    // version, and a current row taken once at opening would then repeat that text and miss the new one.
     let signal = combineLatest(queue: .mainQueue(),
         context.sharedContext.presentationData,
-        store.editHistory(messageId: message.id)
+        store.editHistory(messageId: message.id),
+        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Messages.Message(id: message.id))
     )
-    |> map { presentationData, versions -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, versions, liveMessage -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        // A message deleted locally keeps its last known text.
+        let current = liveMessage ?? message
+        var currentEntities: [MessageTextEntity] = []
+        var currentEditDate: Int32?
+        for attribute in current.attributes {
+            if let attribute = attribute as? TextEntitiesMessageAttribute {
+                currentEntities = attribute.entities
+            } else if let attribute = attribute as? EditedMessageAttribute {
+                currentEditDate = attribute.date
+            }
+        }
+        let currentText = current.text
+        let currentDate = currentEditDate ?? current.timestamp
         let strings = AstraStrings(presentationData.strings)
         var entries: [AstraEditHistoryEntry] = []
         for (index, version) in versions.enumerated() {
@@ -128,10 +131,11 @@ public func astraEditHistoryController(context: AccountContext, message: EngineM
             let text = astraPreviewText(text: version.text, mediaKind: version.mediaKind, fileName: nil, strings: strings)
             entries.append(.version(index: index, title: title, date: astraFormatDate(version.versionDate, withSeconds: true), text: text, rawText: version.text, entities: version.entities))
         }
+        entries.append(.current(title: strings.currentVersion, date: astraFormatDate(currentDate, withSeconds: true), text: currentText, entities: currentEntities))
+        // After the current row: the list expects its entries in order (section and stable id), and the note sorts last.
         if versions.isEmpty {
             entries.append(.empty(strings.noEditHistory))
         }
-        entries.append(.current(title: strings.currentVersion, date: astraFormatDate(currentDate, withSeconds: true), text: currentText, entities: entitiesValue))
 
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(strings.editHistory), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true)

@@ -131,6 +131,30 @@ import UIKitRuntimeUtils
 import ChatHistoryListViewBackend
 import AstraGramUI
 
+/// AstraGram: the batches sent while "Translate my messages" is on, in the order sent. A batch waits until it is ready
+/// (translated) and every batch before it has gone out, so a short text or an untranslated batch cannot overtake a
+/// longer text whose translation is still running.
+final class AstraTranslatedSendQueue {
+    final class Batch {
+        /// Nil while the translation is still running.
+        var messages: [EnqueueMessage]?
+        let send: ([EnqueueMessage]) -> Void
+
+        init(send: @escaping ([EnqueueMessage]) -> Void) {
+            self.send = send
+        }
+    }
+
+    var batches: [Batch] = []
+
+    func flush() {
+        while let first = self.batches.first, let messages = first.messages {
+            self.batches.removeFirst()
+            first.send(messages)
+        }
+    }
+}
+
 extension ChatControllerImpl {
     func reloadChatLocation(chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, historyNode: ChatHistoryListNodeImpl, apply: @escaping ((ContainedViewLayoutTransition?) -> Void) -> Void) {
         self.contentDataReady.set(false)
@@ -996,25 +1020,55 @@ extension ChatControllerImpl {
             }, messageCorrelationId)
         }
         
+        // AstraGram: batches held back while an earlier batch is still being translated, so they go out in the order sent.
+        let astraTranslatedSendQueue = AstraTranslatedSendQueue()
         self.chatDisplayNode.sendMessages = { [weak self] messages, silentPosting, scheduleTime, repeatPeriod, isAnyMessageTextPartitioned, postpone in
             guard let strongSelf = self else {
                 return
             }
             // AstraGram: "Translate my messages" in this chat: the texts go out translated (the originals are not sent).
-            if !strongSelf.astraSendingTranslated, let peerId = strongSelf.chatLocation.peerId, let toLang = AstraOutgoingTranslation.language(peerId: peerId), messages.contains(where: { message in
+            let astraToLang: String? = strongSelf.chatLocation.peerId.flatMap { AstraOutgoingTranslation.language(peerId: $0) }
+            let astraNeedsTranslation = astraToLang != nil && messages.contains(where: { message in
                 if case let .message(text, _, _, _, _, _, _, _, _, _) = message {
                     return !text.isEmpty
                 }
                 return false
-            }) {
+            })
+            if !strongSelf.astraSendingTranslated && (astraNeedsTranslation || !astraTranslatedSendQueue.batches.isEmpty) {
+                let batch = AstraTranslatedSendQueue.Batch(send: { [weak strongSelf] ready in
+                    guard let strongSelf else {
+                        return
+                    }
+                    strongSelf.astraSendingTranslated = true
+                    strongSelf.chatDisplayNode.sendMessages(ready, silentPosting, scheduleTime, repeatPeriod, isAnyMessageTextPartitioned, postpone)
+                    strongSelf.astraSendingTranslated = false
+                })
+                astraTranslatedSendQueue.batches.append(batch)
+                guard astraNeedsTranslation, let toLang = astraToLang else {
+                    // Nothing to translate here, but an earlier batch is still being translated: this one waits for it.
+                    batch.messages = messages
+                    astraTranslatedSendQueue.flush()
+                    return
+                }
                 let signals: [Signal<EnqueueMessage, NoError>] = messages.map { message in
                     guard case let .message(text, attributes, inlineStickers, mediaReference, threadId, replyToMessageId, replyToStoryId, localGroupingKey, correlationId, bubbleUpEmojiOrStickersets) = message, !text.isEmpty else {
                         return .single(message)
                     }
                     let entities = attributes.compactMap({ $0 as? TextEntitiesMessageAttribute }).first?.entities ?? []
+                    // A mention by name (TextMention) does not survive the translate request, which has no peers to
+                    // resolve it with, so such a text is sent untranslated rather than with the mention lost.
+                    if entities.contains(where: { if case .TextMention = $0.type { return true } else { return false } }) {
+                        return .single(message)
+                    }
                     return strongSelf.context.engine.messages.translate(text: text, toLang: toLang, entities: entities)
                     |> map { result -> EnqueueMessage in
                         guard let (translated, translatedEntities) = result, !translated.isEmpty else {
+                            return message
+                        }
+                        // The texts were split to the limit before translating; a translation that grew past it
+                        // would be rejected by the server, so the original piece is sent instead.
+                        let astraLimit = mediaReference != nil ? 1024 : 4096
+                        if (translated as NSString).length > astraLimit {
                             return message
                         }
                         var attributes = attributes.filter({ !($0 is TextEntitiesMessageAttribute) })
@@ -1030,13 +1084,9 @@ extension ChatControllerImpl {
                 }
                 let _ = (combineLatest(signals)
                 |> take(1)
-                |> deliverOnMainQueue).startStandalone(next: { [weak strongSelf] translated in
-                    guard let strongSelf else {
-                        return
-                    }
-                    strongSelf.astraSendingTranslated = true
-                    strongSelf.chatDisplayNode.sendMessages(translated, silentPosting, scheduleTime, repeatPeriod, isAnyMessageTextPartitioned, postpone)
-                    strongSelf.astraSendingTranslated = false
+                |> deliverOnMainQueue).startStandalone(next: { translated in
+                    batch.messages = translated
+                    astraTranslatedSendQueue.flush()
                 })
                 return
             }
@@ -4337,6 +4387,12 @@ extension ChatControllerImpl {
             guard let self, let peerId = self.chatLocation.peerId else {
                 return
             }
+            // AstraGram: a "translate their messages" language overrides the stored state, so "Show original" on the
+            // bar has to turn that language off itself. The stored state is then turned off too (below), or a chat
+            // translation enabled earlier would take over and keep the messages translated.
+            if type == .original, AstraIncomingTranslation.language(peerId: peerId) != nil {
+                AstraIncomingTranslation.setLanguage(nil, peerId: peerId)
+            }
             let _ = (updateChatTranslationStateInteractively(engine: self.context.engine, peerId: peerId, threadId: self.chatLocation.threadId,  { current in
                 return current?.withIsEnabled(type == .translated)
             })
@@ -4352,6 +4408,11 @@ extension ChatControllerImpl {
                 return
             }
             let langCode = normalizeTranslationLanguage(langCode)
+            // AstraGram: with a "translate their messages" language set, the language picked on the bar replaces it.
+            if AstraIncomingTranslation.language(peerId: peerId) != nil {
+                AstraIncomingTranslation.setLanguage(langCode, peerId: peerId)
+                return
+            }
             let _ = updateChatTranslationStateInteractively(engine: self.context.engine, peerId: peerId, threadId: self.chatLocation.threadId, { current in
                 return current?.withToLang(langCode).withIsEnabled(true)
             }).startStandalone()

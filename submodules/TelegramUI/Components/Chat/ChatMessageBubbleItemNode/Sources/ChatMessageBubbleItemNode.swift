@@ -4492,7 +4492,16 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         // A round video has a ring of its own (ChatMessageInteractiveInstantVideoNode): the bubble behind it is not its
         // shape, and its outline showed in pieces around the circle.
         let astraIsRoundVideo = item.content.firstMessage.media.contains(where: { ($0 as? TelegramMediaFile)?.isInstantVideo == true })
-        let astraIsDeleted = item.content.firstMessage.astraDeletedAt != nil && !astraIsRoundVideo
+        // An album is marked only when all of its items are deleted: one photo can be deleted on its own, and marking by
+        // the first item alone showed live photos as deleted, or a deleted one as live.
+        let astraAllDeleted: Bool
+        switch item.content {
+        case let .message(message, _, _, _, _):
+            astraAllDeleted = message.astraDeletedAt != nil
+        case let .group(messages):
+            astraAllDeleted = !messages.isEmpty && messages.allSatisfy { $0.0.astraDeletedAt != nil }
+        }
+        let astraIsDeleted = astraAllDeleted && !astraIsRoundVideo
         let astraFillAlpha: CGFloat = astraIsDeleted ? 0.45 : 1.0
         if strongSelf.backgroundNode.astraFillAlpha != astraFillAlpha {
             strongSelf.backgroundNode.astraFillAlpha = astraFillAlpha

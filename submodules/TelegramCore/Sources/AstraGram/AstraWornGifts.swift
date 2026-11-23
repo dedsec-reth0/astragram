@@ -86,13 +86,16 @@ public enum AstraWornGifts {
                 }
                 if let status = new[key] {
                     if user.emojiStatus != status {
-                        // What the server sent, kept for when the gift is taken off.
-                        let kept = AstraWornGifts.state.modify { current in
-                            var current = current
-                            current.real[key] = StoredStatus(status: user.emojiStatus)
-                            return current
+                        // What the server sent, kept for when the gift is taken off. A switch from another gift finds
+                        // that gift's status stored: it is ours, and the server's status kept before stays.
+                        if previous[key] == nil || user.emojiStatus != previous[key] {
+                            let kept = AstraWornGifts.state.modify { current in
+                                var current = current
+                                current.real[key] = StoredStatus(status: user.emojiStatus)
+                                return current
+                            }
+                            AstraWornGifts.save(kept)
                         }
-                        AstraWornGifts.save(kept)
                         peers.append(user.withUpdatedEmojiStatus(status))
                     }
                 } else if previous[key] != nil, user.emojiStatus == previous[key] {

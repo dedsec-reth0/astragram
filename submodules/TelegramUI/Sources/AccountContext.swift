@@ -803,7 +803,8 @@ public final class AccountContextImpl: AccountContext {
         case let .replyThread(data):
             let context = chatLocationContext(holder: contextHolder, account: self.account, data: data)
             context.applyMaxReadIndex(messageIndex: messageIndex)
-            self.sharedContext.applicationBindings.clearMessageNotifications([messageIndex.id])
+            // Notifications are not cleared here: ClearNotificationsManager clears by peer and message id only, so reading
+            // one forum topic or comment thread would also take down the group's other threads' unread notifications.
         case .customChatContents:
             break
         }

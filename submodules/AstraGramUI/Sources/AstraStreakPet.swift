@@ -662,6 +662,7 @@ public final class AstraStreakPetAttachment {
     private let peerId: EnginePeer.Id
     private weak var hostView: UIView?
     private var floatingView: AstraStreakPetFloatingView?
+    private var resizeObserver: AstraStreakPetResizeObserver?
     private var disposable: Disposable?
 
     public init(context: AccountContext, peerId: EnginePeer.Id, hostView: UIView) {
@@ -692,6 +693,7 @@ public final class AstraStreakPetAttachment {
     deinit {
         self.disposable?.dispose()
         self.floatingView?.removeFromSuperview()
+        self.resizeObserver?.removeFromSuperview()
     }
 
     private func show(state: AstraStreakState?) {
@@ -722,6 +724,19 @@ public final class AstraStreakPetAttachment {
             self.floatingView = view
             view.placeInitially(in: hostView.bounds)
             view.appear()
+            if self.resizeObserver == nil {
+                // The chat resizes while it stays open (rotation, split view, Stage Manager): the pet is put back at its
+                // saved spot within the new size, or it could be left outside the view, where it cannot be dragged back.
+                let observer = AstraStreakPetResizeObserver(frame: hostView.bounds)
+                observer.resized = { [weak self] in
+                    guard let self = self, let hostView = self.hostView, let view = self.floatingView, hostView.bounds.width > 0.0, hostView.bounds.height > 0.0 else {
+                        return
+                    }
+                    view.placeInitially(in: hostView.bounds)
+                }
+                hostView.insertSubview(observer, at: 0)
+                self.resizeObserver = observer
+            }
         }
         hostView.bringSubviewToFront(view)
         view.update(days: days, mood: AstraStreakPetMood.of(state), look: look)
@@ -730,6 +745,35 @@ public final class AstraStreakPetAttachment {
     private func hide() {
         self.floatingView?.removeFromSuperview()
         self.floatingView = nil
+    }
+}
+
+/// An empty view that follows the size of the view it is in (by autoresizing) and says when that size changes, as the
+/// chat's view cannot be subclassed to hear about its own layout.
+final class AstraStreakPetResizeObserver: UIView {
+    var resized: (() -> Void)?
+    private var lastSize: CGSize?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        self.isUserInteractionEnabled = false
+        self.backgroundColor = .clear
+        self.isAccessibilityElement = false
+        self.lastSize = frame.size
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Only a change of size moves the pet, so a layout pass during a drag does not undo it.
+        if self.lastSize != self.bounds.size {
+            self.lastSize = self.bounds.size
+            self.resized?()
+        }
     }
 }
 

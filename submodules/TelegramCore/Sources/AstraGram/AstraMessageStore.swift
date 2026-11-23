@@ -271,19 +271,9 @@ public final class AstraMessageStore {
         return AstraMessageStore.exec(database, "SELECT count(*) FROM sqlite_master")
     }
 
-    /// Copies an old store into an encrypted file and puts it in its place. Under a file lock, because the app and the
-    /// notification service extension may start at the same time.
+    /// Copies an old store into an encrypted file and puts it in its place. The caller holds the store's file lock,
+    /// because the app and the notification service extension may start at the same time.
     private static func encryptPlaintextStore(_ path: String, hexKey: String) {
-        let lockFd = Darwin.open(path + ".lock", O_CREAT | O_RDWR, 0o600)
-        if lockFd >= 0 {
-            flock(lockFd, LOCK_EX)
-        }
-        defer {
-            if lockFd >= 0 {
-                flock(lockFd, LOCK_UN)
-                Darwin.close(lockFd)
-            }
-        }
         guard AstraMessageStore.isPlaintext(path), let database = AstraMessageStore.openConnection(path) else {
             return
         }
@@ -297,9 +287,17 @@ public final class AstraMessageStore {
         }
         sqlite3_close(database)
         if exported {
-            AstraMessageStore.removeFiles(path)
-            try? FileManager.default.moveItem(atPath: exportPath, toPath: path)
-            Logger.shared.log("AstraGram", "encrypted the message store")
+            // The encrypted copy replaces the old file in one rename: deleting first left a moment without a file, in
+            // which another opener created an empty store, the move then failed and every saved message was lost.
+            for suffix in ["-wal", "-shm"] {
+                try? FileManager.default.removeItem(atPath: path + suffix)
+            }
+            if Darwin.rename(exportPath, path) == 0 {
+                Logger.shared.log("AstraGram", "encrypted the message store")
+            } else {
+                // The plaintext store stays in place and the export is kept; the next launch tries again.
+                Logger.shared.log("AstraGram", "could not replace the message store: errno \(errno)")
+            }
         } else {
             AstraMessageStore.removeFiles(exportPath)
             Logger.shared.log("AstraGram", "could not encrypt the message store")
@@ -319,6 +317,19 @@ public final class AstraMessageStore {
             return
         }
         let hexKey = AstraMessageStore.hexString(key)
+        // One lock over the whole check, migration and open: the app and the notification service extension both open
+        // the store, and an opener running during another's migration would otherwise create an empty file in its place.
+        // It is taken here only, since a second flock on another descriptor in the same process would wait for itself.
+        let lockFd = Darwin.open(self.path + ".lock", O_CREAT | O_RDWR, 0o600)
+        if lockFd >= 0 {
+            flock(lockFd, LOCK_EX)
+        }
+        defer {
+            if lockFd >= 0 {
+                flock(lockFd, LOCK_UN)
+                Darwin.close(lockFd)
+            }
+        }
         if AstraMessageStore.isPlaintext(self.path) {
             AstraMessageStore.encryptPlaintextStore(self.path, hexKey: hexKey)
         }
@@ -597,7 +608,7 @@ public final class AstraMessageStore {
             return Signal { subscriber in
                 self.queue.async {
                     var result: [(peerId: PeerId, title: String, count: Int, lastDeletedAt: Int32)] = []
-                    if let statement = self.prepare("SELECT peer_id, MAX(chat_title), COUNT(*), MAX(deleted_at) FROM deleted_messages GROUP BY peer_id ORDER BY MAX(deleted_at) DESC") {
+                    if let statement = self.prepare("SELECT d.peer_id, (SELECT chat_title FROM deleted_messages d2 WHERE d2.peer_id = d.peer_id ORDER BY d2.deleted_at DESC, d2.row_id DESC LIMIT 1), COUNT(*), MAX(d.deleted_at) FROM deleted_messages d GROUP BY d.peer_id ORDER BY MAX(d.deleted_at) DESC") {
                         while sqlite3_step(statement) == SQLITE_ROW {
                             result.append((
                                 peerId: PeerId(sqlite3_column_int64(statement, 0)),

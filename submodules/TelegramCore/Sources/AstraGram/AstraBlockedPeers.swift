@@ -45,6 +45,22 @@ enum AstraBlockedPeers {
         }
     }
 
+    /// Drops an account's list: when its account is logged out (the poll is disposed) or the option is turned off,
+    /// so peers blocked only there stop hiding messages in the other accounts.
+    fileprivate static func remove(network: Network) {
+        let id = ObjectIdentifier(network)
+        let _ = AstraBlockedPeers.peerIds.modify { current in
+            var current = current
+            current.removeValue(forKey: id)
+            return current
+        }
+    }
+
+    fileprivate static func hasList(network: Network) -> Bool {
+        let id = ObjectIdentifier(network)
+        return AstraBlockedPeers.peerIds.with { $0[id] != nil }
+    }
+
     fileprivate static func fetch(network: Network, offset: Int32, collected: Set<PeerId>) -> Signal<Set<PeerId>?, NoError> {
         return network.request(Api.functions.contacts.getBlocked(flags: 0, offset: offset, limit: 100))
         |> map(Optional.init)
@@ -53,7 +69,9 @@ enum AstraBlockedPeers {
         }
         |> mapToSignal { result -> Signal<Set<PeerId>?, NoError> in
             guard let result = result else {
-                return .single(offset == 0 ? nil : collected)
+                // A later page failed: the full list from an earlier poll is kept; the partial one is used only when
+                // nothing is stored yet, where it is better than none.
+                return .single(offset == 0 || AstraBlockedPeers.hasList(network: network) ? nil : collected)
             }
             let blocked: [Api.PeerBlocked]
             var totalCount: Int?
@@ -89,10 +107,16 @@ func managedAstraBlockedPeers(network: Network) -> Signal<Void, NoError> {
     |> then(Signal<Void, NoError>.complete() |> delay(10.0 * 60.0, queue: Queue.concurrentDefaultQueue()))
     |> restart
 
-    return AstraGramSettings.signal
+    return (AstraGramSettings.signal
     |> map { $0.hideBlockedUsersMessages }
     |> distinctUntilChanged
     |> mapToSignal { enabled -> Signal<Void, NoError> in
+        if !enabled {
+            AstraBlockedPeers.remove(network: network)
+        }
         return enabled ? poll : .complete()
+    })
+    |> afterDisposed {
+        AstraBlockedPeers.remove(network: network)
     }
 }

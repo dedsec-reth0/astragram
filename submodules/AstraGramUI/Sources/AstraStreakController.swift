@@ -722,9 +722,15 @@ public final class AstraStreakManager {
 
     public static func start(context: AccountContext) {
         let peerId = context.account.peerId
-        if AstraStreakManager.managers[peerId] == nil {
-            AstraStreakManager.managers[peerId] = AstraStreakManager(context: context)
+        if let existing = AstraStreakManager.managers[peerId] {
+            if existing.account === context.account {
+                return
+            }
+            // A new login of the same user is a new Account with its own postbox and store: the old manager would keep
+            // counting from the closed ones, so it is stopped and replaced.
+            existing.stop()
         }
+        AstraStreakManager.managers[peerId] = AstraStreakManager(context: context)
     }
 
     static func forAccount(_ peerId: EnginePeer.Id) -> AstraStreakManager? {
@@ -832,6 +838,17 @@ public final class AstraStreakManager {
 
     func refresh() {
         self.refreshPipe.putNext(Void())
+    }
+
+    /// Stops counting and syncing, for a manager whose account was replaced by a new login.
+    private func stop() {
+        self.disposable?.dispose()
+        self.disposable = nil
+        self.localStreaksDisposable?.dispose()
+        self.localStreaksDisposable = nil
+        self.timer?.invalidate()
+        self.timer = nil
+        self.finishSync(false)
     }
 
     private func apply(_ states: [EnginePeer.Id: AstraStreakState]) {

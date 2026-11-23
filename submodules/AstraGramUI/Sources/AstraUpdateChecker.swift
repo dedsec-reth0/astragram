@@ -50,7 +50,11 @@ public enum AstraUpdateChecker {
                 let parts = tag.dropFirst().split(separator: "-")
                 if parts.count == 2, let build = Int(parts[1]) {
                     let assets = object["assets"] as? [[String: Any]] ?? []
-                    let ipaUrl = assets.compactMap { $0["browser_download_url"] as? String }.first(where: { $0.hasSuffix(".ipa") })
+                    // Releases carry a light .ipa (extensions stripped, installable with a free Apple ID) and a -full one
+                    // that needs 7 App IDs; their order in the reply is not fixed, so the light one is picked by name, as
+                    // publish_release.py does for the AltStore source. Older releases have only one .ipa.
+                    let ipas = assets.compactMap { $0["browser_download_url"] as? String }.filter { $0.hasSuffix(".ipa") }
+                    let ipaUrl = ipas.first(where: { !$0.hasSuffix("-full.ipa") }) ?? ipas.first
                     if let ipaUrl = ipaUrl {
                         release = Release(version: String(parts[0]), build: build, ipaUrl: ipaUrl, pageUrl: object["html_url"] as? String ?? "", notes: object["body"] as? String ?? "")
                     }
@@ -80,9 +84,14 @@ public enum AstraUpdateChecker {
         if now - lastCheck < 12.0 * 60.0 * 60.0 {
             return
         }
-        UserDefaults.standard.set(now, forKey: AstraUpdateChecker.lastCheckKey)
         AstraUpdateChecker.fetchLatest(completion: { release in
-            guard let release = release, release.build > AstraUpdateChecker.currentBuild, release.build != UserDefaults.standard.integer(forKey: AstraUpdateChecker.skippedBuildKey) else {
+            guard let release = release else {
+                return
+            }
+            // Saved only after a check that worked: a launch while offline or rate-limited must not block the next
+            // launches from checking for 12 hours.
+            UserDefaults.standard.set(now, forKey: AstraUpdateChecker.lastCheckKey)
+            guard release.build > AstraUpdateChecker.currentBuild, release.build != UserDefaults.standard.integer(forKey: AstraUpdateChecker.skippedBuildKey) else {
                 return
             }
             if let controller = AstraUpdateChecker.topViewController(window) {

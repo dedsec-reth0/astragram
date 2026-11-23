@@ -184,3 +184,19 @@ CREATE TABLE IF NOT EXISTS premium_look (
   look TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
+
+-- Every visual gift an account gave or passed on, for the daily limit (GIFTS_PER_DAY). Apart from
+-- visual_gift_received, so a recipient hiding gifts (or a trim) does not give the sender new ones. Kept a day.
+CREATE TABLE IF NOT EXISTS visual_gift_sends (
+  from_id INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS visual_gift_sends_from ON visual_gift_sends(from_id, created_at);
+
+-- How many IDs each account asked about this hour in the badge's and the visual gifts' `check` (CHECK_IDS_PER_HOUR),
+-- so nobody can sweep ID ranges to collect every AstraGram user. period is the hour (unix time / 3600).
+CREATE TABLE IF NOT EXISTS check_budget (
+  tg_id INTEGER PRIMARY KEY,
+  period INTEGER NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0
+);

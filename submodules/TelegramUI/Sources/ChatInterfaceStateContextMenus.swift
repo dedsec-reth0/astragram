@@ -1374,9 +1374,19 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
 
         // AstraGram: the AstraGram submenu (details, repeat, copy without formatting, read until here, hide).
+        // Copy protection is honoured like Telegram's own Copy: the items that copy, share or send the content out are
+        // hidden. Both checks are already off when the user turned on removeCopyRestrictions.
+        let astraIsCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()
         if message.id.namespace == Namespaces.Message.Cloud {
             let astraStrings = AstraStrings(chatPresentationInterfaceState.strings)
             let astraMessage = message
+            // A forum topic or a Saved Messages sub-chat: export and AI summaries cover that thread only.
+            let astraThreadId: Int64?
+            if case let .replyThread(replyThreadMessage) = chatPresentationInterfaceState.chatLocation {
+                astraThreadId = replyThreadMessage.threadId
+            } else {
+                astraThreadId = nil
+            }
             actions.append(.action(ContextMenuActionItem(text: astraStrings.messageMenu, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Customize"), color: theme.actionSheet.primaryTextColor)
             }, action: { c, _ in
@@ -1409,7 +1419,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         controllerInteraction.sendMessage(astraMessage.text, nil)
                     })))
                 }
-                if !astraMessage.text.isEmpty {
+                if !astraMessage.text.isEmpty && !astraIsCopyProtected {
                     subItems.append(.action(ContextMenuActionItem(text: astraStrings.copyPlain, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor)
                     }, action: { _, f in
@@ -1459,7 +1469,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         controllerInteraction.displayUndo(.info(title: nil, text: astraStrings.burnDone, timeout: 2.0, customUndoText: nil))
                     })))
                 }
-                if let astraMessageNode = messageNode {
+                if !astraIsCopyProtected, let astraMessageNode = messageNode {
                     subItems.append(.action(ContextMenuActionItem(text: astraStrings.messageShot, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Image"), color: theme.actionSheet.primaryTextColor)
                     }, action: { [weak astraMessageNode] c, _ in
@@ -1500,7 +1510,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         controllerInteraction.displayUndo(.info(title: nil, text: astraStrings.bookmarkAdded, timeout: 2.0, customUndoText: nil))
                     }
                 })))
-                if let astraImage = astraMessage.media.first(where: { $0 is TelegramMediaImage }) as? TelegramMediaImage, let astraLargest = largestImageRepresentation(astraImage.representations) {
+                if !astraIsCopyProtected, let astraImage = astraMessage.media.first(where: { $0 is TelegramMediaImage }) as? TelegramMediaImage, let astraLargest = largestImageRepresentation(astraImage.representations) {
                     subItems.append(.action(ContextMenuActionItem(text: astraStrings.ocr, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor)
                     }, action: { c, _ in
@@ -1519,22 +1529,24 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         })
                     })))
                 }
-                subItems.append(.action(ContextMenuActionItem(text: astraStrings.exportChat, icon: { theme in
-                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Statistics"), color: theme.actionSheet.primaryTextColor)
-                }, action: { c, _ in
-                    c?.dismiss(completion: {
-                        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-                        let resultController = AstraTextResultController(title: astraStrings.exportChat, isRussian: astraStrings.isRussian, load: { completion in
-                            let _ = (AstraMessageActions.recentMessages(account: context.account, peerId: astraMessage.id.peerId, limit: 3000)
-                            |> deliverOnMainQueue).start(next: { messages in
-                                let statistics = astraChatStatistics(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
-                                let transcript = astraChatTranscript(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
-                                completion(.success(statistics + "\n\n────────\n\n" + transcript))
+                if !astraIsCopyProtected {
+                    subItems.append(.action(ContextMenuActionItem(text: astraStrings.exportChat, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Statistics"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { c, _ in
+                        c?.dismiss(completion: {
+                            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                            let resultController = AstraTextResultController(title: astraStrings.exportChat, isRussian: astraStrings.isRussian, load: { completion in
+                                let _ = (AstraMessageActions.recentMessages(account: context.account, peerId: astraMessage.id.peerId, threadId: astraThreadId, limit: 3000)
+                                |> deliverOnMainQueue).start(next: { messages in
+                                    let statistics = astraChatStatistics(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
+                                    let transcript = astraChatTranscript(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
+                                    completion(.success(statistics + "\n\n────────\n\n" + transcript))
+                                })
                             })
+                            astraPresentNative(resultController.wrapped(), in: controllerInteraction.navigationController()?.view.window)
                         })
-                        astraPresentNative(resultController.wrapped(), in: controllerInteraction.navigationController()?.view.window)
-                    })
-                })))
+                    })))
+                }
                 subItems.append(.action(ContextMenuActionItem(text: astraStrings.hideMessage, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/EyeLocked"), color: theme.actionSheet.primaryTextColor)
                 }, action: { _, f in
@@ -1547,10 +1559,18 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })))
         }
 
-        // AstraGram: AI actions (an OpenAI-compatible API with the user's own key).
-        if message.id.namespace == Namespaces.Message.Cloud {
+        // AstraGram: AI actions (an OpenAI-compatible API with the user's own key). They send the content to a server
+        // outside Telegram, so they are hidden on copy-protected content.
+        if message.id.namespace == Namespaces.Message.Cloud && !astraIsCopyProtected {
             let astraStrings = AstraStrings(chatPresentationInterfaceState.strings)
             let astraMessage = message
+            // A forum topic or a Saved Messages sub-chat: export and AI summaries cover that thread only.
+            let astraThreadId: Int64?
+            if case let .replyThread(replyThreadMessage) = chatPresentationInterfaceState.chatLocation {
+                astraThreadId = replyThreadMessage.threadId
+            } else {
+                astraThreadId = nil
+            }
             let astraLanguageNameValue = astraLanguageName(chatPresentationInterfaceState.strings)
             actions.append(.action(ContextMenuActionItem(text: astraStrings.aiMenu, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Translate"), color: theme.actionSheet.primaryTextColor)
@@ -1637,7 +1657,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     }, action: { _, _ in
                         presentAI(title, { completion in
                             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-                            let _ = (AstraMessageActions.recentMessages(account: context.account, peerId: astraMessage.id.peerId, limit: 100)
+                            let _ = (AstraMessageActions.recentMessages(account: context.account, peerId: astraMessage.id.peerId, threadId: astraThreadId, limit: 100)
                             |> deliverOnMainQueue).start(next: { messages in
                                 let transcript = astraChatTranscript(messages: messages, strings: presentationData.strings, nameDisplayOrder: presentationData.nameDisplayOrder)
                                 complete(action, transcript, completion)

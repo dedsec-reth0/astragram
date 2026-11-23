@@ -21,7 +21,7 @@ public enum AstraAI {
     /// Whether the user's own key is set (otherwise the free service is used).
     public static var hasOwnKey: Bool {
         let settings = AstraGramSettings.current
-        return !settings.aiApiKey.trimmingCharacters(in: .whitespaces).isEmpty && URL(string: settings.aiEndpoint) != nil
+        return !settings.aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && URL(string: settings.aiEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)) != nil
     }
 
     public static var isConfigured: Bool {
@@ -158,7 +158,7 @@ public enum AstraAI {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let hasOwnKey = AstraAI.hasOwnKey
         if hasOwnKey {
-            request.setValue("Bearer \(settings.aiApiKey.trimmingCharacters(in: .whitespaces))", forHTTPHeaderField: "Authorization")
+            request.setValue("Bearer \(settings.aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines))", forHTTPHeaderField: "Authorization")
         }
         let body: [String: Any] = [
             "model": hasOwnKey ? (settings.aiModel.isEmpty ? "gpt-4o-mini" : settings.aiModel) : AstraAI.freeModel,
@@ -221,7 +221,7 @@ public enum AstraAI {
         var request = URLRequest(url: url, timeoutInterval: 180.0)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(settings.aiApiKey.trimmingCharacters(in: .whitespaces))", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(settings.aiApiKey.trimmingCharacters(in: .whitespacesAndNewlines))", forHTTPHeaderField: "Authorization")
         request.httpBody = body
         URLSession.shared.dataTask(with: request, completionHandler: { data, response, error in
             let result: Result<String, AIError>

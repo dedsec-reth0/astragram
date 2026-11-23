@@ -13,6 +13,8 @@ import AccountContext
 public enum AstraBadgeSync {
     private static var disposables: [EnginePeer.Id: Disposable] = [:]
     private static var timers: [EnginePeer.Id: SwiftSignalKit.Timer] = [:]
+    /// The account (session) the state above was started for: a new login of the same account gets a new one.
+    private static var accountIds: [EnginePeer.Id: ObjectIdentifier] = [:]
     /// The bot is connected for the badge at most once per account in a session.
     private static var linkTried = Set<EnginePeer.Id>()
     /// The old name mark is taken out at most once per account in a session.
@@ -24,9 +26,19 @@ public enum AstraBadgeSync {
         let peerId = context.account.peerId
         // Visual gifts are asked again on every switch to the account (at most once a minute).
         AstraVisualGifts.start(context: context)
-        if AstraBadgeSync.disposables[peerId] != nil {
-            return
+        if let existing = AstraBadgeSync.disposables[peerId] {
+            if AstraBadgeSync.accountIds[peerId] == ObjectIdentifier(context.account) {
+                return
+            }
+            // A new login of the same account: the state bound to the old, logged-out context goes, so the refreshes
+            // use the new one (and the old account is not kept alive). The old account is retained until here, so its
+            // identifier cannot have been reused by the new one.
+            existing.dispose()
+            AstraBadgeSync.disposables[peerId] = nil
+            AstraBadgeSync.timers[peerId]?.invalidate()
+            AstraBadgeSync.timers[peerId] = nil
         }
+        AstraBadgeSync.accountIds[peerId] = ObjectIdentifier(context.account)
         let enabled = AstraGramSettings.signal
         |> map { settings -> Bool in
             return settings.astraBadge

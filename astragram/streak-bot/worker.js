@@ -13,8 +13,27 @@ const STALE_DAYS = 30;
 // The bot's admin: their private chat is the control panel and the support inbox. A plain Telegram user id (not a
 // secret): messaging someone needs them to have started the bot.
 const ADMIN_ID = 887825713;
-// How many messages one invocation sends, kept well under the Workers subrequest limit.
-const BROADCAST_BATCH = 25;
+// How many messages one invocation sends, kept well under the Workers subrequest limit and the free plan's 50 D1
+// queries per invocation (a drain makes a few queries per batch, not per message).
+const BROADCAST_BATCH = 20;
+
+// An account keeps one owners row per linked device (up to 5): joining owners directly returns every pair once per
+// device. This is one row per account, its most recently synced device, whose time zone is the current one.
+const LATEST_OWNER = `(SELECT tg_id, name, tz FROM owners o1 WHERE token_hash = (SELECT token_hash FROM owners o2
+  WHERE o2.tg_id = o1.tg_id ORDER BY last_sync DESC, created_at DESC LIMIT 1))`;
+
+// The owner's current local day, as the app counts it (see remind()).
+function ownerDay(t, tz) {
+  return Math.floor((t + (tz || 0)) / 86400);
+}
+
+// A restore the friend may still ask for: the pair's numbers are of the owner's current day and yesterday is
+// restorable. An older row (the owner's app offline since) would be refused by the app, which restores only
+// yesterday, after the bot had told the friend it would count.
+function canRestore(pair, t) {
+  const day = ownerDay(t, pair.owner_tz);
+  return pair.restorable_day !== null && pair.restores_left > 0 && pair.day === day && pair.restorable_day === day - 1;
+}
 
 function isAdmin(id) {
   return id === ADMIN_ID;
@@ -161,7 +180,11 @@ const PAIR_UPSERT_SHARED =
      mine = CASE WHEN pairs.day = excluded.day THEN MAX(pairs.mine, excluded.mine) ELSE excluded.mine END,
      theirs = CASE WHEN pairs.day = excluded.day THEN MAX(pairs.theirs, excluded.theirs) ELSE excluded.theirs END,
      today_done = CASE WHEN pairs.day = excluded.day THEN MAX(pairs.today_done, excluded.today_done) ELSE excluded.today_done END,
-     day = excluded.day, need = excluded.need, updated_at = excluded.updated_at`;
+     day = excluded.day, need = excluded.need, updated_at = excluded.updated_at
+   WHERE excluded.day >= pairs.day OR excluded.day < pairs.day - 1`;
+// The WHERE above: a device whose numbers are of the day before the stored row (counted before midnight, or in a time
+// zone behind) must not put yesterday's numbers back as today's. Only exactly one day back is refused, so a row once
+// written with a wrong future clock does not stay frozen until that day comes.
 
 async function handleSync(request, env) {
   const owner = await ownerFromRequest(request, env);
@@ -238,8 +261,22 @@ async function handleSync(request, env) {
     }
   }
 
-  const restores = await env.DB.prepare('SELECT friend_id, day FROM restore_requests WHERE owner_id = ?').bind(owner.tg_id).all();
-  await env.DB.prepare('DELETE FROM restore_requests WHERE owner_id = ?').bind(owner.tg_id).run();
+  let restores;
+  if (list) {
+    // A version 2 app confirms the restores it applied in pair.restored (stored in streak_restores by the batch above):
+    // only those go. The others are sent again until confirmed, or until the 3-day cleanup in remind(), so a lost
+    // reply (a timeout, the app killed mid-request) does not lose a restore the bot already promised the friend. The
+    // app ignores one sent again (it restores only yesterday, and a restored day is a set).
+    await env.DB.prepare(
+      `DELETE FROM restore_requests WHERE owner_id = ? AND EXISTS (SELECT 1 FROM streak_restores s
+         WHERE s.owner_id = restore_requests.owner_id AND s.friend_id = restore_requests.friend_id AND s.day = restore_requests.day)`
+    ).bind(owner.tg_id).run();
+    restores = await env.DB.prepare('SELECT friend_id, day FROM restore_requests WHERE owner_id = ?').bind(owner.tg_id).all();
+  } else {
+    // An app before version 2 confirms nothing: the requests are handed over once, read and deleted in one statement,
+    // so a request the friend makes meanwhile is not deleted unread.
+    restores = await env.DB.prepare('DELETE FROM restore_requests WHERE owner_id = ? RETURNING friend_id, day').bind(owner.tg_id).all();
+  }
   const reply = { restores: (restores.results || []).map((r) => ({ friend: r.friend_id, day: r.day })) };
   if (list) {
     reply.streaks = list.active.map((r) => ({ friend: r.friend_id, startDay: r.start_day }));
@@ -305,7 +342,27 @@ async function syncList(env, owner, body, pairs, t) {
 // returning it would give anyone the IDs of every AstraGram user. A badge nobody refreshed in BADGE_DAYS is dropped.
 const BADGE_DAYS = 45;
 const MAX_BADGE_CHECK = 1000;
+// /api/gifts makes five chunked lookups per `check` (meta, lists, received, worn, looks): 300 IDs are 4 chunks each,
+// which with its fixed queries stays under the free plan's 50 D1 queries per invocation.
+const MAX_GIFT_CHECK = 300;
 const D1_CHUNK = 90;
+// Without a limit, any account (anyone can link one) could sweep ID ranges through `check` and collect every AstraGram
+// user. Each account may check this many IDs an hour, over /api/badge and /api/gifts together and all of its devices:
+// a real app re-checks its chats every 30 minutes and after a gift action, far below it.
+const CHECK_IDS_PER_HOUR = 40000;
+
+// Counts `n` checked IDs against the account's hourly budget; false when it is spent.
+async function takeCheckBudget(env, tgId, n, t) {
+  if (n === 0) return true;
+  const period = Math.floor(t / 3600);
+  const row = await env.DB.prepare(
+    `INSERT INTO check_budget (tg_id, period, used) VALUES (?, ?, ?)
+     ON CONFLICT (tg_id) DO UPDATE SET used = CASE WHEN check_budget.period = excluded.period THEN check_budget.used + excluded.used ELSE excluded.used END,
+       period = excluded.period
+     RETURNING used`
+  ).bind(tgId, period, n).first();
+  return !row || row.used <= CHECK_IDS_PER_HOUR;
+}
 
 async function handleBadge(request, env) {
   const owner = await ownerFromRequest(request, env);
@@ -321,13 +378,15 @@ async function handleBadge(request, env) {
     await env.DB.prepare('DELETE FROM badges WHERE tg_id = ?').bind(owner.tg_id).run();
     return json({ users: [] });
   }
+  const check = Array.isArray(body.check)
+    ? [...new Set(body.check.slice(0, MAX_BADGE_CHECK).map((id) => int(id, 1, Number.MAX_SAFE_INTEGER, 0)).filter((id) => id > 0))]
+    : [];
+  // The app takes a refusal for a failed refresh and keeps what it had.
+  if (!(await takeCheckBudget(env, owner.tg_id, check.length, t))) return json({ error: 'too often' }, 429);
   // A badge-only owner never syncs streaks: this keeps it from being taken for stale.
   await env.DB.prepare('UPDATE owners SET last_sync = ? WHERE token_hash = ? AND last_sync < ?').bind(t, owner.token_hash, t - 86400).run();
   await env.DB.prepare('INSERT INTO badges (tg_id, updated_at) VALUES (?, ?) ON CONFLICT (tg_id) DO UPDATE SET updated_at = excluded.updated_at')
     .bind(owner.tg_id, t).run();
-  const check = Array.isArray(body.check)
-    ? [...new Set(body.check.slice(0, MAX_BADGE_CHECK).map((id) => int(id, 1, Number.MAX_SAFE_INTEGER, 0)).filter((id) => id > 0))]
-    : [];
   const users = [];
   for (let i = 0; i < check.length; i += D1_CHUNK) {
     const chunk = check.slice(i, i + D1_CHUNK);
@@ -475,6 +534,13 @@ async function handleGifts(request, env) {
     return json({ error: 'bad json' }, 400);
   }
   const t = now();
+  // The account itself stays in `check`: an app may ask with another linked account's token (the lookup tokens), and
+  // that account's gifts must then come back as anyone's would. The app leaves its own ID out when it asks with its own.
+  const check = Array.isArray(body.check)
+    ? [...new Set(body.check.slice(0, MAX_GIFT_CHECK).map((id) => int(id, 1, Number.MAX_SAFE_INTEGER, 0)).filter((id) => id > 0))]
+    : [];
+  // Refused before anything changes, so a refused request did nothing (the app takes it for a failure).
+  if (!(await takeCheckBudget(env, owner.tg_id, check.length, t))) return json({ error: 'too often' }, 429);
   if (Array.isArray(body.gifts)) {
     // Gift IDs are 64-bit; they travel as decimal strings. A number past 2^53 has already been rounded by JSON.parse, so it
     // is dropped rather than stored as some other gift.
@@ -488,14 +554,23 @@ async function handleGifts(request, env) {
   } else {
     await env.DB.prepare('UPDATE visual_gifts SET updated_at = ? WHERE tg_id = ?').bind(t, owner.tg_id).run();
   }
-  const giftsToday = async () => (await env.DB.prepare('SELECT COUNT(*) AS c FROM visual_gift_received WHERE from_id = ? AND created_at > ?').bind(owner.tg_id, t - 86400).first()).c;
+  // Takes one of the GIFTS_PER_DAY a gift given or passed on uses; false when they are used up. The count is kept in
+  // its own log, which hiding, trimming and passing gifts on never touch (counting visual_gift_received let a sender
+  // whose recipient hides the gifts give without end), and the check and the take are one statement, so two requests
+  // at once cannot both take the last one.
+  const takeGiftQuota = async () => {
+    const taken = await env.DB.prepare(
+      'INSERT INTO visual_gift_sends (from_id, created_at) SELECT ?, ? WHERE (SELECT COUNT(*) FROM visual_gift_sends WHERE from_id = ? AND created_at > ?) < ?'
+    ).bind(owner.tg_id, t, owner.tg_id, t - 86400, GIFTS_PER_DAY).run();
+    return !!(taken.meta && taken.meta.changes);
+  };
   const trimReceived = (to) => env.DB.prepare('DELETE FROM visual_gift_received WHERE to_id = ? AND id NOT IN (SELECT id FROM visual_gift_received WHERE to_id = ? ORDER BY id DESC LIMIT ?)').bind(to, to, MAX_RECEIVED).run();
   let sent = null;
   if (body.send && typeof body.send === 'object') {
     const to = int(body.send.to, 1, Number.MAX_SAFE_INTEGER, 0);
     const gift = giftId(body.send.gift);
     if (!to || to === owner.tg_id || !gift) return json({ error: 'bad gift' }, 400);
-    if (await giftsToday() >= GIFTS_PER_DAY) return json({ error: 'too many gifts today' }, 429);
+    if (!(await takeGiftQuota())) return json({ error: 'too many gifts today' }, 429);
     const inserted = await env.DB.prepare('INSERT INTO visual_gift_received (to_id, from_id, gift_id, created_at) VALUES (?, ?, ?, ?)').bind(to, owner.tg_id, gift, t).run();
     sent = inserted.meta ? inserted.meta.last_row_id : null;
     const text = clip(body.send.text, GIFT_TEXT_MAX);
@@ -569,15 +644,19 @@ async function handleGifts(request, env) {
     const to = int(body.transfer.to, 1, Number.MAX_SAFE_INTEGER, 0);
     const gift = ref ? await ownedGift(env, owner.tg_id, ref) : null;
     if (!gift || !to || to === owner.tg_id) return json({ error: 'bad transfer' }, 400);
+    // A gift passed on reaches the other profile as one given does (an own gift can be put on from the shop at will):
+    // it counts against the same daily limit.
+    if (!(await takeGiftQuota())) return json({ error: 'too many gifts today' }, 429);
     const meta = await env.DB.prepare('SELECT unique_look FROM visual_gift_meta WHERE tg_id = ? AND ref = ?').bind(owner.tg_id, ref).first();
-    let row;
     if (ref[0] === 'o') {
       await saveOwnGiftList(env, owner.tg_id, (await ownGiftList(env, owner.tg_id)).filter((id) => id !== gift), t);
-      const inserted = await env.DB.prepare('INSERT INTO visual_gift_received (to_id, from_id, gift_id, created_at) VALUES (?, ?, ?, ?)').bind(to, owner.tg_id, gift, t).run();
-      row = inserted.meta.last_row_id;
-    } else {
-      row = int(ref.slice(1), 1, Number.MAX_SAFE_INTEGER, 0);
-      await env.DB.prepare('UPDATE visual_gift_received SET to_id = ?, from_id = ?, created_at = ? WHERE id = ?').bind(to, owner.tg_id, t, row).run();
+    }
+    // A new row, also for a received gift passed on: re-pointing the old row would keep its old, low id, and
+    // trimReceived (which keeps the newest ids) could then drop it from the recipient at once.
+    const inserted = await env.DB.prepare('INSERT INTO visual_gift_received (to_id, from_id, gift_id, created_at) VALUES (?, ?, ?, ?)').bind(to, owner.tg_id, gift, t).run();
+    const row = inserted.meta.last_row_id;
+    if (ref[0] === 'r') {
+      await env.DB.prepare('DELETE FROM visual_gift_received WHERE id = ? AND to_id = ?').bind(int(ref.slice(1), 1, Number.MAX_SAFE_INTEGER, 0), owner.tg_id).run();
     }
     await env.DB.prepare('DELETE FROM visual_gift_meta WHERE tg_id = ? AND ref = ?').bind(owner.tg_id, ref).run();
     await env.DB.prepare('DELETE FROM visual_gift_worn WHERE tg_id = ? AND ref = ?').bind(owner.tg_id, ref).run();
@@ -609,10 +688,9 @@ async function handleGifts(request, env) {
     }
   }
   await env.DB.prepare('UPDATE owners SET last_sync = ? WHERE token_hash = ? AND last_sync < ?').bind(t, owner.token_hash, t - 86400).run();
-  const check = Array.isArray(body.check)
-    ? [...new Set(body.check.slice(0, MAX_BADGE_CHECK).map((id) => int(id, 1, Number.MAX_SAFE_INTEGER, 0)).filter((id) => id > 0 && id !== owner.tg_id))]
-    : [];
   const inList = (chunk) => chunk.map(() => '?').join(',');
+  // The account and the checked people, once each.
+  const wornIds = [...new Set([owner.tg_id, ...check])];
   // What the owners set on their gifts, by owner and ref (with their hidden gifts, which only the owner gets).
   const metaOf = {};
   const metaRows = async (ids) => {
@@ -622,7 +700,7 @@ async function handleGifts(request, env) {
       for (const r of rows) (metaOf[r.tg_id] = metaOf[r.tg_id] || {})[r.ref] = r;
     }
   };
-  await metaRows([...check, owner.tg_id]);
+  await metaRows(wornIds);
   const metaFor = (tgId, ref) => (metaOf[tgId] || {})[ref];
   const isHidden = (tgId, ref) => !!(metaFor(tgId, ref) && metaFor(tgId, ref).hidden);
   // The settings an app shows on a gift; only the owner learns which are hidden.
@@ -687,14 +765,26 @@ async function handleGifts(request, env) {
     if (m) mineMeta[id] = m;
   }
   // The gifts worn as a status: the account's own and the checked people's (a hidden gift is not shown worn).
+  // Whether a worn ref is still its wearer's gift, from the lists loaded above rather than a query per wearer (which
+  // would take a full `check` past the free plan's D1 query limit). A hidden gift is left out of the others' lists,
+  // and is not shown worn for them anyway.
+  const ownedRef = (tgId, ref) => {
+    if (ref[0] === 'o') {
+      const list = tgId === owner.tg_id ? mine : users[tgId];
+      return list && list.map(String).includes(ref.slice(1)) ? ref.slice(1) : null;
+    }
+    const id = int(ref.slice(1), 1, Number.MAX_SAFE_INTEGER, 0);
+    const list = tgId === owner.tg_id ? mineReceived : received[tgId];
+    const r = list && list.find((x) => x.id === id);
+    return r ? String(r.gift) : null;
+  };
   const worn = {};
-  const wornIds = [owner.tg_id, ...check];
   for (let i = 0; i < wornIds.length; i += D1_CHUNK) {
     const chunk = wornIds.slice(i, i + D1_CHUNK);
     const rows = (await env.DB.prepare(`SELECT tg_id, ref FROM visual_gift_worn WHERE tg_id IN (${inList(chunk)})`).bind(...chunk).all()).results || [];
     for (const r of rows) {
       if (r.tg_id !== owner.tg_id && isHidden(r.tg_id, r.ref)) continue;
-      const gift = await ownedGift(env, r.tg_id, r.ref);
+      const gift = ownedRef(r.tg_id, r.ref);
       if (!gift) continue;
       const m = metaFor(r.tg_id, r.ref);
       worn[r.tg_id] = { ref: r.ref, gift, u: m ? uniqueLook(m.unique_look) : null };
@@ -764,9 +854,13 @@ async function handleFeedback(request, env) {
     who = `${name || 'пользователь'}${username ? ' @' + username : ''} (id ${tgId}${verified ? '' : ', не подтверждён'})`;
   }
   const header = kind === 'idea' ? '💡 Идея' : '🐞 Ошибка';
-  const reply = tgId ? '\n\nОтветьте на это сообщение — ответ уйдёт автору в чат с ботом (если он его запускал).' : '';
+  // A reply reaches the author only when their account is proven: a claimed userId is whatever the sender typed, and
+  // the admin's answer would go to that person's chat.
+  const reply = verified
+    ? '\n\nОтветьте на это сообщение — ответ уйдёт автору в чат с ботом (если он его запускал).'
+    : (tgId ? '\n\nОтправитель не подтверждён — ответ через бота не доставляется.' : '');
   const { key } = await sendInbox(env, kind, { text: `${header} #${id}\nОт: ${who}\n${app}\n\n${text}${reply}` });
-  if (tgId && key) {
+  if (verified && tgId && key) {
     await env.DB.prepare('INSERT OR REPLACE INTO support (admin_msg_id, user_id, created_at) VALUES (?, ?, ?)').bind(key, tgId, t).run();
   }
   return json({ ok: true, id });
@@ -881,16 +975,21 @@ async function handleLogin(request, env) {
   const t = now();
   const user = await verifiedWebAppUser(env, body && body.initData, t);
   if (!user) return json({ ok: false, error: 'signature' }, 403);
-  await linkOwner(env, await sha256Hex(match[1]), user.id, user.first_name, t);
+  if (!(await linkOwner(env, await sha256Hex(match[1]), user.id, user.first_name, t))) return json({ ok: false, error: 'token' }, 409);
   return json({ ok: true, id: user.id });
 }
 
-// Up to 5 linked devices per account (a phone and an iPad must not keep unlinking each other): the oldest go.
+// Up to 5 linked devices per account (a phone and an iPad must not keep unlinking each other): the oldest go. A token
+// already tied to another account is never handed over (whoever knows it would act as the new account); returns
+// whether the token is now linked.
 async function linkOwner(env, hash, tgId, firstName, t) {
+  const existing = await env.DB.prepare('SELECT tg_id FROM owners WHERE token_hash = ?').bind(hash).first();
+  if (existing && existing.tg_id !== tgId) return false;
   await env.DB.batch([
     env.DB.prepare('DELETE FROM owners WHERE tg_id = ? AND token_hash NOT IN (SELECT token_hash FROM owners WHERE tg_id = ? ORDER BY created_at DESC LIMIT 4)').bind(tgId, tgId),
     env.DB.prepare('INSERT OR REPLACE INTO owners (token_hash, tg_id, name, created_at) VALUES (?, ?, ?, ?)').bind(hash, tgId, cleanName(firstName), t),
   ]);
+  return true;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -898,7 +997,7 @@ async function linkOwner(env, hash, tgId, firstName, t) {
 
 async function streaksMessage(env, userId, ru) {
   const rows = (await env.DB.prepare(
-    `SELECT p.*, o.name AS owner_name FROM pairs p JOIN owners o ON o.tg_id = p.owner_id
+    `SELECT p.*, o.name AS owner_name, o.tz AS owner_tz FROM pairs p JOIN ${LATEST_OWNER} o ON o.tg_id = p.owner_id
      WHERE p.friend_id = ? ORDER BY p.count DESC`
   ).bind(userId).all()).results || [];
   if (rows.length === 0) {
@@ -918,7 +1017,7 @@ async function streaksMessage(env, userId, ru) {
     lines.push(ru
       ? `   Сегодня: ты ${Math.min(row.theirs, row.need)}/${row.need}, ${row.owner_name} ${Math.min(row.mine, row.need)}/${row.need}${row.today_done ? ' ✅' : ''}`
       : `   Today: you ${Math.min(row.theirs, row.need)}/${row.need}, ${row.owner_name} ${Math.min(row.mine, row.need)}/${row.need}${row.today_done ? ' ✅' : ''}`);
-    if (row.restorable_day !== null && row.restores_left > 0) {
+    if (canRestore(row, t)) {
       lines.push(ru
         ? `   Вчера пропущено — можно восстановить сегодня (осталось ${row.restores_left} на неделе)`
         : `   Yesterday was missed — it can be restored today (${row.restores_left} left this week)`);
@@ -945,26 +1044,31 @@ async function handleMessage(env, message) {
   const text = (message.text || '').trim();
   const t = now();
 
+  // Linking by "/start l<token>" asks first: anyone can make a token and send someone the link, and pressing Start
+  // alone would tie that token to the presser's account, letting the link's author act as them. The token is linked
+  // when the button is pressed (handleCallback). The app's usual way to link is /api/login, with Telegram's signature.
   const link = text.match(/^\/start l([0-9a-f]{48})$/);
   if (link) {
-    await linkOwner(env, await sha256Hex(link[1]), from.id, from.first_name, t);
     await tg(env, 'sendMessage', {
       chat_id: from.id,
       text: ru
-        ? '✅ AstraGram подключён к боту огоньков.\n\nТе, с кем у вас огонёк и у кого нет AstraGram, увидят здесь счёт, получат напоминание вечером и смогут восстановить пропущенный день. Пригласить человека можно с экрана огонька в AstraGram.\n\nБоту приходят только числа, тексты сообщений — никогда. Отключить: AstraGram → огонёк → «Отключить бота огоньков».'
-        : '✅ AstraGram is connected to the streak bot.\n\nPeople you have a streak with who do not use AstraGram see the count here, get a reminder in the evening and can restore a missed day. Invite someone from the streak screen in AstraGram.\n\nThe bot gets only numbers, never message texts. To disconnect: AstraGram → streak → Disconnect Streak Bot.',
+        ? 'Подключить AstraGram к вашему аккаунту? Нажимайте, только если вы сами только что подключали бота огоньков в своём AstraGram. Если ссылку прислал кто-то другой — не нажимайте: он получит доступ к вашим огонькам и подаркам.'
+        : 'Connect AstraGram to your account? Press only if you just connected the streak bot in your own AstraGram. If someone else sent you this link, do not press: they would get access to your streaks and gifts.',
+      // "l:" and 48 hex digits are 50 bytes, under Telegram's 64-byte limit for callback data.
+      reply_markup: { inline_keyboard: [[{ text: ru ? '✅ Подключить' : '✅ Connect', callback_data: `l:${link[1]}` }]] },
     });
+    return;
+  }
+
+  // A payment's service message has no text: it must not fall into the admin's panel below.
+  if (message.successful_payment) {
+    await handleSuccessfulPayment(env, message);
     return;
   }
 
   // The admin's chat is the control panel and the support inbox.
   if (isAdmin(from.id)) {
     if (await handleAdminMessage(env, message)) return;
-  }
-
-  if (message.successful_payment) {
-    await handleSuccessfulPayment(env, message);
-    return;
   }
 
   if (text === '/paysupport') {
@@ -1027,13 +1131,29 @@ async function handleCallback(env, callback) {
   if (isAdmin(from.id) && (callback.data || '').startsWith('bc:')) {
     if (await handleAdminCallback(env, callback)) return;
   }
+  // The confirmation of "/start l<token>" (see handleMessage): the token is tied to whoever pressed it.
+  const linkMatch = (callback.data || '').match(/^l:([0-9a-f]{48})$/);
+  if (linkMatch) {
+    const ok = await linkOwner(env, await sha256Hex(linkMatch[1]), from.id, from.first_name, now());
+    await tg(env, 'answerCallbackQuery', { callback_query_id: callback.id });
+    await tg(env, 'sendMessage', {
+      chat_id: from.id,
+      text: !ok
+        ? (ru ? 'Эта ссылка уже использована другим аккаунтом.' : 'This link was already used by another account.')
+        : ru
+          ? '✅ AstraGram подключён к боту огоньков.\n\nТе, с кем у вас огонёк и у кого нет AstraGram, увидят здесь счёт, получат напоминание вечером и смогут восстановить пропущенный день. Пригласить человека можно с экрана огонька в AstraGram.\n\nБоту приходят только числа, тексты сообщений — никогда. Отключить: AstraGram → огонёк → «Отключить бота огоньков».'
+          : '✅ AstraGram is connected to the streak bot.\n\nPeople you have a streak with who do not use AstraGram see the count here, get a reminder in the evening and can restore a missed day. Invite someone from the streak screen in AstraGram.\n\nThe bot gets only numbers, never message texts. To disconnect: AstraGram → streak → Disconnect Streak Bot.',
+    });
+    return;
+  }
   const match = (callback.data || '').match(/^r:(\d+)$/);
   let answer = ru ? 'Не получилось' : 'Could not do that';
   if (match) {
     const ownerId = Number(match[1]);
-    const pair = await env.DB.prepare('SELECT p.*, o.name AS owner_name FROM pairs p JOIN owners o ON o.tg_id = p.owner_id WHERE p.owner_id = ? AND p.friend_id = ?').bind(ownerId, from.id).first();
-    if (pair && pair.restorable_day !== null && pair.restores_left > 0) {
-      await env.DB.prepare('INSERT OR IGNORE INTO restore_requests (owner_id, friend_id, day, created_at) VALUES (?, ?, ?, ?)').bind(ownerId, from.id, pair.restorable_day, now()).run();
+    const t = now();
+    const pair = await env.DB.prepare(`SELECT p.*, o.name AS owner_name, o.tz AS owner_tz FROM pairs p JOIN ${LATEST_OWNER} o ON o.tg_id = p.owner_id WHERE p.owner_id = ? AND p.friend_id = ?`).bind(ownerId, from.id).first();
+    if (pair && canRestore(pair, t)) {
+      await env.DB.prepare('INSERT OR IGNORE INTO restore_requests (owner_id, friend_id, day, created_at) VALUES (?, ?, ?, ?)').bind(ownerId, from.id, pair.restorable_day, t).run();
       pair.owner_name = cleanName(pair.owner_name);
       answer = ru
         ? `Готово: вчерашний день засчитается, как только AstraGram у ${pair.owner_name} выйдет на связь`
@@ -1095,37 +1215,60 @@ async function enqueueBroadcast(env, fromChat, msgId) {
 }
 
 async function drainBroadcast(env) {
-  const rows = (await env.DB.prepare('SELECT * FROM broadcast_queue ORDER BY id LIMIT ?').bind(BROADCAST_BATCH).all()).results || [];
+  // The rows are claimed (taken out of the queue) before sending, in one statement: a drain from the webhook and one
+  // from the cron at the same time never get the same rows, so nobody gets the post twice.
+  const rows = ((await env.DB.prepare('DELETE FROM broadcast_queue WHERE id IN (SELECT id FROM broadcast_queue ORDER BY id LIMIT ?) RETURNING *').bind(BROADCAST_BATCH).all()).results || [])
+    .sort((a, b) => a.id - b.id);
   const touched = new Set();
-  for (const row of rows) {
+  // The counts are written once per broadcast at the end, not per message: with a query or two per message a batch
+  // went past the free plan's 50 D1 queries, and the query that failed came after its message had been sent.
+  const counts = new Map();
+  const stopped = [];
+  let unsent = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
     const res = await tg(env, 'copyMessage', { chat_id: row.chat_id, from_chat_id: row.from_chat, message_id: row.msg_id });
     if (!res.ok && res.error_code === 429) {
-      // Rate limited: stop and leave the rest for the next drain (the cron runs every minute).
+      // Rate limited: stop and put the rest back for the next drain (the cron runs every minute).
+      unsent = rows.slice(i);
       break;
     }
+    const c = counts.get(row.broadcast_id) || { delivered: 0, failed: 0 };
     if (res.ok) {
-      await env.DB.prepare('UPDATE broadcasts SET delivered = delivered + 1 WHERE id = ?').bind(row.broadcast_id).run();
+      c.delivered++;
     } else {
-      await env.DB.prepare('UPDATE broadcasts SET failed = failed + 1 WHERE id = ?').bind(row.broadcast_id).run();
+      c.failed++;
       // Blocked the bot: no more broadcasts or reminders to them.
-      if (res.error_code === 403) {
-        await env.DB.prepare('UPDATE friends SET stopped = 1 WHERE tg_id = ?').bind(row.chat_id).run();
-      }
+      if (res.error_code === 403) stopped.push(row.chat_id);
     }
-    await env.DB.prepare('DELETE FROM broadcast_queue WHERE id = ?').bind(row.id).run();
+    counts.set(row.broadcast_id, c);
     touched.add(row.broadcast_id);
   }
-  // Report each broadcast that has now fully drained, once.
+  const statements = [];
+  for (const [id, c] of counts) {
+    statements.push(env.DB.prepare('UPDATE broadcasts SET delivered = delivered + ?, failed = failed + ? WHERE id = ?').bind(c.delivered, c.failed, id));
+  }
+  for (const chatId of stopped) {
+    statements.push(env.DB.prepare('UPDATE friends SET stopped = 1 WHERE tg_id = ?').bind(chatId));
+  }
+  // Put back with their own ids, so the queue keeps its order.
+  for (const r of unsent) {
+    statements.push(env.DB.prepare('INSERT INTO broadcast_queue (id, broadcast_id, chat_id, from_chat, msg_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(r.id, r.broadcast_id, r.chat_id, r.from_chat, r.msg_id, r.created_at));
+  }
+  if (statements.length) await env.DB.batch(statements);
+  // Report each broadcast that has now fully drained, once: marking it done is one statement, so two drains at once
+  // do not both report it. A row another drain has claimed is no longer in the queue while it is being sent, so an
+  // empty queue alone is not enough: every recipient must also be counted.
   for (const id of touched) {
     const remaining = (await env.DB.prepare('SELECT COUNT(*) AS c FROM broadcast_queue WHERE broadcast_id = ?').bind(id).first()).c;
     if (remaining > 0) {
       continue;
     }
-    const b = await env.DB.prepare('SELECT * FROM broadcasts WHERE id = ? AND done = 0').bind(id).first();
+    const b = await env.DB.prepare('UPDATE broadcasts SET done = 1 WHERE id = ? AND done = 0 AND delivered + failed >= total RETURNING *').bind(id).first();
     if (!b) {
       continue;
     }
-    await env.DB.prepare('UPDATE broadcasts SET done = 1 WHERE id = ?').bind(id).run();
     let text = `✅ <b>Рассылка завершена</b>\n\nДоставлено: <b>${b.delivered}</b> из <b>${b.total}</b>`;
     if (b.failed > 0) {
       text += `\nНе доставлено: ${b.failed} (остановили бота)`;
@@ -1147,7 +1290,8 @@ function adminPanel() {
 
 async function adminStats(env) {
   const reach = (await broadcastRecipients(env)).length;
-  const owners = (await env.DB.prepare('SELECT COUNT(*) AS c FROM owners').first()).c;
+  // One row per linked device: the accounts are counted once.
+  const owners = (await env.DB.prepare('SELECT COUNT(DISTINCT tg_id) AS c FROM owners').first()).c;
   const pairs = (await env.DB.prepare('SELECT COUNT(*) AS c FROM pairs').first()).c;
   const queued = (await env.DB.prepare('SELECT COUNT(*) AS c FROM broadcast_queue').first()).c;
   let text = `📊 <b>Статистика</b>\n\n👥 Подписчиков бота: <b>${reach}</b>\n🔥 Пользователей AstraGram: <b>${owners}</b>\n💬 Активных огоньков: <b>${pairs}</b>`;
@@ -1340,7 +1484,7 @@ async function remind(env) {
   const t = now();
   const rows = (await env.DB.prepare(
     `SELECT p.*, o.name AS owner_name, o.tz AS tz FROM pairs p
-     JOIN owners o ON o.tg_id = p.owner_id
+     JOIN ${LATEST_OWNER} o ON o.tg_id = p.owner_id
      JOIN friends f ON f.tg_id = p.friend_id AND f.stopped = 0
      WHERE p.updated_at > ? AND p.today_done = 0 AND p.theirs < p.need AND p.reminded_day < p.day AND (p.count > 0 OR p.lost_count > 0)`
   ).bind(t - 36 * 3600).all()).results || [];
@@ -1370,6 +1514,9 @@ async function remind(env) {
     env.DB.prepare('DELETE FROM support WHERE created_at < ?').bind(t - 30 * 86400),
     env.DB.prepare('DELETE FROM broadcast_queue WHERE created_at < ?').bind(t - 2 * 86400),
     env.DB.prepare('DELETE FROM broadcasts WHERE done = 1 AND created_at < ?').bind(t - 2 * 86400),
+    // The daily gift limit looks back one day; the hourly check budget one hour.
+    env.DB.prepare('DELETE FROM visual_gift_sends WHERE created_at < ?').bind(t - 86400),
+    env.DB.prepare('DELETE FROM check_budget WHERE period < ?').bind(Math.floor(t / 3600) - 1),
   ]);
 }
 

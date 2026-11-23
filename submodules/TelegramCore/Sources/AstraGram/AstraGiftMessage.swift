@@ -76,10 +76,16 @@ public enum AstraGiftMessage {
         // Shown on the card in place of Telegram's "add it to your profile, make it collectible": a visual gift is
         // already on the profile and has nothing to convert or upgrade.
         let note = isRussian ? "Бесплатный подарок AstraGram: он уже в профиле, его видят пользователи AstraGram" : "A free AstraGram gift: it is on the profile already, and AstraGram users see it"
+        // The giver's own words: the sending app puts them after the fixed second line, as "\n\n" + caption. The
+        // second line has a single line break, so the first blank line after the hidden mark starts the caption.
+        var caption = ""
+        if let markEnd = message.text.range(of: String(String.UnicodeScalarView(AstraGiftMessage.mark)), options: .backwards)?.upperBound, let separator = message.text.range(of: "\n\n", range: markEnd ..< message.text.endIndex) {
+            caption = String(message.text[separator.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         let action = TelegramMediaAction(action: .starGift(
             gift: .generic(gift),
             convertStars: nil,
-            text: note,
+            text: caption.isEmpty ? note : caption,
             entities: nil,
             nameHidden: false,
             savedToProfile: true,

@@ -159,6 +159,8 @@ public final class PeerInfoGiftsCoverComponent: Component {
         
         fileprivate var astraBubbles: AstraGiftBubblesView?
         fileprivate var astraBubblesHidden = false
+        // The last collapse fraction, so unhiding the bubbles restores the right alpha and touches at once.
+        fileprivate var astraBubbleFraction: CGFloat = 0.0
         fileprivate var astraBubbleItems: [ProfileGiftsContext.State.StarGift] = []
         fileprivate var astraBubbleHomes: [PositionGenerator.Position] = []
         fileprivate var astraBubbleLayoutKey: String = ""
@@ -261,7 +263,9 @@ public final class PeerInfoGiftsCoverComponent: Component {
         }
         
         public override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-            if let bubbles = self.astraBubbles, bubbles.alpha > 0.1, bubbles.point(inside: self.convert(point, to: bubbles), with: event) {
+            // Bubbles that do not take touches (the header half collapsed, or the photo expanded) must not swallow a
+            // tap meant for the title or the buttons under them.
+            if let bubbles = self.astraBubbles, bubbles.isUserInteractionEnabled, bubbles.alpha > 0.1, bubbles.point(inside: self.convert(point, to: bubbles), with: event) {
                 return true
             }
             for (_, iconLayer) in self.iconLayers {
@@ -1099,6 +1103,7 @@ extension PeerInfoGiftsCoverComponent.View {
         )
         // As the header collapses into the bar, the bubbles fade into the avatar.
         let fraction = max(0.0, min(1.0, component.avatarTransitionFraction * 1.6))
+        self.astraBubbleFraction = fraction
         bubbles.alpha = self.astraBubblesHidden ? 0.0 : 1.0 - fraction
         bubbles.isUserInteractionEnabled = fraction < 0.5 && !self.astraBubblesHidden
         return availableSize
@@ -1125,8 +1130,10 @@ extension PeerInfoGiftsCoverComponent.View {
             return
         }
         self.astraBubblesHidden = hidden
+        let fraction = self.astraBubbleFraction
+        bubbles.isUserInteractionEnabled = !hidden && fraction < 0.5
         UIView.animate(withDuration: 0.2, animations: {
-            bubbles.layer.opacity = hidden ? 0.0 : 1.0
+            bubbles.alpha = hidden ? 0.0 : 1.0 - fraction
         })
     }
 }

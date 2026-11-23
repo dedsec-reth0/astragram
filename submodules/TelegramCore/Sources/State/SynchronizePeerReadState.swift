@@ -182,6 +182,11 @@ func localReadMarkIsAheadOfServer(localMaxIncomingReadId: MessageId.Id, serverMa
     return (serverCount != 0 || serverMarkedUnread) && localMaxIncomingReadId > serverMaxIncomingReadId
 }
 
+private enum PeerReadStateValidationOutcome {
+    case applied
+    case pushLocal
+}
+
 private func validatePeerReadState(network: Network, postbox: Postbox, stateManager: AccountStateManager, peerId: PeerId) -> Signal<Never, PeerReadStateValidationError> {
     if peerId.namespace == Namespaces.Peer.SecretChat {
         // A secret chat has no Api.InputPeer, so there is no dialog to read an authoritative
@@ -204,7 +209,9 @@ private func validatePeerReadState(network: Network, postbox: Postbox, stateMana
             return confirmSynchronized(postbox: postbox, peerId: peerId)
             |> ignoreValues
         }
-        return stateManager.addCustomOperation(postbox.transaction { transaction -> PeerReadStateValidationError? in
+        // The push runs after the custom operation, not inside it: the operations run one at a time, so a push
+        // started from inside one would wait for its own verification operation forever.
+        return (stateManager.addCustomOperation(postbox.transaction { transaction -> PeerReadStateValidationOutcome in
             if let currentReadState = transaction.getCombinedPeerReadState(peerId) {
                 loop: for (namespace, currentState) in currentReadState.states {
                     if namespace == Namespaces.Message.Cloud {
@@ -216,9 +223,12 @@ private func validatePeerReadState(network: Network, postbox: Postbox, stateMana
                                         // AstraGram ghost mode: the server stays behind because read receipts are not
                                         // sent. Keep the local mark and confirm, instead of retrying forever.
                                         transaction.confirmSynchronizedIncomingReadState(peerId)
-                                        return nil
+                                        return .applied
                                     }
-                                    return .retry
+                                    // The local mark is ahead and only a push can bring the server up to it (a chat
+                                    // read while ghost mode was on, which is now off). Retrying the validation would
+                                    // fetch the same server state again and again without end.
+                                    return .pushLocal
                                 }
                             }
                         default:
@@ -243,15 +253,17 @@ private func validatePeerReadState(network: Network, postbox: Postbox, stateMana
                 }
             }
             transaction.resetIncomingReadStates([peerId: [Namespaces.Message.Cloud: updatedReadState]])
-            return nil
+            return .applied
         }
-        |> mapToSignalPromotingError { error -> Signal<Never, PeerReadStateValidationError> in
-            if let error = error {
-                return .fail(error)
-            } else {
+        |> castError(PeerReadStateValidationError.self)))
+        |> mapToSignal { outcome -> Signal<Never, PeerReadStateValidationError> in
+            switch outcome {
+            case .applied:
                 return .complete()
+            case .pushLocal:
+                return pushPeerReadState(network: network, postbox: postbox, stateManager: stateManager, peerId: peerId, willValidate: false)
             }
-        })
+        }
     }
     
     return maybeAppliedReadState
@@ -278,7 +290,7 @@ private func pushPeerReadState(network: Network, postbox: Postbox, stateManager:
         return .single(readState)
     }
     // AstraGram ghost mode: a read receipt that does go out ("mark read after...") shows the account online.
-    AstraGhostMode.markAsOnline()
+    // Network.request marks this account (only) as online for the readHistory request itself.
     if peerId.namespace == Namespaces.Peer.SecretChat {
         // Decide whether a request is needed before looking the peer up: inputSecretChat goes
         // through loadedPeerWithId, which never emits when the peer row is missing and fails
