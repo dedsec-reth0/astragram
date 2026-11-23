@@ -132,6 +132,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     fileprivate var astraMusicMoodTime: CGFloat = 0.0
     fileprivate var astraMusicMoodColor: UIColor?
     fileprivate var astraMusicMoodLink: CADisplayLink?
+    /// AstraGram: the beat found in the music's loudness: a slow average, the last beat's time and the pulse after it.
+    fileprivate let astraMusicLevelDisposable = MetaDisposable()
+    fileprivate var astraLevelAverage: CGFloat = 0.0
+    fileprivate var astraLevelPrevious: CGFloat = 0.0
+    fileprivate var astraLastBeat: Double = 0.0
+    fileprivate var astraBeatKick: CGFloat = 0.0
     /// AstraGram: recolors the header's background (its luminance and pattern kept) with the profile's flowing color.
     private let astraFlowOverlay = UIView()
     /// AstraGram: the rest of the profile takes on the flowing color too (nil: back to the theme).
@@ -488,6 +494,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     
     deinit {
         self.astraMusicPlaybackDisposable?.dispose()
+        self.astraMusicLevelDisposable.dispose()
         self.emojiStatusPackDisposable.dispose()
     }
     
@@ -3276,6 +3283,14 @@ extension PeerInfoHeaderNode {
             return
         }
         self.astraMusicMoodPlaying = playing
+        if playing {
+            self.astraMusicLevelDisposable.set((self.context.sharedContext.mediaManager.musicMediaPlayerAudioLevel
+            |> deliverOnMainQueue).startStrict(next: { [weak self] level in
+                self?.astraMusicLevel(CGFloat(level))
+            }))
+        } else {
+            self.astraMusicLevelDisposable.set(nil)
+        }
         if playing && self.astraMusicMoodAmount <= 0.0 {
             self.astraMusicMoodTime = 0.0
         }
@@ -3284,6 +3299,26 @@ extension PeerInfoHeaderNode {
             link.preferredFrameRateRange = CAFrameRateRange(minimum: 20.0, maximum: 30.0, preferred: 30.0)
             link.add(to: .main, forMode: .common)
             self.astraMusicMoodLink = link
+        }
+    }
+
+    /// A beat is a jump in loudness well above the recent average (the kick drum, the snare), at most every 0.22 s.
+    fileprivate func astraMusicLevel(_ level: CGFloat) {
+        let previous = self.astraLevelPrevious
+        self.astraLevelPrevious = level
+        if self.astraLevelAverage <= 0.0 {
+            self.astraLevelAverage = level
+            return
+        }
+        // About the last second (levels come ~37 times a second).
+        self.astraLevelAverage = self.astraLevelAverage * 0.97 + level * 0.03
+        let now = CACurrentMediaTime()
+        let average = max(0.04, self.astraLevelAverage)
+        if level > average * 1.3 && level > previous * 1.08 && now - self.astraLastBeat > 0.22 {
+            self.astraLastBeat = now
+            let strength = min(1.0, max(0.0, (level / average - 1.3) / 0.9))
+            self.astraBeatKick = max(self.astraBeatKick, 0.6 + 0.4 * strength)
+            (self.giftsCover.view as? PeerInfoGiftsCoverComponent.View)?.astraBeat(strength: strength)
         }
     }
 
@@ -3329,9 +3364,9 @@ extension PeerInfoHeaderNode {
             self.astraFlowTintUpdated?(self.astraSurface)
         }
         let t = self.astraMusicMoodTime
-        let beat = 60.0 / 112.0
-        let phase = t.truncatingRemainder(dividingBy: beat) / beat
-        let flicker = 0.84 + 0.1 * exp(-phase * 6.0) + 0.04 * sin(t * 23.0) + 0.02 * sin(t * 41.0 + 1.0)
+        // The vignette flickers on the song's own beats.
+        self.astraBeatKick *= exp(-dt * 7.0)
+        let flicker = 0.8 + 0.2 * self.astraBeatKick + 0.025 * sin(t * 23.0) + 0.015 * sin(t * 41.0 + 1.0)
         self.astraMusicVignetteUpdated?(self.astraMusicMoodAmount * flicker)
         self.astraFlowOverlay.isHidden = moodAmount <= 0.0
         if self.astraMusicMoodAmount <= 0.0 && !self.astraMusicMoodPlaying {

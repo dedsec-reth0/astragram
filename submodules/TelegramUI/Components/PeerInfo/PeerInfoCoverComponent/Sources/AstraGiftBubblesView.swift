@@ -49,7 +49,6 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         let phase: CGFloat = CGFloat.random(in: 0.0 ..< 100.0)
         let speed: CGFloat = CGFloat.random(in: 0.6 ..< 1.1)
         /// A hair off the beat, so they do not move as one.
-        let beatLag: CGFloat = CGFloat.random(in: 0.0 ..< 0.06)
         var placed = false
 
         init(id: AnyHashable, gift: ProfileGiftsContext.State.StarGift, view: AstraGiftBubbleView, baseRadius: CGFloat) {
@@ -67,8 +66,6 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
     static var eggHeight: CGFloat { return AstraBubbleTuning.current.eggHeight }
     static let pulledRadius: CGFloat = 86.0
     private static let sizeFactors: [CGFloat] = [1.25, 0.8, 1.05, 0.7, 1.15, 0.9, 0.78, 1.1, 0.85, 1.0]
-    /// Beats a minute of the pulse while music plays.
-    private static let bpm: CGFloat = 112.0
 
     var touched: ((ProfileGiftsContext.State.StarGift) -> Void)?
     var opened: ((ProfileGiftsContext.State.StarGift) -> Void)?
@@ -83,8 +80,6 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
 
     private var musicPlaying = false
     private var musicTime: CGFloat = 0.0
-    private var beatsSinceCycle: Int = 0
-    private var lastBeatIndex: Int = -1
     private var cycleIndex = 0
     private var beatEnergy: CGFloat = 0.0
 
@@ -187,8 +182,6 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         self.musicPlaying = playing
         if playing {
             self.musicTime = 0.0
-            self.lastBeatIndex = -1
-            self.beatsSinceCycle = 0
         }
         // With music the bubbles light up as neon jelly and more of them come out; without, clear soap bubbles.
         if let (context, items, homes, avatarCenter, avatarRadius, area) = self.lastUpdate {
@@ -333,26 +326,27 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         self.layoutBubbles()
     }
 
-    /// The pulse: a sharp kick on every beat, fading out between them; silence lets it die away.
-    private func pulse(at time: CGFloat) -> CGFloat {
-        let beat = 60.0 / AstraGiftBubblesView.bpm
-        let phase = (time.truncatingRemainder(dividingBy: beat)) / beat
-        return exp(-phase * 7.0)
+    /// A beat of the music (found in its loudness): the bubbles jump and glow, and the ring gets a push.
+    func beat(strength: CGFloat) {
+        self.beatKick = max(self.beatKick, 0.55 + 0.45 * strength)
+        self.spin += (self.spin >= 0.0 ? 1.0 : -1.0) * (0.35 + 0.5 * strength)
+        for bubble in self.bubbles where bubble !== self.dragged {
+            bubble.radiusVelocity += bubble.baseRadius * (2.0 + 3.0 * strength)
+        }
     }
+
+    /// The pulse after a beat, fading out until the next one.
+    private var beatKick: CGFloat = 0.0
 
     private func updateBeat(dt: CGFloat) {
         if self.musicPlaying {
             self.musicTime += dt
             self.beatEnergy = min(1.0, self.beatEnergy + dt * 2.0)
-            let beatIndex = Int(self.musicTime / (60.0 / AstraGiftBubblesView.bpm))
-            if beatIndex != self.lastBeatIndex {
-                self.lastBeatIndex = beatIndex
-                self.beatsSinceCycle += 1
-            }
         } else {
             self.beatEnergy = max(0.0, self.beatEnergy - dt * 1.5)
         }
-        let kick = self.beatEnergy * self.pulse(at: self.musicTime)
+        self.beatKick *= exp(-dt * 6.0)
+        let kick = self.beatEnergy * self.beatKick
         self.ringContainer.opacity = Float(0.55 + 0.45 * kick)
     }
 
@@ -485,7 +479,7 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
     private func layoutBubbles() {
         for bubble in self.bubbles {
             let view = bubble.view
-            let kick = self.beatEnergy * self.pulse(at: max(0.0, self.musicTime - bubble.beatLag))
+            let kick = self.beatEnergy * self.beatKick
             view.bounds = CGRect(origin: .zero, size: CGSize(width: bubble.baseRadius * 2.0, height: bubble.baseRadius * 2.0 * AstraGiftBubblesView.eggHeight))
             view.center = bubble.position
             // Nearer (lower on the ring) is bigger and in front of the avatar; farther is smaller and behind it.
@@ -936,11 +930,12 @@ final class AstraGiftBubbleView: UIView {
         self.rimLayer.lineWidth = t.rimWidth
         self.shineLayer.colors = [UIColor(white: 1.0, alpha: t.shineAlpha).cgColor, UIColor(white: 1.0, alpha: t.shineAlpha * 0.38).cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor]
         self.specularLayer.colors = [UIColor(white: 1.0, alpha: t.specularAlpha).cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor]
-        self.spillLayer.isHidden = self.soap
+        self.spillLayer.isHidden = false
         self.glowColor = inner
         self.glowLayer.shadowColor = inner.cgColor
-        self.spillLayer.colors = [inner.withAlphaComponent(0.55).cgColor, inner.withAlphaComponent(0.18).cgColor, inner.withAlphaComponent(0.0).cgColor]
-        self.spillLayer.locations = [0.0, 0.45, 1.0]
+        // The colored light it throws on the background around it (it moves with the bubble).
+        self.spillLayer.colors = [inner.withAlphaComponent(0.5).cgColor, inner.withAlphaComponent(0.22).cgColor, inner.withAlphaComponent(0.07).cgColor, inner.withAlphaComponent(0.0).cgColor]
+        self.spillLayer.locations = [0.0, 0.3, 0.65, 1.0]
 
         var file: TelegramMediaFile?
         switch gift.gift {
@@ -1031,7 +1026,11 @@ final class AstraGiftBubbleView: UIView {
         // Stroked on the outline and clipped to it, so only the inner half shows: a band inside the edge.
         self.innerGlowLayer.lineWidth = bounds.width * t.innerGlowWidth
         self.innerEdgeLayer.lineWidth = max(1.0, bounds.width * t.innerEdgeWidth)
-        self.spillLayer.opacity = Float(t.spillOpacity + (1.0 - t.spillOpacity) * glow)
+        let spillBase = self.soap ? t.spillOpacity * 0.45 : t.spillOpacity
+        self.spillLayer.opacity = Float(min(1.0, spillBase + (1.0 - spillBase) * glow + 0.5 * pulled))
+        // Pulled big, its light floods much of the screen (as in the concept).
+        let spill = bounds.width * (t.spillSize + 4.0 * pulled)
+        self.spillLayer.frame = bounds.insetBy(dx: -spill, dy: -spill)
         // Pulled big, the jelly thins out: the profile shows through it, as through a lens.
         self.bodyLayer.opacity = Float(1.0 - 0.5 * pulled)
         CATransaction.commit()
@@ -1067,8 +1066,6 @@ final class AstraGiftBubbleView: UIView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         self.glowLayer.frame = bounds
-        let spill = bounds.width * 1.1
-        self.spillLayer.frame = bounds.insetBy(dx: -spill, dy: -spill)
         self.lensLayer.frame = bounds
         self.lensMask.frame = bounds
         self.bodyLayer.frame = bounds
@@ -1131,6 +1128,7 @@ struct AstraBubbleTuning: Codable {
     var glowRadius: CGFloat = 0.34
     var glowOpacity: CGFloat = 0.75
     var spillOpacity: CGFloat = 0.6
+    var spillSize: CGFloat = 1.8
     var radius: CGFloat = 19.5
     var eggHeight: CGFloat = 1.1
     var orbitScale: CGFloat = 1.2
@@ -1170,6 +1168,7 @@ struct AstraBubbleTuning: Codable {
         self.glowRadius = value(.glowRadius, d.glowRadius)
         self.glowOpacity = value(.glowOpacity, d.glowOpacity)
         self.spillOpacity = value(.spillOpacity, d.spillOpacity)
+        self.spillSize = value(.spillSize, d.spillSize)
         self.radius = value(.radius, d.radius)
         self.eggHeight = value(.eggHeight, d.eggHeight)
         self.orbitScale = value(.orbitScale, d.orbitScale)

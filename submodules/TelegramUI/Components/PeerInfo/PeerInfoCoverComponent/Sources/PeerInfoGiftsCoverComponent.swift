@@ -1111,6 +1111,11 @@ extension PeerInfoGiftsCoverComponent.View {
         self.astraBubbles?.attachRotation(to: host)
     }
 
+    /// AstraGram: a beat of the profile's music.
+    public func astraBeat(strength: CGFloat) {
+        self.astraBubbles?.beat(strength: strength)
+    }
+
     /// AstraGram: the bubbles fade away while the photo is expanded.
     public func astraSetBubblesHidden(_ hidden: Bool) {
         guard let bubbles = self.astraBubbles, self.astraBubblesHidden != hidden else {
