@@ -450,6 +450,30 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         for bubble in self.bubbles {
             bubble.position.x += bubble.velocity.x * dt
             bubble.position.y += bubble.velocity.y * dt
+        }
+        // Hard: whatever pulls them, no two bubbles are ever drawn one inside the other.
+        for _ in 0 ..< 4 {
+            for i in 0 ..< self.bubbles.count {
+                for j in (i + 1) ..< self.bubbles.count {
+                    let a = self.bubbles[i], b = self.bubbles[j]
+                    let dx = b.position.x - a.position.x
+                    let dy = b.position.y - a.position.y
+                    let distance = max(0.001, sqrt(dx * dx + dy * dy))
+                    let minDistance = (self.drawnRadius(a) + self.drawnRadius(b)) * 1.04
+                    if distance < minDistance {
+                        let overlap = minDistance - distance
+                        let nx = dx / distance, ny = dy / distance
+                        let aWeight: CGFloat = a === self.dragged ? 0.0 : (b === self.dragged ? 1.0 : 0.5)
+                        let bWeight: CGFloat = 1.0 - aWeight
+                        a.position.x -= nx * overlap * aWeight
+                        a.position.y -= ny * overlap * aWeight
+                        b.position.x += nx * overlap * bWeight
+                        b.position.y += ny * overlap * bWeight
+                    }
+                }
+            }
+        }
+        for bubble in self.bubbles {
             // Soft walls.
             if self.area.width > 0.0 && bubble !== self.dragged {
                 let r = bubble.radius
