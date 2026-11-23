@@ -142,7 +142,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     fileprivate var astraBeatKick: CGFloat = 0.0
     /// AstraGram: the track of this profile's music playing now (nil: none playing).
     fileprivate var astraNowPlaying: (title: String?, performer: String?)?
-    fileprivate let astraAvatarFlash = CALayer()
+    /// AstraGram: the white ring around the avatar while the profile's music plays.
+    fileprivate let astraAvatarRing = CAShapeLayer()
     /// AstraGram: recolors the header's background (its luminance and pattern kept) with the profile's flowing color.
     private let astraFlowOverlay = UIView()
     /// AstraGram: the rest of the profile takes on the flowing color too (nil: back to the theme).
@@ -3370,21 +3371,47 @@ extension PeerInfoHeaderNode {
                 pulse.timingFunctions = [CAMediaTimingFunction(name: .easeOut), CAMediaTimingFunction(name: .easeInEaseOut)]
                 pulse.isAdditive = false
                 layer.add(pulse, forKey: "astraBeat")
-                let flash = self.astraAvatarFlash
-                if flash.superlayer !== layer {
-                    flash.backgroundColor = UIColor.white.cgColor
-                    flash.opacity = 0.0
-                    layer.addSublayer(flash)
-                }
-                flash.frame = layer.bounds
-                flash.cornerRadius = layer.bounds.width / 2.0
-                let blink = CAKeyframeAnimation(keyPath: "opacity")
-                blink.values = [0.0, Float(0.18 + 0.17 * strength), 0.0]
-                blink.keyTimes = [0.0, 0.2, 1.0]
-                blink.duration = 0.32
-                flash.add(blink, forKey: "astraBeat")
+                // The white ring jumps out with the beat and settles back.
+                let ring = self.astraAvatarRing
+                let jump = CAKeyframeAnimation(keyPath: "transform.scale")
+                jump.values = [1.0, 1.0 + 0.08 + 0.08 * strength, 1.0]
+                jump.keyTimes = [0.0, 0.22, 1.0]
+                jump.duration = 0.34
+                jump.timingFunctions = [CAMediaTimingFunction(name: .easeOut), CAMediaTimingFunction(name: .easeInEaseOut)]
+                ring.add(jump, forKey: "astraBeat")
+                let width = CAKeyframeAnimation(keyPath: "lineWidth")
+                width.values = [3.0, 3.0 + 2.5 * strength, 3.0]
+                width.keyTimes = [0.0, 0.22, 1.0]
+                width.duration = 0.34
+                ring.add(width, forKey: "astraBeatWidth")
             }
         }
+    }
+
+    fileprivate func astraUpdateAvatarRing(amount: CGFloat) {
+        // The avatar's own frame: the transform container itself is a zero-size point at the avatar's centre.
+        let host = self.avatarListNode.avatarContainerNode.containerNode.layer
+        let ring = self.astraAvatarRing
+        if ring.superlayer !== host {
+            ring.fillColor = UIColor.clear.cgColor
+            ring.strokeColor = UIColor.white.cgColor
+            ring.lineWidth = 3.0
+            ring.shadowColor = UIColor.white.cgColor
+            ring.shadowOffset = .zero
+            ring.shadowRadius = 6.0
+            ring.shadowOpacity = 0.7
+            host.addSublayer(ring)
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let bounds = host.bounds
+        if ring.bounds.size != bounds.size || ring.path == nil {
+            ring.bounds = CGRect(origin: .zero, size: bounds.size)
+            ring.position = CGPoint(x: bounds.midX, y: bounds.midY)
+            ring.path = UIBezierPath(ovalIn: CGRect(origin: .zero, size: bounds.size).insetBy(dx: -5.0, dy: -5.0)).cgPath
+        }
+        ring.opacity = self.isAvatarExpanded ? 0.0 : Float(amount)
+        CATransaction.commit()
     }
 
     fileprivate func astraMusicMoodTick(_ link: CADisplayLink) {
@@ -3433,6 +3460,7 @@ extension PeerInfoHeaderNode {
         self.astraBeatKick *= exp(-dt * 7.0)
         let flicker = 0.8 + 0.2 * self.astraBeatKick + 0.025 * sin(t * 23.0) + 0.015 * sin(t * 41.0 + 1.0)
         self.astraMusicVignetteUpdated?(self.astraMusicMoodAmount * flicker)
+        self.astraUpdateAvatarRing(amount: self.astraMusicMoodAmount)
         self.astraFlowOverlay.isHidden = moodAmount <= 0.0
         if self.astraMusicMoodAmount <= 0.0 && !self.astraMusicMoodPlaying {
             self.astraMusicMoodLink?.invalidate()
