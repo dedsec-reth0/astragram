@@ -31,12 +31,13 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         /// The resting place as distance and angle from the avatar: it turns slowly, so the bubbles swirl.
         var homeDistance: CGFloat = 0.0
         var homeAngle: CGFloat = 0.0
-        /// Where it rests now (it moves to another place every several seconds).
-        var restAngle: CGFloat = 0.0
-        var restDistance: CGFloat = 0.0
-        var nextMoveTime: CGFloat = 0.0
         var snapUntil: CGFloat = 0.0
-        var whirlUntil: CGFloat = 0.0
+        /// Its place on the tilted ring around the avatar (as a carousel seen a little from above): the angle grows
+        /// clockwise; at the bottom it passes in front of the avatar, at the top behind it.
+        var orbitAngle: CGFloat = 0.0
+        var orbitRadius: CGFloat = 0.0
+        var depth: CGFloat = 0.0
+        var inFront = false
         var position: CGPoint = .zero
         var velocity: CGPoint = .zero
         var radius: CGFloat
@@ -107,6 +108,10 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
     private var soap = true
     private var dragged: Bubble?
     private let avatarMask = CAShapeLayer()
+    /// Bubbles behind the avatar (its circle cut out of them) and in front of it.
+    private let backContainer = UIView()
+    private let frontContainer = UIView()
+    private static let orbitRadii: [CGFloat] = [1.3, 1.85, 1.5, 2.05, 1.38, 1.7, 1.95, 1.45, 1.6, 1.8]
     private weak var rotationHost: UIView?
     private var rotationRecognizer: UIPanGestureRecognizer?
     private var rotationLastAngle: CGFloat = 0.0
@@ -140,6 +145,10 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         self.ringContainer.addSublayer(self.ringGradient)
         self.ringContainer.opacity = 0.0
         self.layer.addSublayer(self.ringContainer)
+        self.backContainer.isUserInteractionEnabled = false
+        self.frontContainer.isUserInteractionEnabled = false
+        self.addSubview(self.backContainer)
+        self.addSubview(self.frontContainer)
     }
 
     required init?(coder: NSCoder) {
@@ -176,9 +185,6 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
             return
         }
         self.musicPlaying = playing
-        for bubble in self.bubbles {
-            bubble.nextMoveTime = self.time + CGFloat.random(in: 2.0 ..< 6.0)
-        }
         if playing {
             self.musicTime = 0.0
             self.lastBeatIndex = -1
@@ -224,10 +230,10 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
                 view.soap = soap
                 view.update(context: context, gift: item.gift)
                 bubble = Bubble(id: item.id, gift: item.gift, view: view, baseRadius: baseRadius)
-                self.addSubview(view)
+                self.backContainer.addSubview(view)
             }
             bubble.home = homes[index]
-            bubble.homeDistance = max(sqrt(pow(homes[index].x - avatarCenter.x, 2.0) + pow(homes[index].y - avatarCenter.y, 2.0)), avatarRadius + bubble.baseRadius * AstraBubbleTuning.current.restMin)
+            bubble.homeDistance = sqrt(pow(homes[index].x - avatarCenter.x, 2.0) + pow(homes[index].y - avatarCenter.y, 2.0))
             bubble.homeAngle = atan2(homes[index].y - avatarCenter.y, homes[index].x - avatarCenter.x)
             if !bubble.placed {
                 bubble.placed = true
@@ -247,7 +253,17 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
                 view.removeFromSuperview()
             })
         }
+        if next.count != self.bubbles.count || next.contains(where: { bubble in !self.bubbles.contains(where: { $0 === bubble }) }) {
+            // Spread evenly round the ring, turned as the ring is now (they glide to their new places).
+            let reference = self.bubbles.first?.orbitAngle ?? -CGFloat.pi / 2.0
+            for (index, bubble) in next.enumerated() {
+                bubble.orbitAngle = reference + CGFloat(index) * 2.0 * .pi / CGFloat(next.count)
+            }
+        }
         self.bubbles = next
+        self.updateOrbits()
+        self.backContainer.frame = self.bounds
+        self.frontContainer.frame = self.bounds
         self.updateAvatarMask()
         self.updateRing()
         self.updateDisplayLink()
@@ -300,6 +316,7 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
             self.lensTime = self.time
             self.captureLens()
             if AstraBubbleTuning.reload() {
+                self.updateOrbits()
                 for bubble in self.bubbles {
                     if bubble !== self.dragged {
                         bubble.targetRadius = bubble.baseRadius
@@ -331,21 +348,6 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
             if beatIndex != self.lastBeatIndex {
                 self.lastBeatIndex = beatIndex
                 self.beatsSinceCycle += 1
-                // Every bar the bubbles whirl a third of the way around the avatar, clockwise, and hang there until
-                // the next one (as in the concept).
-                if self.beatsSinceCycle >= 4 && !self.bubbles.isEmpty {
-                    self.beatsSinceCycle = 0
-                    let turn = CGFloat.random(in: 1.7 ..< 2.4)
-                    for bubble in self.bubbles where bubble !== self.dragged {
-                        if bubble.restDistance <= 0.0 {
-                            bubble.restAngle = bubble.homeAngle
-                        }
-                        bubble.restAngle += turn + CGFloat.random(in: -0.25 ..< 0.25)
-                        bubble.restDistance = self.restDistance(bubble)
-                        bubble.whirlUntil = self.time + 0.75
-                        bubble.nextMoveTime = self.time + 30.0
-                    }
-                }
             }
         } else {
             self.beatEnergy = max(0.0, self.beatEnergy - dt * 1.5)
@@ -402,41 +404,18 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
                 force.x += (self.dragPoint.x - bubble.position.x) * 260.0 - bubble.velocity.x * 22.0
                 force.y += (self.dragPoint.y - bubble.position.y) * 260.0 - bubble.velocity.y * 22.0
             } else {
-                // The resting place turns around the avatar, its distance breathing in and out, so the bubbles swirl:
-                // they pass over the avatar's edge and the name, as in the concept. Livelier with music.
-                // As in the concept the bubbles hang almost still, drifting a little; now and then one floats slowly
-                // over to another place around the avatar (over its edge and the name too).
+                // Round the tilted ring: inner ones a little faster (as in the concept), quicker with music.
+                let base: CGFloat = self.musicPlaying ? AstraBubbleTuning.current.orbitSpeedMusic : AstraBubbleTuning.current.orbitSpeed
+                bubble.orbitAngle += base * sqrt(self.avatarRadius * 1.5 / max(1.0, bubble.orbitRadius)) * dt
+                bubble.depth = sin(bubble.orbitAngle)
                 let t = self.time * bubble.speed + bubble.phase
-                if self.time >= bubble.nextMoveTime {
-                    bubble.nextMoveTime = self.time + CGFloat.random(in: 5.0 ..< 11.0)
-                    if bubble.restDistance > 0.0 {
-                        bubble.restAngle += CGFloat.random(in: -1.1 ..< 1.1)
-                        bubble.restDistance = self.restDistance(bubble)
-                    } else {
-                        bubble.restAngle = bubble.homeAngle
-                        bubble.restDistance = bubble.homeDistance
-                    }
-                }
-                let rest = CGPoint(x: self.avatarCenter.x + cos(bubble.restAngle) * bubble.restDistance * 1.1, y: self.avatarCenter.y + sin(bubble.restAngle) * bubble.restDistance)
-                let wander = CGPoint(x: sin(t * 0.55 + 1.3) * 5.0 + sin(t * 0.23) * 4.0, y: sin(t * 0.47) * 4.0 + sin(t * 0.19 + 2.0) * 3.0)
-                // A soft, slow pull: it glides there rather than jumps.
-                // (Let go, or just out of the avatar, it snaps back with a bounce first.)
+                let target = CGPoint(x: self.avatarCenter.x + cos(bubble.orbitAngle) * bubble.orbitRadius + sin(t * 0.9) * 2.0, y: self.avatarCenter.y + sin(bubble.orbitAngle) * bubble.orbitRadius * AstraBubbleTuning.current.orbitTilt + sin(t * 0.7 + 1.0) * 2.0)
+                // Follows its place closely; let go, it flies back with a bounce.
                 let snapping = self.time < bubble.snapUntil
-                let whirling = self.time < bubble.whirlUntil
-                let pull: CGFloat = snapping ? 26.0 : (whirling ? 30.0 : 1.6)
-                let damping: CGFloat = snapping ? 5.5 : (whirling ? 8.0 : 2.4)
-                force.x += (rest.x + wander.x - bubble.position.x) * pull - bubble.velocity.x * damping
-                force.y += (rest.y + wander.y - bubble.position.y) * pull - bubble.velocity.y * damping
-                // Not deep into the avatar (its edge is fine).
-                let dx = bubble.position.x - self.avatarCenter.x
-                let dy = bubble.position.y - self.avatarCenter.y
-                let distance = max(0.001, sqrt(dx * dx + dy * dy))
-                let minDistance = self.avatarRadius * 0.35
-                if distance < minDistance {
-                    let push = (minDistance - distance) * 70.0
-                    force.x += dx / distance * push
-                    force.y += dy / distance * push
-                }
+                let pull: CGFloat = snapping ? 26.0 : 40.0
+                let damping: CGFloat = snapping ? 5.5 : 11.0
+                force.x += (target.x - bubble.position.x) * pull - bubble.velocity.x * damping
+                force.y += (target.y - bubble.position.y) * pull - bubble.velocity.y * damping
             }
             bubble.velocity.x += force.x * dt
             bubble.velocity.y += force.y * dt
@@ -445,6 +424,9 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         for i in 0 ..< self.bubbles.count {
             for j in (i + 1) ..< self.bubbles.count {
                 let a = self.bubbles[i], b = self.bubbles[j]
+                if a !== self.dragged && b !== self.dragged {
+                    continue
+                }
                 let dx = b.position.x - a.position.x
                 let dy = b.position.y - a.position.y
                 let distance = max(0.001, sqrt(dx * dx + dy * dy))
@@ -506,7 +488,15 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
             let kick = self.beatEnergy * self.pulse(at: max(0.0, self.musicTime - bubble.beatLag))
             view.bounds = CGRect(origin: .zero, size: CGSize(width: bubble.baseRadius * 2.0, height: bubble.baseRadius * 2.0 * AstraGiftBubblesView.eggHeight))
             view.center = bubble.position
-            let scale = bubble.radius / bubble.baseRadius * (1.0 + 0.1 * kick)
+            // Nearer (lower on the ring) is bigger and in front of the avatar; farther is smaller and behind it.
+            let front = bubble === self.dragged || bubble.depth > 0.0
+            if front != bubble.inFront || view.superview == nil {
+                bubble.inFront = front
+                (front ? self.frontContainer : self.backContainer).addSubview(view)
+            }
+            let depthScale: CGFloat = bubble === self.dragged ? 1.0 : (1.0 + 0.16 * bubble.depth)
+            view.alpha = bubble === self.dragged ? 1.0 : (0.82 + 0.18 * (bubble.depth + 1.0) / 2.0)
+            let scale = bubble.radius / bubble.baseRadius * (1.0 + 0.1 * kick) * depthScale
             // Stretch along the deformation's direction, squeeze across it, keeping the area.
             let amount = min(0.35, sqrt(bubble.deform.x * bubble.deform.x + bubble.deform.y * bubble.deform.y))
             let angle = atan2(bubble.deform.y, bubble.deform.x)
@@ -532,8 +522,8 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
     /// The bubbles are over everything in the header but the avatar: its circle is cut out of them, so they pass
     /// behind it. A held bubble is over the avatar too.
     private func updateAvatarMask() {
-        guard self.dragged == nil, self.avatarRadius > 10.0, self.avatarRadius < 80.0 else {
-            self.layer.mask = nil
+        guard self.avatarRadius > 10.0, self.avatarRadius < 80.0 else {
+            self.backContainer.layer.mask = nil
             return
         }
         let path = UIBezierPath(rect: self.bounds.insetBy(dx: -400.0, dy: -400.0))
@@ -543,28 +533,23 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         self.avatarMask.frame = self.bounds
         self.avatarMask.fillRule = .evenOdd
         self.avatarMask.path = path.cgPath
-        if self.layer.mask !== self.avatarMask {
-            self.layer.mask = self.avatarMask
+        if self.backContainer.layer.mask !== self.avatarMask {
+            self.backContainer.layer.mask = self.avatarMask
         }
         CATransaction.commit()
     }
 
-    /// A distance from the avatar's center where the bubble mostly shows beside it (a little behind its edge at most).
-    private func restDistance(_ bubble: Bubble) -> CGFloat {
+    private func updateOrbits() {
         let t = AstraBubbleTuning.current
-        return self.avatarRadius + bubble.baseRadius * CGFloat.random(in: t.restMin ..< max(t.restMin + 0.01, t.restMax))
+        for (index, bubble) in self.bubbles.enumerated() {
+            bubble.orbitRadius = self.avatarRadius * AstraGiftBubblesView.orbitRadii[index % AstraGiftBubblesView.orbitRadii.count] * t.orbitScale + bubble.baseRadius * 0.2
+        }
     }
 
     /// Turns all the bubbles around the avatar by `angle`.
     private func turn(by angle: CGFloat) {
         for bubble in self.bubbles where bubble !== self.dragged {
-            if bubble.restDistance <= 0.0 {
-                bubble.restAngle = bubble.homeAngle
-                bubble.restDistance = bubble.homeDistance
-            }
-            bubble.restAngle += angle
-            bubble.whirlUntil = self.time + 0.35
-            bubble.nextMoveTime = max(bubble.nextMoveTime, self.time + 6.0)
+            bubble.orbitAngle += angle
         }
     }
 
@@ -692,7 +677,8 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         self.dragPoint = touch.location(in: self)
         self.dragStart = self.dragPoint
         self.dragMoved = false
-        self.bringSubviewToFront(bubble.view)
+        self.frontContainer.addSubview(bubble.view)
+        bubble.inFront = true
         // The bubbles live behind the avatar and the name; a held one comes over everything.
         self.updateAvatarMask()
         self.setScrollingEnabled(false)
@@ -1147,8 +1133,10 @@ struct AstraBubbleTuning: Codable {
     var spillOpacity: CGFloat = 0.6
     var radius: CGFloat = 19.5
     var eggHeight: CGFloat = 1.1
-    var restMin: CGFloat = 0.45
-    var restMax: CGFloat = 2.0
+    var orbitScale: CGFloat = 1.2
+    var orbitTilt: CGFloat = 0.55
+    var orbitSpeed: CGFloat = 0.22
+    var orbitSpeedMusic: CGFloat = 0.5
 
     init() {
     }
@@ -1184,8 +1172,10 @@ struct AstraBubbleTuning: Codable {
         self.spillOpacity = value(.spillOpacity, d.spillOpacity)
         self.radius = value(.radius, d.radius)
         self.eggHeight = value(.eggHeight, d.eggHeight)
-        self.restMin = value(.restMin, d.restMin)
-        self.restMax = value(.restMax, d.restMax)
+        self.orbitScale = value(.orbitScale, d.orbitScale)
+        self.orbitTilt = value(.orbitTilt, d.orbitTilt)
+        self.orbitSpeed = value(.orbitSpeed, d.orbitSpeed)
+        self.orbitSpeedMusic = value(.orbitSpeedMusic, d.orbitSpeedMusic)
     }
 
     static var current = AstraBubbleTuning()

@@ -3276,6 +3276,9 @@ extension PeerInfoHeaderNode {
             return
         }
         self.astraMusicMoodPlaying = playing
+        if playing && self.astraMusicMoodAmount <= 0.0 {
+            self.astraMusicMoodTime = 0.0
+        }
         if self.astraMusicMoodLink == nil {
             let link = CADisplayLink(target: AstraMusicMoodTarget(self), selector: #selector(AstraMusicMoodTarget.tick(_:)))
             link.preferredFrameRateRange = CAFrameRateRange(minimum: 20.0, maximum: 30.0, preferred: 30.0)
@@ -3293,13 +3296,44 @@ extension PeerInfoHeaderNode {
             self.astraMusicMoodAmount = max(target, self.astraMusicMoodAmount - dt / 1.0)
         }
         self.astraMusicMoodTime += dt
-        // The profile keeps its color; a vignette closes in around the avatar and flickers a little with the beat.
+        // The screen's color goes round the concept's sequence (taken from it), starting and ending on the profile's own
+        // color; a vignette closes in around the avatar and flickers a little with the beat.
+        let base = self.astraSurface ?? UIColor(rgb: 0x232524)
+        let keys: [(CGFloat, UIColor?)] = [(0.0, nil), (2.0, UIColor(rgb: 0x243d5e)), (5.0, UIColor(rgb: 0x0f475a)), (7.5, UIColor(rgb: 0x114a38)), (9.0, UIColor(rgb: 0x4a4019)), (10.5, UIColor(rgb: 0x533b0f)), (12.0, UIColor(rgb: 0x1e2020)), (24.5, UIColor(rgb: 0x1e2020)), (26.0, UIColor(rgb: 0x6a2542)), (29.0, UIColor(rgb: 0x0f4166)), (30.5, UIColor(rgb: 0x333c74)), (32.0, nil)]
+        let total: CGFloat = 32.0
+        let position = self.astraMusicMoodTime.truncatingRemainder(dividingBy: total)
+        var mood = base
+        for k in 0 ..< keys.count - 1 where position >= keys[k].0 && position < keys[k + 1].0 {
+            let from = keys[k].1 ?? base, to = keys[k + 1].1 ?? base
+            // Each change takes about a second and a half, then the color holds.
+            let span = keys[k + 1].0 - keys[k].0
+            let f = min(1.0, (position - keys[k].0) / min(span, 1.5))
+            mood = from.mixedWith(to, alpha: f * f * (3.0 - 2.0 * f))
+        }
+        let moodAmount = self.astraMusicMoodAmount
+        let color = base.mixedWith(mood, alpha: moodAmount)
+        let overlay = self.astraFlowOverlay
+        if overlay.superview !== self.backgroundBannerView {
+            overlay.isUserInteractionEnabled = false
+            overlay.layer.compositingFilter = nil
+            self.backgroundBannerView.addSubview(overlay)
+        }
+        overlay.frame = self.backgroundBannerView.bounds
+        // The cover's pattern still shows through a little.
+        overlay.backgroundColor = color.withAlphaComponent(0.88 * moodAmount)
+        if moodAmount > 0.0 {
+            self.astraMusicMoodColor = color
+            self.astraFlowTintUpdated?(color)
+        } else if self.astraMusicMoodColor != nil {
+            self.astraMusicMoodColor = nil
+            self.astraFlowTintUpdated?(self.astraSurface)
+        }
         let t = self.astraMusicMoodTime
         let beat = 60.0 / 112.0
         let phase = t.truncatingRemainder(dividingBy: beat) / beat
         let flicker = 0.84 + 0.1 * exp(-phase * 6.0) + 0.04 * sin(t * 23.0) + 0.02 * sin(t * 41.0 + 1.0)
         self.astraMusicVignetteUpdated?(self.astraMusicMoodAmount * flicker)
-        self.astraFlowOverlay.isHidden = true
+        self.astraFlowOverlay.isHidden = moodAmount <= 0.0
         if self.astraMusicMoodAmount <= 0.0 && !self.astraMusicMoodPlaying {
             self.astraMusicMoodLink?.invalidate()
             self.astraMusicMoodLink = nil
