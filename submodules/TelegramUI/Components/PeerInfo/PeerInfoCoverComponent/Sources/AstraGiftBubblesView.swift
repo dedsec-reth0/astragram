@@ -35,6 +35,8 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         /// Its place on the tilted ring around the avatar (as a carousel seen a little from above): the angle grows
         /// clockwise; at the bottom it passes in front of the avatar, at the top behind it.
         var orbitAngle: CGFloat = 0.0
+        /// Its fixed place on the ring (evenly spread): the ring turns as one, so they never bunch up.
+        var orbitSlot: CGFloat = 0.0
         var orbitRadius: CGFloat = 0.0
         var depth: CGFloat = 0.0
         var inFront = false
@@ -111,6 +113,8 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
     private var rotationRecognizer: UIPanGestureRecognizer?
     private var rotationLastX: CGFloat = 0.0
     private var rotationActive = false
+    /// How far the ring of bubbles has turned.
+    private var ringAngle: CGFloat = -CGFloat.pi / 2.0
     /// Radians a second the bubbles keep turning after a swipe (it dies away).
     private var spin: CGFloat = 0.0
     private var dragPoint: CGPoint = .zero
@@ -247,9 +251,8 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         }
         if next.count != self.bubbles.count || next.contains(where: { bubble in !self.bubbles.contains(where: { $0 === bubble }) }) {
             // Spread evenly round the ring, turned as the ring is now (they glide to their new places).
-            let reference = self.bubbles.first?.orbitAngle ?? -CGFloat.pi / 2.0
             for (index, bubble) in next.enumerated() {
-                bubble.orbitAngle = reference + CGFloat(index) * 2.0 * .pi / CGFloat(next.count)
+                bubble.orbitSlot = CGFloat(index) * 2.0 * .pi / CGFloat(next.count)
             }
         }
         self.bubbles = next
@@ -384,6 +387,7 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
     }
 
     private func step(dt: CGFloat) {
+        self.ringAngle += (self.musicPlaying ? AstraBubbleTuning.current.orbitSpeedMusic : AstraBubbleTuning.current.orbitSpeed) * dt
         if abs(self.spin) > 0.02 {
             self.turn(by: self.spin * dt)
             self.spin *= exp(-dt * 2.6)
@@ -397,9 +401,8 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
                 force.x += (self.dragPoint.x - bubble.position.x) * 260.0 - bubble.velocity.x * 22.0
                 force.y += (self.dragPoint.y - bubble.position.y) * 260.0 - bubble.velocity.y * 22.0
             } else {
-                // Round the tilted ring: inner ones a little faster (as in the concept), quicker with music.
-                let base: CGFloat = self.musicPlaying ? AstraBubbleTuning.current.orbitSpeedMusic : AstraBubbleTuning.current.orbitSpeed
-                bubble.orbitAngle += base * sqrt(self.avatarRadius * 1.5 / max(1.0, bubble.orbitRadius)) * dt
+                // Round the tilted ring, all together (quicker with music).
+                bubble.orbitAngle = self.ringAngle + bubble.orbitSlot
                 bubble.depth = sin(bubble.orbitAngle)
                 let t = self.time * bubble.speed + bubble.phase
                 let target = CGPoint(x: self.avatarCenter.x + cos(bubble.orbitAngle) * bubble.orbitRadius + sin(t * 0.9) * 2.0, y: self.avatarCenter.y + sin(bubble.orbitAngle) * bubble.orbitRadius * AstraBubbleTuning.current.orbitTilt + sin(t * 0.7 + 1.0) * 2.0)
@@ -576,9 +579,7 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
 
     /// Turns all the bubbles around the avatar by `angle`.
     private func turn(by angle: CGFloat) {
-        for bubble in self.bubbles where bubble !== self.dragged {
-            bubble.orbitAngle += angle
-        }
+        self.ringAngle += angle
     }
 
     /// A sideways swipe around the avatar turns the bubbles (`host`: the header's view, which gets the gesture).
