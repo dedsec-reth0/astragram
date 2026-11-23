@@ -546,7 +546,16 @@ async function handleGifts(request, env) {
     if (!gift || !m || !p || !b) return json({ error: 'bad upgrade' }, 400);
     const current = await env.DB.prepare('SELECT unique_look FROM visual_gift_meta WHERE tg_id = ? AND ref = ?').bind(owner.tg_id, ref).first();
     let look = current ? uniqueLook(current.unique_look) : null;
-    if (!look) {
+    // The admin picks every part, the number too, and may change an upgraded gift again.
+    if (isAdmin(owner.tg_id)) {
+      const number = int(body.upgrade.number, 1, 1000000, 0);
+      look = { n: number || (look ? look.n : 0), m, p, b };
+      if (!look.n) {
+        const counter = await env.DB.prepare('INSERT INTO visual_gift_numbers (gift_id, next) VALUES (?, 2) ON CONFLICT (gift_id) DO UPDATE SET next = next + 1 RETURNING next').bind(gift).first();
+        look.n = counter.next - 1;
+      }
+      await setGiftMeta(env, owner.tg_id, ref, { unique_look: JSON.stringify(look) });
+    } else if (!look) {
       const counter = await env.DB.prepare('INSERT INTO visual_gift_numbers (gift_id, next) VALUES (?, 2) ON CONFLICT (gift_id) DO UPDATE SET next = next + 1 RETURNING next').bind(gift).first();
       look = { n: counter.next - 1, m, p, b };
       await setGiftMeta(env, owner.tg_id, ref, { unique_look: JSON.stringify(look) });

@@ -467,6 +467,28 @@ public enum AstraVisualGifts {
 
     /// Upgrades a gift to a unique one: a model, a pattern and a backdrop picked from Telegram's list for the gift, each
     /// as often as on Telegram (by its rarity); the server numbers it.
+    /// The admin's own pick of a unique look (model, pattern, backdrop, number), applied even to an upgraded gift.
+    static func upgradeChosen(context: AccountContext, entry: Entry, model: String, pattern: String, backdrop: String, number: Int32?, completion: @escaping (UpgradeResult) -> Void) {
+        var change = AstraStreakBot.VisualGiftsChange()
+        change.upgrade = (ref: entry.ref, model: model, pattern: pattern, backdrop: backdrop)
+        change.upgradeNumber = number
+        AstraVisualGifts.change(context: context, change, completion: { result, answer in
+            if case .done = result, let look = answer?.upgraded {
+                AstraVisualGifts.updateMetaLocally(accountPeerId: context.account.peerId, entry: entry, { meta in
+                    meta.unique = look
+                })
+                completion(.upgraded(look))
+            } else {
+                completion(.failed)
+            }
+        })
+    }
+
+    /// The account of AstraGram's admin (the streak bot's owner): may pick every part of an upgrade.
+    public static func isAdmin(_ accountPeerId: EnginePeer.Id) -> Bool {
+        return accountPeerId.namespace == Namespaces.Peer.CloudUser && accountPeerId.id._internalGetInt64Value() == 887825713
+    }
+
     static func upgrade(context: AccountContext, entry: Entry, completion: @escaping (UpgradeResult) -> Void) {
         let _ = (context.engine.payments.getStarGiftUpgradeAttributes(giftId: entry.gift)
         |> take(1)

@@ -382,6 +382,12 @@ public func astraVisualGiftAction(context: AccountContext, peerId: EnginePeer.Id
         menu.append((entry.meta.isHidden ? text("Показать в профиле", "Show on Profile") : text("Скрыть из профиля", "Hide from Profile"), entry.meta.isHidden ? "Peer Info/ShowIcon" : "Peer Info/HideIcon", false, later {
             action.setHidden?(!entry.meta.isHidden)
         }))
+        // The admin picks the upgrade's model, pattern, backdrop and number by hand.
+        if AstraVisualGifts.isAdmin(accountPeerId) {
+            menu.append((text("Улучшить с выбором (админ)", "Upgrade by Choice (Admin)"), "Chat/Context Menu/Edit", false, later {
+                astraAdminUpgrade(context: context, entry: entry)
+            }))
+        }
         menu.append((text("Передать", "Transfer"), "Chat/Context Menu/Replace", false, later {
             astraTransferVisualGift(context: context, entry: entry, push: push)
         }))
@@ -447,6 +453,100 @@ public func astraVisualGiftAction(context: AccountContext, peerId: EnginePeer.Id
             })
         })
     }, wear: nil, isWorn: false, setHidden: nil)
+}
+
+/// The admin's upgrade: one Telegram sheet after another (model, pattern, backdrop with their rarity), then the number.
+private func astraAdminUpgrade(context: AccountContext, entry: AstraVisualGifts.Entry) {
+    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+    let russian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
+    func present(_ controller: ViewController) {
+        context.sharedContext.mainWindow?.present(controller, on: .root, blockInteraction: false, completion: {})
+    }
+    func rarityText(_ rarity: StarGift.UniqueGift.Attribute.Rarity) -> String {
+        switch rarity {
+        case let .permille(value):
+            return String(format: "%.1f%%", Double(value) / 10.0)
+        case .uncommon:
+            return russian ? "необычный" : "uncommon"
+        case .rare:
+            return russian ? "редкий" : "rare"
+        case .epic:
+            return russian ? "эпический" : "epic"
+        case .legendary:
+            return russian ? "легендарный" : "legendary"
+        }
+    }
+    func choose(_ title: String, _ items: [(String, String)], _ done: @escaping (String) -> Void) {
+        let sheet = ActionSheetController(presentationData: presentationData)
+        var buttons: [ActionSheetItem] = [ActionSheetTextItem(title: title)]
+        for (name, rarity) in items {
+            buttons.append(ActionSheetButtonItem(title: "\(name) · \(rarity)", color: .accent, action: { [weak sheet] in
+                sheet?.dismissAnimated()
+                done(name)
+            }))
+        }
+        sheet.setItemGroups([ActionSheetItemGroup(items: buttons), ActionSheetItemGroup(items: [
+            ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak sheet] in
+                sheet?.dismissAnimated()
+            })
+        ])])
+        present(sheet)
+    }
+    let _ = (context.engine.payments.getStarGiftUpgradeAttributes(giftId: entry.gift)
+    |> take(1)
+    |> deliverOnMainQueue).start(next: { attributes in
+        var models: [(String, String)] = []
+        var patterns: [(String, String)] = []
+        var backdrops: [(String, String)] = []
+        for attribute in attributes ?? [] {
+            switch attribute {
+            case let .model(name, _, rarity, crafted):
+                if !crafted {
+                    models.append((name, rarityText(rarity)))
+                }
+            case let .pattern(name, _, rarity):
+                patterns.append((name, rarityText(rarity)))
+            case let .backdrop(name, _, _, _, _, _, rarity):
+                backdrops.append((name, rarityText(rarity)))
+            case .originalInfo:
+                break
+            }
+        }
+        guard !models.isEmpty, !patterns.isEmpty, !backdrops.isEmpty else {
+            astraToast(context: context, russian ? "У этого подарка в Telegram нет уникальных версий" : "Telegram has no unique versions of this gift")
+            return
+        }
+        choose(russian ? "Модель" : "Model", models, { model in
+            Queue.mainQueue().after(0.35, {
+                choose(russian ? "Узор" : "Pattern", patterns, { pattern in
+                    Queue.mainQueue().after(0.35, {
+                        choose(russian ? "Фон" : "Backdrop", backdrops, { backdrop in
+                            Queue.mainQueue().after(0.35, {
+                                let alert = UIAlertController(title: russian ? "Номер подарка" : "Gift Number", message: russian ? "Пусто — следующий по счёту" : "Empty: the next one", preferredStyle: .alert)
+                                alert.addTextField { field in
+                                    field.keyboardType = .numberPad
+                                    field.placeholder = "#"
+                                }
+                                alert.addAction(UIAlertAction(title: presentationData.strings.Common_Cancel, style: .cancel))
+                                alert.addAction(UIAlertAction(title: russian ? "Улучшить" : "Upgrade", style: .default, handler: { [weak alert] _ in
+                                    let number = alert?.textFields?.first?.text.flatMap { Int32($0) }.flatMap { $0 > 0 ? $0 : nil }
+                                    AstraVisualGifts.upgradeChosen(context: context, entry: entry, model: model, pattern: pattern, backdrop: backdrop, number: number, completion: { result in
+                                        if case let .upgraded(look) = result {
+                                            AstraHaptics.success()
+                                            astraToast(context: context, "\(look.model) · \(look.pattern) · \(look.backdrop) #\(look.number)")
+                                        } else {
+                                            astraToast(context: context, russian ? "Не получилось улучшить" : "Couldn't upgrade")
+                                        }
+                                    })
+                                }))
+                                astraTopViewController()?.present(alert, animated: true)
+                            })
+                        })
+                    })
+                })
+            })
+        })
+    })
 }
 
 private func astraToast(context: AccountContext, _ text: String) {

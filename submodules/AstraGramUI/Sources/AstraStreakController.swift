@@ -353,6 +353,8 @@ public enum AstraStreakBot {
         var meta: [(ref: String, pinned: Bool?, hidden: Bool?)] = []
         /// Upgrades a gift to the look given (names from Telegram's list for the gift).
         var upgrade: (ref: String, model: String, pattern: String, backdrop: String)?
+        /// The admin's own number for the upgrade.
+        var upgradeNumber: Int32?
         /// Passes a gift on to someone else.
         var transfer: (ref: String, to: Int64, text: String, anonymous: Bool)?
         /// Wears a gift as the status (`.some(nil)` takes it off).
@@ -414,7 +416,11 @@ public enum AstraStreakBot {
             }
         }
         if let upgrade = change.upgrade {
-            body["upgrade"] = ["ref": upgrade.ref, "model": upgrade.model, "pattern": upgrade.pattern, "backdrop": upgrade.backdrop]
+            var value: [String: Any] = ["ref": upgrade.ref, "model": upgrade.model, "pattern": upgrade.pattern, "backdrop": upgrade.backdrop]
+            if let number = change.upgradeNumber {
+                value["number"] = NSNumber(value: number)
+            }
+            body["upgrade"] = value
         }
         if let transfer = change.transfer {
             body["transfer"] = ["ref": transfer.ref, "to": NSNumber(value: transfer.to), "text": transfer.text, "anonymous": transfer.anonymous]

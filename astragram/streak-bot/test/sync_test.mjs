@@ -314,6 +314,12 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   r = await gifts('A', { wear: null, meta: [{ ref: 'o5170145012310081615', pinned: false }], check: [] });
   check('unpinned', r.body.mineMeta['5170145012310081615'], undefined);
 
+  // 9h2. Only the admin may set the number (or change an upgraded gift); anyone else gets the next number.
+  r = await gifts('A', { upgrade: { ref: 'o5170145012310081615', model: 'Gold', pattern: 'Star', backdrop: 'Black', number: 7 }, check: [] });
+  check('a non-admin cannot choose the number', [r.body.upgraded.u.m, r.body.upgraded.u.n === 7], ['Gold', false]);
+  r = await gifts('A', { upgrade: { ref: 'o5170145012310081615', model: 'Silver', pattern: 'Star', backdrop: 'Black' }, check: [] });
+  check('a non-admin cannot change an upgraded gift', r.body.upgraded.u.m, 'Gold');
+
   // 9i. Local Premium looks: set, seen by others, junk dropped, turned off.
   r = await gifts('A', { premiumLook: { status: '5170145012310081615', nameColor: 3, profileColor: 7, bad: 'x', backgroundEmoji: 12.5 }, check: [] });
   check('own look comes back', r.body.premiumLooks[100], { status: '5170145012310081615', nameColor: 3, profileColor: 7 });
