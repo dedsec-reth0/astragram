@@ -5,68 +5,180 @@ import SwiftSignalKit
 import TelegramCore
 import TelegramPresentationData
 import AccountContext
-import ContextUI
+import ItemListUI
+import AttachmentUI
 import TranslateUI
-import TranslationLanguagesContextMenuContent
 import AstraGramUI
 
-/// AstraGram: "Translate my messages" in this chat, from the attachment menu's "Translate" tab: Telegram's own
-/// context menu and its own list of translation languages.
+/// AstraGram: the attachment menu's "Translate" tab: which language the user's own messages go out in, and which
+/// language the others' messages in this chat are shown in. Telegram's own list look, in the attachment sheet.
+final class AstraTranslateAttachmentScreen: ItemListController, AttachmentContainable {
+    var requestAttachmentMenuExpansion: () -> Void = {}
+    var updateNavigationStack: (@escaping ([AttachmentContainable]) -> ([AttachmentContainable], AttachmentMediaPickerContext?)) -> Void = { _ in }
+    var updateTabBarAlpha: (CGFloat, ContainedViewLayoutTransition) -> Void = { _, _ in }
+    var updateTabBarVisibility: (Bool, ContainedViewLayoutTransition) -> Void = { _, _ in }
+    var cancelPanGesture: () -> Void = {}
+    var isContainerPanning: () -> Bool = { return false }
+    var isContainerExpanded: () -> Bool = { return false }
+    var parentController: () -> ViewController? = { return nil }
+    var isMinimized: Bool = false
+    var mediaPickerContext: AttachmentMediaPickerContext? {
+        return nil
+    }
+}
+
+private enum AstraTranslateMode: Int {
+    case mine
+    case theirs
+}
+
+private final class AstraTranslateArguments {
+    let selectMode: (AstraTranslateMode) -> Void
+    let selectLanguage: (String?) -> Void
+
+    init(selectMode: @escaping (AstraTranslateMode) -> Void, selectLanguage: @escaping (String?) -> Void) {
+        self.selectMode = selectMode
+        self.selectLanguage = selectLanguage
+    }
+}
+
+private enum AstraTranslateEntry: ItemListNodeEntry {
+    case modeHeader(String)
+    case mode(AstraTranslateMode, String, String, Bool)
+    case modeFooter(String)
+    case languageHeader(String)
+    case off(String, Bool)
+    case language(Int, String, String, Bool)
+
+    var section: ItemListSectionId {
+        switch self {
+        case .modeHeader, .mode, .modeFooter:
+            return 0
+        case .languageHeader, .off, .language:
+            return 1
+        }
+    }
+
+    var stableId: Int {
+        switch self {
+        case .modeHeader: return 0
+        case let .mode(mode, _, _, _): return 1 + mode.rawValue
+        case .modeFooter: return 9
+        case .languageHeader: return 10
+        case .off: return 11
+        case let .language(index, _, _, _): return 100 + index
+        }
+    }
+
+    static func ==(lhs: AstraTranslateEntry, rhs: AstraTranslateEntry) -> Bool {
+        switch (lhs, rhs) {
+        case let (.modeHeader(a), .modeHeader(b)), let (.modeFooter(a), .modeFooter(b)), let (.languageHeader(a), .languageHeader(b)):
+            return a == b
+        case let (.mode(a1, a2, a3, a4), .mode(b1, b2, b3, b4)):
+            return a1 == b1 && a2 == b2 && a3 == b3 && a4 == b4
+        case let (.off(a1, a2), .off(b1, b2)):
+            return a1 == b1 && a2 == b2
+        case let (.language(a1, a2, a3, a4), .language(b1, b2, b3, b4)):
+            return a1 == b1 && a2 == b2 && a3 == b3 && a4 == b4
+        default:
+            return false
+        }
+    }
+
+    static func <(lhs: AstraTranslateEntry, rhs: AstraTranslateEntry) -> Bool {
+        return lhs.stableId < rhs.stableId
+    }
+
+    func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
+        let arguments = arguments as! AstraTranslateArguments
+        switch self {
+        case let .modeHeader(text), let .languageHeader(text):
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
+        case let .mode(mode, title, value, selected):
+            return ItemListCheckboxItem(presentationData: presentationData, systemStyle: .glass, title: title, subtitle: value, style: .left, checked: selected, zeroSeparatorInsets: false, sectionId: self.section, action: {
+                arguments.selectMode(mode)
+            })
+        case let .modeFooter(text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+        case let .off(title, selected):
+            return ItemListCheckboxItem(presentationData: presentationData, systemStyle: .glass, title: title, style: .right, checked: selected, zeroSeparatorInsets: false, sectionId: self.section, action: {
+                arguments.selectLanguage(nil)
+            })
+        case let .language(_, code, title, selected):
+            return ItemListCheckboxItem(presentationData: presentationData, systemStyle: .glass, title: title, style: .right, checked: selected, zeroSeparatorInsets: false, sectionId: self.section, action: {
+                arguments.selectLanguage(code)
+            })
+        }
+    }
+}
+
 extension ChatControllerImpl {
-    func astraOpenTranslateMenu(sourceView: UIView, inAttachment attachmentController: ViewController?) {
+    func astraTranslateAttachmentScreen() -> AstraTranslateAttachmentScreen? {
         guard let peerId = self.chatLocation.peerId else {
-            return
+            return nil
         }
-        let presentationData = self.presentationData
-        let russian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
-        let current = AstraOutgoingTranslation.language(peerId: peerId)
-        let interfaceLanguage = normalizeTranslationLanguage(presentationData.strings.baseLanguageCode)
-        let locale = Locale(identifier: interfaceLanguage)
-        func name(_ code: String) -> String {
-            return (locale.localizedString(forLanguageCode: code) ?? code).capitalized(with: locale)
-        }
+        let context = self.context
+        let mode = ValuePromise<AstraTranslateMode>(.mine, ignoreRepeated: true)
+        let modeValue = Atomic<AstraTranslateMode>(value: .mine)
+        let changed = ValuePromise<Int>(0, ignoreRepeated: false)
+        let changes = Atomic<Int>(value: 0)
+        var dismissImpl: (() -> Void)?
 
-        var items: [ContextMenuItem] = []
-        let title = current.flatMap { (russian ? "Переводить на: " : "Translate to: ") + name($0) } ?? (russian ? "Переводить мои сообщения" : "Translate My Messages")
-        items.append(.action(ContextMenuActionItem(text: title, icon: { theme in
-            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Translate"), color: theme.contextMenu.primaryColor)
-        }, action: { [weak self] c, _ in
-            guard let self else {
-                return
+        let arguments = AstraTranslateArguments(selectMode: { value in
+            let _ = modeValue.swap(value)
+            mode.set(value)
+        }, selectLanguage: { code in
+            switch modeValue.with({ $0 }) {
+            case .mine:
+                AstraOutgoingTranslation.setLanguage(code, peerId: peerId)
+            case .theirs:
+                AstraIncomingTranslation.setLanguage(code, peerId: peerId)
             }
-            var languages: [(String, String)] = []
-            for code in supportedTranslationLanguages {
-                languages.append((code, name(code)))
-            }
-            c?.pushItems(items: .single(ContextController.Items(content: .custom(TranslationLanguagesContextMenuContent(
-                context: self.context,
-                languages: languages,
-                selectedLanguages: current.flatMap { Set([$0]) },
-                back: { [weak c] in
-                    c?.popItems()
-                },
-                selectLanguage: { [weak c] code in
-                    c?.dismiss(completion: nil)
-                    AstraOutgoingTranslation.setLanguage(code, peerId: peerId)
+            changed.set(changes.modify { $0 + 1 })
+        })
+
+        let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, mode.get(), changed.get())
+        |> map { presentationData, currentMode, _ -> (ItemListControllerState, (ItemListNodeState, Any)) in
+            let russian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
+            let locale = Locale(identifier: normalizeTranslationLanguage(presentationData.strings.baseLanguageCode))
+            func name(_ code: String?) -> String {
+                guard let code else {
+                    return russian ? "Не переводить" : "Off"
                 }
-            )))))
-        })))
-        if current != nil {
-            items.append(.action(ContextMenuActionItem(text: russian ? "Не переводить" : "Don't Translate", textColor: .destructive, icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Restrict"), color: theme.contextMenu.destructiveColor)
-            }, action: { c, _ in
-                c?.dismiss(completion: nil)
-                AstraOutgoingTranslation.setLanguage(nil, peerId: peerId)
-            })))
-        }
-        items.append(.separator)
-        items.append(.action(ContextMenuActionItem(text: russian ? "Перед отправкой ваше сообщение переводится, и в чат уходит перевод." : "Your messages are translated before sending, and the translation is sent.", textLayout: .multiline, textFont: .small, icon: { _ in return nil }, action: { _, _ in })))
+                return (locale.localizedString(forLanguageCode: code) ?? code).capitalized(with: locale)
+            }
+            let mine = AstraOutgoingTranslation.language(peerId: peerId)
+            let theirs = AstraIncomingTranslation.language(peerId: peerId)
+            let current = currentMode == .mine ? mine : theirs
 
-        let contextController = makeContextController(presentationData: presentationData, source: .reference(ChatControllerContextReferenceContentSource(controller: self, sourceView: sourceView, insets: .zero)), items: .single(ContextController.Items(content: .list(items))), gesture: nil)
-        if let attachmentController {
-            attachmentController.presentInGlobalOverlay(contextController)
-        } else {
-            self.presentInGlobalOverlay(contextController)
+            var entries: [AstraTranslateEntry] = []
+            entries.append(.modeHeader(russian ? "ЧТО ПЕРЕВОДИТЬ" : "TRANSLATE"))
+            entries.append(.mode(.mine, russian ? "Мои сообщения" : "My Messages", name(mine), currentMode == .mine))
+            entries.append(.mode(.theirs, russian ? "Сообщения собеседника" : "Their Messages", name(theirs), currentMode == .theirs))
+            entries.append(.modeFooter(currentMode == .mine
+                ? (russian ? "Перед отправкой ваше сообщение переводится на выбранный язык, и в чат уходит перевод." : "Your message is translated into this language before it is sent, and the translation goes to the chat.")
+                : (russian ? "Сообщения собеседника в этом чате показываются переведёнными на выбранный язык." : "The other side's messages in this chat are shown translated into this language.")))
+            entries.append(.languageHeader(russian ? "ЯЗЫК" : "LANGUAGE"))
+            entries.append(.off(name(nil), current == nil))
+            var languages = supportedTranslationLanguages.map { ($0, name($0)) }
+            languages.sort { $0.1.localizedCompare($1.1) == .orderedAscending }
+            for (index, language) in languages.enumerated() {
+                entries.append(.language(index, language.0, language.1, language.0 == current))
+            }
+
+            let close = ItemListNavigationButton(content: .icon(.close), style: .regular, enabled: true, action: {
+                dismissImpl?()
+            })
+            let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(russian ? "Перевод" : "Translation"), leftNavigationButton: close, rightNavigationButton: nil, backNavigationButton: nil)
+            let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: false)
+            return (controllerState, (listState, arguments))
         }
+
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let controller = AstraTranslateAttachmentScreen(presentationData: ItemListPresentationData(presentationData), updatedPresentationData: context.sharedContext.presentationData |> map { ItemListPresentationData($0) }, state: signal, tabBarItem: nil)
+        dismissImpl = { [weak self] in
+            self?.attachmentController?.dismiss(animated: true)
+        }
+        return controller
     }
 }

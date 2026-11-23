@@ -1070,15 +1070,9 @@ extension ChatControllerImpl {
                         }
                         return true
                     case .astraTranslate:
-                        if let hostView = strongSelf.attachmentController?.view {
-                            // The menu opens above the tab bar, from where the "Translate" tab is.
-                            let anchor = UIView(frame: CGRect(x: hostView.bounds.width * 0.5 - 1.0, y: hostView.bounds.height - hostView.safeAreaInsets.bottom - 80.0, width: 2.0, height: 2.0))
-                            anchor.isUserInteractionEnabled = false
-                            hostView.addSubview(anchor)
-                            strongSelf.astraOpenTranslateMenu(sourceView: anchor, inAttachment: strongSelf.attachmentController)
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 60.0, execute: { [weak anchor] in
-                                anchor?.removeFromSuperview()
-                            })
+                        if let controller = strongSelf.astraTranslateAttachmentScreen() {
+                            completion(controller, nil)
+                            return true
                         }
                         return false
                     case .astraStreak:
