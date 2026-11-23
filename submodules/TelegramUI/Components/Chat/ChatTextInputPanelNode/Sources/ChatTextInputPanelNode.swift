@@ -3346,7 +3346,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         let textInputContainerBackgroundTransition = ComponentTransition(transition)
         let isTextInputGlassInteractive = !(isAgentLayout && self.isAgentMenuActive)
-        self.textInputContainerBackgroundView.update(size: textInputContainerBackgroundFrame.size, cornerRadius: isAgentLayout ? 20.0 : floor(minimalInputHeight * 0.5), isDark: interfaceState.theme.overallDarkAppearance, tintColor: defaultGlassTintColor, isInteractive: isTextInputGlassInteractive, transition: textInputContainerBackgroundTransition)
+        // Folio draws the input field as a slab with 16pt corners rather than a capsule, so it keeps the same corners
+        // when it grows to several lines. The min() keeps a very short field from getting corners larger than half its
+        // height. The agent layout keeps its own 20pt shape in both designs.
+        let textInputContainerCornerRadius: CGFloat = isAgentLayout ? 20.0 : (AstraLook.design2027 ? min(AstraLook.Folio.inputRadius, floor(minimalInputHeight * 0.5)) : floor(minimalInputHeight * 0.5))
+        self.textInputContainerBackgroundView.update(size: textInputContainerBackgroundFrame.size, cornerRadius: textInputContainerCornerRadius, isDark: interfaceState.theme.overallDarkAppearance, tintColor: defaultGlassTintColor, isInteractive: isTextInputGlassInteractive, transition: textInputContainerBackgroundTransition)
         if isTextInputGlassInteractive != self.isTextInputGlassInteractive {
             self.isTextInputGlassInteractive = isTextInputGlassInteractive
             // UIKit's stretch (`_UIFlexInteraction`) follows neither change of the effect on an effect view: it stays
@@ -4048,7 +4052,16 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     context.fill(CGRect(origin: CGPoint(), size: size))
                     context.setBlendMode(.copy)
                     context.setFillColor(UIColor.clear.cgColor)
-                    context.fillEllipse(in: CGRect(origin: CGPoint(x: contextPanelMaskInset, y: contextPanelMaskInset + maskSize * 0.5), size: CGSize(width: maskSize, height: maskSize)))
+                    let maskHoleRect = CGRect(origin: CGPoint(x: contextPanelMaskInset, y: contextPanelMaskInset + maskSize * 0.5), size: CGSize(width: maskSize, height: maskSize))
+                    if AstraLook.design2027 {
+                        // Under Folio the input field is a slab with 16pt corners, so the hole that hides the context
+                        // panel behind the field follows the same corners. Otherwise the panel would show through the
+                        // translucent glass between the capsule curve and the slab corner.
+                        context.addPath(UIBezierPath(roundedRect: maskHoleRect, cornerRadius: min(AstraLook.Folio.inputRadius, floor(maskSize * 0.5))).cgPath)
+                        context.fillPath()
+                    } else {
+                        context.fillEllipse(in: maskHoleRect)
+                    }
                     context.fill(CGRect(origin: CGPoint(x: 0.0, y: contextPanelMaskInset + maskSize), size: CGSize(width: maskSize + contextPanelMaskInset * 2.0, height: maskSize + contextPanelMaskInset)))
                 })?.stretchableImage(withLeftCapWidth: Int(contextPanelMaskInset) + Int(maskSize) / 2, topCapHeight: Int(contextPanelMaskInset) + 1)
                 
@@ -6125,6 +6138,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 self.hapticFeedback.error()
                 return
             }
+        }
+        
+        if AstraLook.design2027 {
+            // Folio confirms a send with a light tap. Stock fires no haptic on send, so this does not double one up,
+            // and it comes after the length check above so a rejected edit only gets the error haptic.
+            self.hapticFeedback.impact(.light)
         }
         
         if let presentationInterfaceState = self.presentationInterfaceState, presentationInterfaceState.interfaceState.mediaDraftState != nil {

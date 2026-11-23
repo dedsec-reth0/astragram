@@ -388,7 +388,9 @@ public struct PresentationResourcesItemList {
                     corners.insert(.bottomLeft)
                     corners.insert(.bottomRight)
                 }
-                let cornerRadius: CGFloat = glass ? 26.0 : 11.0
+                // Folio cards have 20pt corners. The image is cached per theme and the Folio theme is its own
+                // instance, so turning the flag on or off draws a fresh image rather than reusing a stale one.
+                let cornerRadius: CGFloat = glass ? (AstraLook.design2027 ? AstraLook.Folio.cardRadius : 26.0) : 11.0
                 let path = UIBezierPath(roundedRect: bounds, byRoundingCorners: corners, cornerRadii: CGSize(width: cornerRadius, height: cornerRadius))
                 context.addPath(path.cgPath)
                 context.fillPath()

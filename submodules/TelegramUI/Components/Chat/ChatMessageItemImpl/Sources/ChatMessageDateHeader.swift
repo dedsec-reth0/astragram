@@ -236,6 +236,23 @@ private final class ChatMessageDateSectionSeparatorNode: ASDisplayNode {
     }
 }
 
+/// AstraGram Folio: the date chip's label is set in tracked uppercase, 11 Semibold, like a magazine folio line. The
+/// flag is read at each call, so a live toggle restyles the label on the next presentation data update; the stock
+/// label (Medium 13, as typed) stays in the else branch.
+private func astraChatDateHeaderTitle(_ text: String, baseDisplaySize: CGFloat, textColor: UIColor) -> NSAttributedString {
+    if AstraLook.design2027 {
+        let font = Font.semibold(min(18.0, floor(baseDisplaySize * 11.0 / 17.0)))
+        return NSAttributedString(string: text.uppercased(with: Locale.current), attributes: [
+            NSAttributedString.Key.font: font,
+            NSAttributedString.Key.foregroundColor: textColor,
+            NSAttributedString.Key.kern: 0.8 as NSNumber
+        ])
+    } else {
+        let titleFont = Font.medium(min(18.0, floor(baseDisplaySize * 13.0 / 17.0)))
+        return NSAttributedString(string: text, font: titleFont, textColor: textColor)
+    }
+}
+
 private final class ChatMessageDateContentNode: ASDisplayNode {
     private var presentationData: ChatPresentationData
     private let controllerInteraction: ChatControllerInteraction?
@@ -255,6 +272,9 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
     private var isFlashing = true
     private var glassView: GlassBackgroundView?
     private var parkedLabelNode: TextNode?
+    // Whether the label was last laid out in the Folio style. Its size changes with the style even when the font size
+    // does not, so a live toggle has to resize the label too.
+    private var astraLabelIsFolio = false
     
     init(presentationData: ChatPresentationData, controllerInteraction: ChatControllerInteraction?, localTimestamp: Int32, scheduled: Bool) {
         self.presentationData = presentationData
@@ -325,10 +345,9 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
             self.addSubnode(self.backgroundNode)
         }
         self.addSubnode(self.labelNode)
-                
-        let titleFont = Font.medium(min(18.0, floor(presentationData.fontSize.baseDisplaySize * 13.0 / 17.0)))
         
-        let attributedString = NSAttributedString(string: text, font: titleFont, textColor: bubbleVariableColor(variableColor: presentationData.theme.theme.chat.serviceMessage.dateTextColor, wallpaper: presentationData.theme.wallpaper))
+        let attributedString = astraChatDateHeaderTitle(text, baseDisplaySize: presentationData.fontSize.baseDisplaySize, textColor: bubbleVariableColor(variableColor: presentationData.theme.theme.chat.serviceMessage.dateTextColor, wallpaper: presentationData.theme.wallpaper))
+        self.astraLabelIsFolio = AstraLook.design2027
         let labelLayout = TextNode.asyncLayout(self.labelNode)
                 
         let (size, apply) = labelLayout(TextNodeLayoutArguments(attributedString: attributedString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: 320.0, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
@@ -349,15 +368,15 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
         self.backgroundNode.updateColor(color: selectDateFillStaticColor(theme: presentationData.theme.theme, wallpaper: presentationData.theme.wallpaper), enableBlur: fullTranslucency && dateFillNeedsBlur(theme: presentationData.theme.theme, wallpaper: presentationData.theme.wallpaper), transition: .immediate)
         self.stickBackgroundNode.image = graphics.dateFloatingBackground
         
-        let titleFont = Font.medium(min(18.0, floor(presentationData.fontSize.baseDisplaySize * 13.0 / 17.0)))
-        
-        let attributedString = NSAttributedString(string: self.text, font: titleFont, textColor: bubbleVariableColor(variableColor: presentationData.theme.theme.chat.serviceMessage.dateTextColor, wallpaper: presentationData.theme.wallpaper))
+        let attributedString = astraChatDateHeaderTitle(self.text, baseDisplaySize: presentationData.fontSize.baseDisplaySize, textColor: bubbleVariableColor(variableColor: presentationData.theme.theme.chat.serviceMessage.dateTextColor, wallpaper: presentationData.theme.wallpaper))
         let labelLayout = TextNode.asyncLayout(self.labelNode)
         
         let (size, apply) = labelLayout(TextNodeLayoutArguments(attributedString: attributedString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: 320.0, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
         let _ = apply()
         
-        if presentationData.fontSize != previousPresentationData.fontSize {
+        let astraStyleChanged = self.astraLabelIsFolio != AstraLook.design2027
+        self.astraLabelIsFolio = AstraLook.design2027
+        if presentationData.fontSize != previousPresentationData.fontSize || astraStyleChanged {
             self.labelNode.bounds = CGRect(origin: CGPoint(), size: size.size)
         }
         
@@ -369,18 +388,29 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
     
     /// The parked date's label: the date in the primary text colour, where the gray one is.
     private func layoutParkedLabel(_ parkedLabelNode: TextNode) {
-        let titleFont = Font.medium(min(18.0, floor(self.presentationData.fontSize.baseDisplaySize * 13.0 / 17.0)))
-        let (layout, apply) = TextNode.asyncLayout(parkedLabelNode)(TextNodeLayoutArguments(attributedString: NSAttributedString(string: self.text, font: titleFont, textColor: self.presentationData.theme.theme.list.itemPrimaryTextColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: 320.0, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+        let attributedString = astraChatDateHeaderTitle(self.text, baseDisplaySize: self.presentationData.fontSize.baseDisplaySize, textColor: self.presentationData.theme.theme.list.itemPrimaryTextColor)
+        let (layout, apply) = TextNode.asyncLayout(parkedLabelNode)(TextNodeLayoutArguments(attributedString: attributedString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: 320.0, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
         let _ = apply()
         parkedLabelNode.bounds = CGRect(origin: CGPoint(), size: layout.size)
         parkedLabelNode.position = self.labelNode.position
+    }
+    
+    /// Whether the date takes the bubbleless form (gray text and a parked glass island). Under Folio it never does:
+    /// the Folio theme keeps its inverse service colours in bubbleless mode too, so its light chip text would vanish
+    /// on the paper page without the chip, and the date stays an ink chip as in bubble mode.
+    private var astraUsesBubblelessDate: Bool {
+        if AstraLook.design2027 {
+            return false
+        } else {
+            return !self.presentationData.chatBubbleCorners.bubbleMode
+        }
     }
     
     /// Without bubbles the pill never shows: in the history the date is the gray label, parked it stands on the glass
     /// island in the primary text colour, and once scrolling stops the island dematerialises (glass under a fading parent
     /// breaks) while its label fades. With bubbles this only restores what it changed.
     private func updateBubblelessIsland(transition: ComponentTransition) {
-        guard !self.presentationData.chatBubbleCorners.bubbleMode else {
+        guard self.astraUsesBubblelessDate else {
             if self.hasBubblelessState {
                 self.hasBubblelessState = false
                 self.backgroundNode.alpha = 1.0
@@ -412,7 +442,9 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
             self.addSubnode(parkedLabelNode)
             self.layoutParkedLabel(parkedLabelNode)
             if let lastBackgroundFrame = self.lastBackgroundFrame {
-                glassView.frame = lastBackgroundFrame.insetBy(dx: -6.0, dy: -3.0)
+                // Under Folio the label already has 10 pt of padding inside the background frame, so the island
+                // adds no horizontal outset and keeps that padding.
+                glassView.frame = lastBackgroundFrame.insetBy(dx: AstraLook.design2027 ? 0.0 : -6.0, dy: -3.0)
             }
             // Glass animates from the state it was last committed in: it materialises a frame later.
             materialisesLater = true
@@ -421,7 +453,8 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
             }
         }
         if let glassView = self.glassView {
-            glassView.update(size: glassView.bounds.size, cornerRadius: glassView.bounds.height * 0.5, isDark: self.presentationData.theme.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isVisible: state.showsIsland && !materialisesLater, transition: materialisesLater ? .immediate : transition)
+            // Under Folio the island is a slab with the chip radius, like the date chip in bubble mode.
+            glassView.update(size: glassView.bounds.size, cornerRadius: AstraLook.design2027 ? AstraLook.Folio.chipRadius : glassView.bounds.height * 0.5, isDark: self.presentationData.theme.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isVisible: state.showsIsland && !materialisesLater, transition: materialisesLater ? .immediate : transition)
         }
         transition.setAlpha(view: self.labelNode.view, alpha: state.showsHistoryLabel ? 1.0 : 0.0)
         if let parkedLabelNode = self.parkedLabelNode {
@@ -440,7 +473,7 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
     
     /// Without bubbles the parked date that has gone takes no taps.
     var bubblelessTakesTaps: Bool? {
-        guard !self.presentationData.chatBubbleCorners.bubbleMode else {
+        guard self.astraUsesBubblelessDate else {
             return nil
         }
         return chatMessageBubblelessDateState(stickDistanceFactor: self.stickDistanceFactor, isFlashing: self.isFlashing).takesTaps
@@ -452,7 +485,9 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
     
     func update(size: CGSize, leftInset: CGFloat, rightInset: CGFloat, transition: ContainedViewLayoutTransition) {
         let chatDateSize: CGFloat = 22.0
-        let chatDateInset: CGFloat = 6.0
+        // AstraGram Folio: the date chip is an 8 pt slab with 10 pt of horizontal padding rather than a capsule.
+        let astraFolio = AstraLook.design2027
+        let chatDateInset: CGFloat = astraFolio ? 10.0 : 6.0
         
         let labelSize = self.labelNode.bounds.size
         let backgroundSize = CGSize(width: labelSize.width + chatDateInset * 2.0, height: chatDateSize)
@@ -461,7 +496,8 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
         
         transition.updateFrame(node: self.stickBackgroundNode, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
         transition.updateFrame(node: self.backgroundNode, frame: backgroundFrame)
-        self.backgroundNode.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.size.height / 2.0, transition: transition)
+        let chatDateCornerRadius: CGFloat = astraFolio ? AstraLook.Folio.chipRadius : backgroundFrame.size.height / 2.0
+        self.backgroundNode.update(size: backgroundFrame.size, cornerRadius: chatDateCornerRadius, transition: transition)
         let labelFrame = CGRect(origin: CGPoint(x: backgroundFrame.origin.x + chatDateInset, y: backgroundFrame.origin.y + floorToScreenPixels((backgroundSize.height - labelSize.height) / 2.0)), size: labelSize)
         
         transition.updatePosition(node: self.labelNode, position: labelFrame.center)
@@ -471,9 +507,9 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
             transition.updatePosition(node: parkedLabelNode, position: labelFrame.center)
         }
         if let glassView = self.glassView {
-            let glassFrame = backgroundFrame.insetBy(dx: -6.0, dy: -3.0)
+            let glassFrame = backgroundFrame.insetBy(dx: astraFolio ? 0.0 : -6.0, dy: -3.0)
             transition.updateFrame(view: glassView, frame: glassFrame)
-            glassView.update(size: glassFrame.size, cornerRadius: glassFrame.height * 0.5, isDark: self.presentationData.theme.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isVisible: chatMessageBubblelessDateState(stickDistanceFactor: self.stickDistanceFactor, isFlashing: self.isFlashing).showsIsland, transition: ComponentTransition(transition))
+            glassView.update(size: glassFrame.size, cornerRadius: astraFolio ? AstraLook.Folio.chipRadius : glassFrame.height * 0.5, isDark: self.presentationData.theme.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isVisible: chatMessageBubblelessDateState(stickDistanceFactor: self.stickDistanceFactor, isFlashing: self.isFlashing).showsIsland, transition: ComponentTransition(transition))
         }
                 
         if let backgroundContent = self.backgroundContent {
@@ -481,7 +517,7 @@ private final class ChatMessageDateContentNode: ASDisplayNode {
             self.backgroundNode.isHidden = true
             
             transition.updateFrame(node: backgroundContent, frame: self.backgroundNode.frame)
-            backgroundContent.cornerRadius = backgroundFrame.size.height / 2.0
+            backgroundContent.cornerRadius = chatDateCornerRadius
             
             /*if let (rect, containerSize) = self.absolutePosition {
                 var backgroundFrame = backgroundContent.frame

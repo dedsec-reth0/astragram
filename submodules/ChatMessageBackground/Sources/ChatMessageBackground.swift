@@ -77,12 +77,29 @@ public class ChatMessageBackground: ASDisplayNode {
     private var astraOutlineView: UIImageView?
     // The source image is kept with its ring: an identifier is only an address, and a freed bubble image's address
     // is reused by a new one of another shape, which then got the old ring.
-    private static var astraRingCache: [ObjectIdentifier: (source: UIImage, ring: UIImage)] = [:]
+    // The key also holds the line width and the colour: one bubble image is ringed both by the 1.5 pt red anti-delete
+    // outline and by the 0.75 pt Folio hairline, and a key of the image alone handed one of them the other's ring.
+    private struct AstraRingKey: Hashable {
+        let image: ObjectIdentifier
+        let lineWidth: CGFloat
+        let color: UInt32
+    }
+    private static var astraRingCache: [AstraRingKey: (source: UIImage, ring: UIImage)] = [:]
 
     /// The colour of an outline drawn along the bubble's shape, or nil for none.
     public var astraOutlineColor: UIColor? {
         didSet {
             if oldValue != self.astraOutlineColor {
+                self.astraUpdateOutline()
+            }
+        }
+    }
+
+    /// The width of that outline. The default of 1.5 pt is the anti-delete outline's; the Folio design draws a 0.75 pt
+    /// hairline around incoming bubbles with the same ring.
+    public var astraOutlineLineWidth: CGFloat = 1.5 {
+        didSet {
+            if oldValue != self.astraOutlineLineWidth {
                 self.astraUpdateOutline()
             }
         }
@@ -95,11 +112,11 @@ public class ChatMessageBackground: ASDisplayNode {
         }
     }
 
-    /// The bubble image turned into a ring: the image, minus itself drawn 1.5 pt smaller on every side. A resizable
+    /// The bubble image turned into a ring: the image, minus itself drawn `lineWidth` smaller on every side. A resizable
     /// image stretches only between its caps, so the smaller copy keeps the tail and the corners, and what is left is
     /// a line along the bubble's edge.
-    private static func astraRing(_ image: UIImage, color: UIColor) -> UIImage? {
-        let key = ObjectIdentifier(image)
+    private static func astraRing(_ image: UIImage, color: UIColor, lineWidth: CGFloat) -> UIImage? {
+        let key = AstraRingKey(image: ObjectIdentifier(image), lineWidth: lineWidth, color: color.argb)
         if let cached = ChatMessageBackground.astraRingCache[key], cached.source === image {
             return cached.ring
         }
@@ -110,7 +127,6 @@ public class ChatMessageBackground: ASDisplayNode {
         let format = UIGraphicsImageRendererFormat()
         format.scale = image.scale
         format.opaque = false
-        let lineWidth: CGFloat = 1.5
         let ring = UIGraphicsImageRenderer(size: size, format: format).image { context in
             let rect = CGRect(origin: CGPoint(), size: size)
             image.draw(in: rect)
@@ -133,7 +149,7 @@ public class ChatMessageBackground: ASDisplayNode {
         if shapeImage == nil, let type = self.type, let graphics = self.graphics {
             shapeImage = bubbleMaskForType(type, graphics: graphics)
         }
-        guard let color = self.astraOutlineColor, let image = shapeImage, let imageView = self.imageView, let ring = ChatMessageBackground.astraRing(image, color: color) else {
+        guard let color = self.astraOutlineColor, let image = shapeImage, let imageView = self.imageView, let ring = ChatMessageBackground.astraRing(image, color: color, lineWidth: self.astraOutlineLineWidth) else {
             self.astraOutlineView?.removeFromSuperview()
             self.astraOutlineView = nil
             return

@@ -630,7 +630,12 @@ public class AttachmentController: ViewController, MinimizableController {
 
             self.dim = ASDisplayNode()
             self.dim.alpha = 0.0
-            self.dim.backgroundColor = UIColor(white: 0.0, alpha: 0.25)
+            if AstraLook.design2027 {
+                // AstraGram Folio: the attachment sheet uses the same ink dim as every other sheet.
+                self.dim.backgroundColor = AstraLook.Folio.dim(dark: self.presentationData.theme.overallDarkAppearance)
+            } else {
+                self.dim.backgroundColor = UIColor(white: 0.0, alpha: 0.25)
+            }
 
             self.shadowNode = ASImageNode()
             self.shadowNode.isUserInteractionEnabled = false
@@ -908,6 +913,10 @@ public class AttachmentController: ViewController, MinimizableController {
                     }
                     self.presentationData = presentationData
                     self.container.presentationData = presentationData
+                    // AstraGram Folio: a theme change while the sheet is open swaps the dim between light and dark.
+                    if AstraLook.design2027 {
+                        self.dim.backgroundColor = AstraLook.Folio.dim(dark: presentationData.theme.overallDarkAppearance)
+                    }
                 })
             }
         }

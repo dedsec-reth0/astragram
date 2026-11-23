@@ -1126,9 +1126,12 @@ public final class ContextControllerActionsListStackItem: ContextControllerActio
                     }
                     animateIn = true
                 }
-                let highlightFrame = CGRect(origin: CGPoint(x: 10.0, y: highlightedItemFrame.minY), size: CGSize(width: combinedSize.width - 10.0 * 2.0, height: highlightedItemFrame.height))
+                // Folio highlights are 12pt plates set 6pt in from the menu edge, concentric with its 22pt corners.
+                let folio = AstraLook.design2027
+                let highlightSideInset: CGFloat = folio ? 6.0 : 10.0
+                let highlightFrame = CGRect(origin: CGPoint(x: highlightSideInset, y: highlightedItemFrame.minY), size: CGSize(width: combinedSize.width - highlightSideInset * 2.0, height: highlightedItemFrame.height))
                 highlightTransition.setFrame(view: self.highlightedItemBackgroundView, frame: highlightFrame)
-                highlightTransition.setCornerRadius(layer: self.highlightedItemBackgroundView.layer, cornerRadius: min(20.0, highlightFrame.height * 0.5))
+                highlightTransition.setCornerRadius(layer: self.highlightedItemBackgroundView.layer, cornerRadius: folio ? min(AstraLook.Folio.menuHighlightRadius, highlightFrame.height * 0.5) : min(20.0, highlightFrame.height * 0.5))
                 if animateIn {
                     var alphaTransition = transition
                     if transition.isAnimated {
@@ -1481,6 +1484,14 @@ public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, Context
         let backgroundContainer: GlassBackgroundContainerView
         let contentContainer: LensTransitionContainer
         
+        /// Folio: the soft Z2 shadow of the menu. It is a sibling below the glass, never the glass itself (a shadow
+        /// on the glass or a clipped layer would be cut off or break the native material), and it is masked to the
+        /// outside of the slab so that it does not grey the frost from underneath. It exists only while Folio is on.
+        private var astraShadowView: UIView?
+        private var astraShadowMaskLayer: CAShapeLayer?
+        /// How far outside the slab the shadow mask reaches; it covers the 24pt blur plus the 8pt drop.
+        private let astraShadowOutset: CGFloat = 64.0
+        
         var requestUpdate: ((ContainedViewLayoutTransition) -> Void)?
         var requestPop: (() -> Void)?
         var transitionFraction: CGFloat = 0.0
@@ -1560,15 +1571,83 @@ public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, Context
         }
         
         func animateIn(from sourceView: UIView, sourceRect: CGRect, sourcePath: UIBezierPath?, alongsideAnimations: @escaping () -> Void) {
+            if let astraShadowView = self.astraShadowView {
+                // The shadow cannot follow the native morph, so it fades in as the menu settles into its final shape.
+                astraShadowView.alpha = 0.0
+                UIView.animate(withDuration: 0.25, delay: 0.15, options: [.curveEaseOut, .beginFromCurrentState], animations: {
+                    astraShadowView.alpha = 1.0
+                })
+            }
             self.contentContainer.animateIn(from: sourceView, sourceRect: sourceRect, sourcePath: sourcePath, alongsideAnimations: alongsideAnimations)
         }
 
         func animateOut(currentSource: (view: UIView, sourceRect: CGRect, sourcePath: UIBezierPath?)?, alongsideAnimations: @escaping () -> Void, completion: @escaping () -> Void) {
+            if let astraShadowView = self.astraShadowView {
+                // The shadow leaves first, so the morph back into the source never drags a static shadow along.
+                UIView.animate(withDuration: 0.12, delay: 0.0, options: [.curveEaseOut, .beginFromCurrentState], animations: {
+                    astraShadowView.alpha = 0.0
+                })
+            }
             self.contentContainer.animateOut(currentSource: currentSource, alongsideAnimations: alongsideAnimations, completion: completion)
         }
+        
+        /// Folio: creates, updates or removes the Z2 shadow below the glass for the menu's current size and radius.
+        private func updateAstraShadow(size: CGSize, cornerRadius: CGFloat, isDark: Bool, transition: ContainedViewLayoutTransition) {
+            guard AstraLook.design2027 else {
+                if let astraShadowView = self.astraShadowView {
+                    self.astraShadowView = nil
+                    self.astraShadowMaskLayer = nil
+                    astraShadowView.removeFromSuperview()
+                }
+                return
+            }
+            let shadowView: UIView
+            let maskLayer: CAShapeLayer
+            var isNew = false
+            if let currentView = self.astraShadowView, let currentMask = self.astraShadowMaskLayer {
+                shadowView = currentView
+                maskLayer = currentMask
+            } else {
+                isNew = true
+                shadowView = UIView()
+                shadowView.isUserInteractionEnabled = false
+                shadowView.backgroundColor = .clear
+                maskLayer = CAShapeLayer()
+                maskLayer.fillRule = .evenOdd
+                maskLayer.fillColor = UIColor.black.cgColor
+                shadowView.layer.mask = maskLayer
+                self.astraShadowView = shadowView
+                self.astraShadowMaskLayer = maskLayer
+                self.view.insertSubview(shadowView, belowSubview: self.backgroundContainer)
+            }
+            
+            let bounds = CGRect(origin: CGPoint(), size: size)
+            let slabPath = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius).cgPath
+            let maskPath = CGMutablePath()
+            maskPath.addRect(bounds.insetBy(dx: -self.astraShadowOutset, dy: -self.astraShadowOutset))
+            maskPath.addPath(slabPath)
+            
+            AstraLook.Folio.z2Shadow(shadowView.layer, dark: isDark)
+            let layoutTransition: ContainedViewLayoutTransition = isNew ? .immediate : transition
+            layoutTransition.updateFrame(view: shadowView, frame: bounds)
+            layoutTransition.updateFrame(layer: maskLayer, frame: bounds)
+            if case let .animated(duration, curve) = layoutTransition, let previousShadowPath = shadowView.layer.shadowPath, let previousMaskPath = maskLayer.path {
+                shadowView.layer.shadowPath = slabPath
+                shadowView.layer.animate(from: previousShadowPath, to: slabPath, keyPath: "shadowPath", timingFunction: curve.timingFunction, duration: duration, mediaTimingFunction: curve.mediaTimingFunction)
+                maskLayer.path = maskPath
+                maskLayer.animate(from: previousMaskPath, to: maskPath, keyPath: "path", timingFunction: curve.timingFunction, duration: duration, mediaTimingFunction: curve.mediaTimingFunction)
+            } else {
+                shadowView.layer.shadowPath = slabPath
+                maskLayer.path = maskPath
+            }
+        }
 
-        func update(presentationData: PresentationData, presentation: Presentation, size: CGSize, usesClearGlass: Bool, glassBlurRadius: CGFloat?, transition: ContainedViewLayoutTransition) {
-            let transition = ComponentTransition(transition)
+        func update(presentationData: PresentationData, presentation: Presentation, size: CGSize, usesClearGlass: Bool, glassBlurRadius: CGFloat?, transition layoutTransition: ContainedViewLayoutTransition) {
+            // Folio menus are 22pt slabs (capped at half the height, so a one-row menu stays round-ended).
+            let cornerRadius: CGFloat = AstraLook.design2027 ? min(AstraLook.Folio.menuRadius, size.height * 0.5) : min(30.0, size.height * 0.5)
+            self.updateAstraShadow(size: size, cornerRadius: cornerRadius, isDark: presentationData.theme.overallDarkAppearance, transition: layoutTransition)
+            
+            let transition = ComponentTransition(layoutTransition)
             
             transition.setFrame(view: self.backgroundContainer, frame: CGRect(origin: CGPoint(), size: size))
             self.backgroundContainer.update(size: size, isDark: presentationData.theme.overallDarkAppearance, transition: transition)
@@ -1577,7 +1656,7 @@ public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, Context
             transition.setBounds(view: self.contentContainer, bounds: CGRect(origin: CGPoint(), size: size))
             self.backgroundContainer.nativeBlurRadius = glassBlurRadius
             self.contentContainer.nativeBlurRadius = glassBlurRadius
-            self.contentContainer.update(size: size, cornerRadius: min(30.0, size.height * 0.5), isDark: presentationData.theme.overallDarkAppearance, tintColor: GlassBackgroundView.TintColor(kind: usesClearGlass ? .custom(style: .clear, color: .clear) : .panel), transition: transition)
+            self.contentContainer.update(size: size, cornerRadius: cornerRadius, isDark: presentationData.theme.overallDarkAppearance, tintColor: GlassBackgroundView.TintColor(kind: usesClearGlass ? .custom(style: .clear, color: .clear) : .panel), transition: transition)
         }
     }
     

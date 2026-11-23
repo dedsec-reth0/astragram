@@ -7,9 +7,57 @@ import TelegramCore
 /// AstraGram Monochrome: the settings icons are drawn once, so they follow the switch after the app restarts.
 private let astraMonochromeSettingsIcons: Bool = AstraGramSettings.current.monochrome
 
+/// AstraGram Folio: the settings icons become flat ink tiles with white glyphs. Like Monochrome they are drawn once
+/// per process, so they follow the switch only after a restart (the settings screen offers one). Folio wins when both
+/// switches are somehow stored on.
+private let astraFolioSettingsIcons: Bool = AstraGramSettings.current.design2027
+
+/// The Folio tile fills: ink for every tile, and Klein Volt for the AstraGram row, the one place the accent marks.
+private let astraFolioTileInk = UIColor(rgb: 0x0B0B0C)
+private let astraFolioTileVolt = UIColor(rgb: 0x3D2BFF)
+
+/// AstraGram Folio: a flat 30x30 tile with continuous 9pt corners, the glyph in white, and a 0.5pt white hairline
+/// just inside the edge, so that the ink tile still reads on the dark cards.
+private func astraFolioSettingsTile(name: String, scaleFactor: CGFloat = 1.0, fill: UIColor) -> UIImage? {
+    return generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
+        let bounds = CGRect(origin: CGPoint(), size: size)
+        context.clear(bounds)
+        
+        let radius = AstraLook.Folio.settingsIconRadius
+        let tilePath = UIBezierPath(roundedRect: bounds, cornerRadius: radius)
+        context.saveGState()
+        context.addPath(tilePath.cgPath)
+        context.setFillColor(fill.cgColor)
+        context.fillPath()
+        context.restoreGState()
+        
+        if let image = UIImage(bundleImageName: name), let maskImage = image.cgImage {
+            let imageSize = CGSize(width: image.size.width * scaleFactor, height: image.size.height * scaleFactor)
+            let imageRect = CGRect(origin: CGPoint(x: (bounds.width - imageSize.width) * 0.5, y: (bounds.height - imageSize.height) * 0.5), size: imageSize)
+            
+            context.saveGState()
+            context.clip(to: imageRect, mask: maskImage)
+            context.setFillColor(UIColor.white.cgColor)
+            context.fill(imageRect)
+            context.restoreGState()
+        }
+        
+        // The stroke is centred on a path inset by half its width, so all of it lies inside the tile.
+        let strokeWidth: CGFloat = 0.5
+        let strokePath = UIBezierPath(roundedRect: bounds.insetBy(dx: strokeWidth * 0.5, dy: strokeWidth * 0.5), cornerRadius: radius - strokeWidth * 0.5)
+        context.saveGState()
+        context.addPath(strokePath.cgPath)
+        context.setLineWidth(strokeWidth)
+        context.setStrokeColor(UIColor.white.withAlphaComponent(0.14).cgColor)
+        context.strokePath()
+        context.restoreGState()
+    })
+}
+
 /// AstraGram Monochrome: an icon drawn in color, with its colors taken away.
 private func astraMonochromeSettingsIcon(_ image: UIImage?) -> UIImage? {
-    guard astraMonochromeSettingsIcons, let image, let cgImage = image.cgImage else {
+    // Folio takes precedence over Monochrome, so its own icons are never desaturated on top.
+    guard astraMonochromeSettingsIcons, !astraFolioSettingsIcons, let image, let cgImage = image.cgImage else {
         return image
     }
     let result = generateImage(image.size, contextGenerator: { size, context in
@@ -29,6 +77,10 @@ private func astraMonochromeSettingsIcon(_ image: UIImage?) -> UIImage? {
 private let gradientImage = UIImage(bundleImageName: "Item List/Icons/Gradient")
 private let backdropImage = UIImage(bundleImageName: "Item List/Icons/Backdrop")
 public func renderSettingsIcon(name: String, scaleFactor: CGFloat = 1.0, backgroundColors rawBackgroundColors: [UIColor]? = nil) -> UIImage? {
+    if astraFolioSettingsIcons, rawBackgroundColors != nil {
+        // Under Folio every coloured tile is the same flat ink tile; only the glyph tells the rows apart.
+        return astraFolioSettingsTile(name: name, scaleFactor: scaleFactor, fill: astraFolioTileInk)
+    }
     var backgroundColors = rawBackgroundColors
     if astraMonochromeSettingsIcons, let rawBackgroundColors {
         backgroundColors = rawBackgroundColors.map { _ in UIColor(rgb: 0x2e2e2e) }
@@ -118,8 +170,10 @@ public func renderAttachAppIcon(iconImage: UIImage?) -> UIImage? {
             context.restoreGState()
         }
         
+        // These icons are whole pictures with no separate glyph, so Folio keeps the picture and only matches the
+        // 9pt corner of its tiles.
         let outerPath = UIBezierPath(rect: CGRect(origin: .zero, size: size))
-        let innerPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 8.0)
+        let innerPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: astraFolioSettingsIcons ? AstraLook.Folio.settingsIconRadius : 8.0)
         outerPath.append(innerPath)
 
         context.saveGState()
@@ -186,7 +240,8 @@ public struct PresentationResourcesSettings {
     public static let archivedSticker = renderSettingsIcon(name: "Item List/Icons/ArchivedSticker", backgroundColors: [colorGreen])
     public static let trendingSticker = renderSettingsIcon(name: "Item List/Icons/TrendingSticker", backgroundColors: [colorOrange])
     public static let effects = renderSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorLightBlue])
-    public static let astraGram = renderSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorViolet])
+    // The AstraGram row is the one Folio tile in Klein Volt.
+    public static let astraGram = astraFolioSettingsIcons ? astraFolioSettingsTile(name: "Item List/Icons/Effect", fill: astraFolioTileVolt) : renderSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorViolet])
     public static let photosBlue = renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorBlue])
     public static let clock = renderSettingsIcon(name: "Item List/Icons/Clock", backgroundColors: [colorPurple])
     public static let photosLightBlue = renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorLightBlue])
@@ -200,7 +255,8 @@ public struct PresentationResourcesSettings {
     public static let timer = renderSettingsIcon(name: "Item List/Icons/Timer", backgroundColors: [colorPurple])
     public static let email = renderSettingsIcon(name: "Item List/Icons/Email", backgroundColors: [colorViolet])
         
-    public static let premium = astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
+    // Folio draws this gradient tile as an ink tile too, with the same glyph at its own size.
+    public static let premium = astraFolioSettingsIcons ? astraFolioSettingsTile(name: "Item List/Icons/Premium", fill: astraFolioTileInk) : astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)
         context.clear(bounds)
                 
@@ -250,7 +306,8 @@ public struct PresentationResourcesSettings {
     
     public static let money = UIImage(bundleImageName: "Settings/Gram")
  
-    public static let stars = astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
+    // Folio draws this gradient tile as an ink tile too, with the same glyph at its own size.
+    public static let stars = astraFolioSettingsIcons ? astraFolioSettingsTile(name: "Item List/Icons/Stars", fill: astraFolioTileInk) : astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)
         context.clear(bounds)
         
@@ -293,7 +350,8 @@ public struct PresentationResourcesSettings {
         context.restoreGState()
     }))
     
-    public static let premiumGift = astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
+    // Folio draws this gradient tile as an ink tile too, with the same glyph at its own size.
+    public static let premiumGift = astraFolioSettingsIcons ? astraFolioSettingsTile(name: "Item List/Icons/Gift", fill: astraFolioTileInk) : astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)
         context.clear(bounds)
         

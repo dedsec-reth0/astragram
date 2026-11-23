@@ -29,6 +29,36 @@ private func attributedServiceMessageString(theme: ChatPresentationThemeData, st
     return universalServiceMessageString(presentationData: (theme.theme, theme.wallpaper), strings: strings, nameDisplayOrder: nameDisplayOrder, dateTimeFormat: dateTimeFormat, message: EngineMessage(message), messageCount: messageCount, accountPeerId: accountPeerId, forChatList: false, forForumOverview: forForumOverview)
 }
 
+/// AstraGram Folio: service text is set in Medium 13 with Bold 13 emphasis instead of Regular / Semibold, so it holds
+/// up on the inverse ink chip. The strings come from shared formatting code that the chat list also uses, so the
+/// fonts are swapped here, where only chat service messages pass. Italic and monospaced runs keep their fonts, and
+/// clear runs (the spacers that make room for a leading icon) keep theirs so the icon stays where it was placed.
+/// Outside Folio the string is returned untouched.
+private func astraFolioServiceMessageFonts(_ string: NSAttributedString?) -> NSAttributedString? {
+    guard AstraLook.design2027, let string, string.length > 0 else {
+        return string
+    }
+    let result = NSMutableAttributedString(attributedString: string)
+    string.enumerateAttribute(NSAttributedString.Key.font, in: NSRange(location: 0, length: string.length), options: []) { value, range, _ in
+        guard let font = value as? UIFont else {
+            return
+        }
+        if let color = string.attribute(NSAttributedString.Key.foregroundColor, at: range.location, effectiveRange: nil) as? UIColor, color.cgColor.alpha.isZero {
+            return
+        }
+        let symbolicTraits = font.fontDescriptor.symbolicTraits
+        if symbolicTraits.contains(.traitItalic) || symbolicTraits.contains(.traitMonoSpace) {
+            return
+        }
+        var isEmphasis = symbolicTraits.contains(.traitBold)
+        if let traits = font.fontDescriptor.object(forKey: UIFontDescriptor.AttributeName.traits) as? [UIFontDescriptor.TraitKey: Any], let weight = traits[UIFontDescriptor.TraitKey.weight] as? CGFloat {
+            isEmphasis = weight >= UIFont.Weight.semibold.rawValue - 0.01
+        }
+        result.addAttribute(NSAttributedString.Key.font, value: isEmphasis ? Font.bold(font.pointSize) : Font.medium(font.pointSize), range: range)
+    }
+    return result
+}
+
 public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
     public var expandHighlightingNode: LinkHighlightingNode?
     
@@ -56,6 +86,8 @@ public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
     private var leadingIconView: UIImageView?
 
     private var cachedMaskBackgroundImage: (CGPoint, UIImage, [CGRect])?
+    // Whether `cachedMaskBackgroundImage` was drawn with the Folio service radius.
+    private var astraCachedMaskIsFolio = false
     private var absoluteRect: (CGRect, CGSize)?
     
     override public var disablesClipping: Bool {
@@ -195,6 +227,7 @@ public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
         let makeBuyStarsTitleLayout = TextNode.asyncLayout(self.buyStarsTitle)
 
         let cachedMaskBackgroundImage = self.cachedMaskBackgroundImage
+        let cachedMaskIsFolio = self.astraCachedMaskIsFolio
         
         return { [weak self] item, layoutConstants, _, _, _, _ in
             var isDetached = false
@@ -451,6 +484,8 @@ public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
                     titleLayoutAndApply = makeTitleLayout(TextNodeLayoutArguments(attributedString: titleString, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: constrainedSize.width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 }
                 
+                updatedAttributedString = astraFolioServiceMessageFonts(updatedAttributedString)
+                
                 let (labelLayout, apply) = makeLabelLayout(TextNodeLayoutArguments(attributedString: updatedAttributedString, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: constrainedSize.width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: textAlignment, cutout: nil, insets: UIEdgeInsets()))
             
                 var labelRects = labelLayout.linesRects()
@@ -474,6 +509,8 @@ public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
                     labelRects[i].origin.x = floor((labelLayout.size.width - labelRects[i].width) / 2.0)
                 }
 
+                // Read once per layout, so the mask, its cache tag and the plate radius below agree with each other.
+                let astraFolioService = AstraLook.design2027
                 let backgroundMaskImage: (CGPoint, UIImage)?
                 var backgroundMaskUpdated = false
                 if suggestedPost != nil {
@@ -482,8 +519,13 @@ public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
                         backgroundMaskUpdated = true
                     }
                 } else {
-                    if let (currentOffset, currentImage, currentRects) = cachedMaskBackgroundImage, currentRects == labelRects {
+                    // AstraGram Folio: the service chip is an 8 pt slab instead of an 11 pt capsule. The cached mask is
+                    // reused only when it was drawn in the current style, so a live toggle redraws it.
+                    if let (currentOffset, currentImage, currentRects) = cachedMaskBackgroundImage, currentRects == labelRects, cachedMaskIsFolio == astraFolioService {
                         backgroundMaskImage = (currentOffset, currentImage)
+                    } else if astraFolioService {
+                        backgroundMaskImage = LinkHighlightingNode.generateImage(color: .white, inset: 0.0, innerRadius: AstraLook.Folio.serviceRadius, outerRadius: AstraLook.Folio.serviceRadius, rects: labelRects, useModernPathCalculation: false)
+                        backgroundMaskUpdated = true
                     } else {
                         backgroundMaskImage = LinkHighlightingNode.generateImage(color: .white, inset: 0.0, innerRadius: 11.0, outerRadius: 11.0, rects: labelRects, useModernPathCalculation: false)
                         backgroundMaskUpdated = true
@@ -850,7 +892,8 @@ public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
                                     if let backgroundNode = strongSelf.backgroundNode {
                                         if labelRects.count == 1 {
                                             backgroundNode.clipsToBounds = true
-                                            backgroundNode.cornerRadius = min(32.0, labelRects[0].height / 2.0)
+                                            // AstraGram Folio: a one-line chip is the same 8 pt slab as the mask.
+                                            backgroundNode.cornerRadius = astraFolioService ? AstraLook.Folio.serviceRadius : min(32.0, labelRects[0].height / 2.0)
                                             backgroundNode.view.mask = nil
                                         } else {
                                             backgroundNode.clipsToBounds = false
@@ -877,7 +920,9 @@ public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
 
                                 animation.animator.updateFrame(layer: strongSelf.backgroundColorNode.layer, frame: CGRect(origin: CGPoint(), size: image.size), completion: nil)
                                 
-                                if item.bubbleStyle == .bubblelessService {
+                                // Under Folio the plate stays in bubbleless mode: the Folio theme keeps its inverse service
+                                // colours there, and the light chip text would vanish on the paper page without it.
+                                if item.bubbleStyle == .bubblelessService && !astraFolioService {
                                     // Without bubbles service text stands on the plain page, without a plate.
                                     strongSelf.hidesPlateWithoutBubbles = true
                                     strongSelf.backgroundNode?.isHidden = true
@@ -887,6 +932,7 @@ public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
                                 }
 
                                 strongSelf.cachedMaskBackgroundImage = (offset, image, labelRects)
+                                strongSelf.astraCachedMaskIsFolio = astraFolioService
                                 
                                 switch strongSelf.visibility {
                                 case .none:

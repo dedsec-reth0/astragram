@@ -973,7 +973,9 @@ public final class ChatTitleComponent: Component {
                 inputActivitiesAllowed = false
             }
             
-            let subtitleFont = Font.regular(12.0)
+            // Folio sets the subtitle in Medium 13 (docs/astragram-redesign-2027.md, typography). Title 17 plus
+            // subtitle 13 still fits the fixed 44pt capsule.
+            let subtitleFont = AstraLook.design2027 ? Font.medium(13.0) : Font.regular(12.0)
             var state: ChatTitleActivityNodeState = .none
             switch component.networkState {
             case .waitingForNetwork, .connecting, .updating:
@@ -1449,7 +1451,8 @@ public final class ChatTitleComponent: Component {
             let titleSize = self.title.update(
                 transition: transition,
                 component: AnyComponent(AnimatedTextComponent(
-                    font: Font.semibold(17.0),
+                    // Folio sets the name in Bold with tabular digits; stock keeps Semibold.
+                    font: AstraLook.design2027 ? Font.with(size: 17.0, design: .regular, weight: .bold, traits: [.monospacedNumbers]) : Font.semibold(17.0),
                     color: component.theme.chat.inputPanel.panelControlColor,
                     items: titleSegments,
                     noDelay: false,

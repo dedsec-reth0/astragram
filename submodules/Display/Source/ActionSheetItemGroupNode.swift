@@ -20,11 +20,40 @@ final class ActionSheetItemGroupNode: ASDisplayNode, ASScrollViewDelegate {
     
     private var overlayNode: ActionSheetGroupOverlayNode?
     
+    /// Folio: the soft Z2 shadow of the group. It is a sibling below the dims and the clipped blur (a clipped layer
+    /// would cut its own shadow off), masked to the outside of the slab so it never greys the frost from below.
+    /// It is created only when the sheet opens under Folio.
+    private let astraShadowView: UIView?
+    private let astraShadowMaskLayer: CAShapeLayer?
+    /// How far outside the slab the shadow mask reaches; it covers the 24pt blur plus the 8pt drop.
+    private let astraShadowOutset: CGFloat = 64.0
+    /// The group radius, read once per sheet: the dim cutout image and the clip must always agree.
+    private let groupCornerRadius: CGFloat
+    
     init(theme: ActionSheetControllerTheme) {
         self.theme = theme
         
+        // Folio groups are 22pt slabs; the dim cutout around them uses the same radius so no dark sliver shows.
+        self.groupCornerRadius = AstraLook.design2027 ? AstraLook.Folio.sheetGroupRadius : 16.0
+        
+        if AstraLook.design2027 {
+            let astraShadowView = UIView()
+            astraShadowView.isUserInteractionEnabled = false
+            astraShadowView.backgroundColor = .clear
+            let astraShadowMaskLayer = CAShapeLayer()
+            astraShadowMaskLayer.fillRule = .evenOdd
+            astraShadowMaskLayer.fillColor = UIColor.black.cgColor
+            astraShadowView.layer.mask = astraShadowMaskLayer
+            AstraLook.Folio.z2Shadow(astraShadowView.layer, dark: theme.backgroundType == .dark)
+            self.astraShadowView = astraShadowView
+            self.astraShadowMaskLayer = astraShadowMaskLayer
+        } else {
+            self.astraShadowView = nil
+            self.astraShadowMaskLayer = nil
+        }
+        
         self.centerDimView = UIImageView()
-        self.centerDimView.image = generateStretchableFilledCircleImage(radius: 16.0, color: nil, backgroundColor: self.theme.dimColor)
+        self.centerDimView.image = generateStretchableFilledCircleImage(radius: self.groupCornerRadius, color: nil, backgroundColor: self.theme.dimColor)
         // The dimming drawn around the group's rounded corners, not content.
         self.centerDimView.accessibilityElementsHidden = true
         
@@ -41,7 +70,7 @@ final class ActionSheetItemGroupNode: ASDisplayNode, ASScrollViewDelegate {
         
         self.clippingNode = ASDisplayNode()
         self.clippingNode.clipsToBounds = true
-        self.clippingNode.cornerRadius = 16.0
+        self.clippingNode.cornerRadius = self.groupCornerRadius
         
         self.backgroundEffectView = UIVisualEffectView(effect: UIBlurEffect(style: self.theme.backgroundType == .light ? .light : .dark))
         
@@ -58,6 +87,9 @@ final class ActionSheetItemGroupNode: ASDisplayNode, ASScrollViewDelegate {
         
         super.init()
         
+        if let astraShadowView = self.astraShadowView {
+            self.view.addSubview(astraShadowView)
+        }
         self.view.addSubview(self.centerDimView)
         self.view.addSubview(self.topDimView)
         self.view.addSubview(self.bottomDimView)
@@ -210,6 +242,19 @@ final class ActionSheetItemGroupNode: ASDisplayNode, ASScrollViewDelegate {
             transition.updateFrame(view: self.centerDimView, frame: clippingNodeFrame)
             transition.updateFrame(view: self.topDimView, frame: CGRect(x: 0.0, y: 0.0, width: clippingNodeFrame.size.width, height: max(0.0, clippingNodeFrame.minY)))
             transition.updateFrame(view: self.bottomDimView, frame: CGRect(x: 0.0, y: clippingNodeFrame.maxY, width: clippingNodeFrame.size.width, height: max(0.0, self.bounds.size.height - clippingNodeFrame.maxY)))
+            
+            if let astraShadowView = self.astraShadowView, let astraShadowMaskLayer = self.astraShadowMaskLayer {
+                // The shadow follows the clip, including the overscroll stretch; its paths are in its own bounds.
+                transition.updateFrame(view: astraShadowView, frame: clippingNodeFrame)
+                let bounds = CGRect(origin: CGPoint(), size: clippingNodeFrame.size)
+                let slabPath = UIBezierPath(roundedRect: bounds, cornerRadius: self.groupCornerRadius).cgPath
+                let maskPath = CGMutablePath()
+                maskPath.addRect(bounds.insetBy(dx: -self.astraShadowOutset, dy: -self.astraShadowOutset))
+                maskPath.addPath(slabPath)
+                astraShadowMaskLayer.frame = bounds
+                astraShadowMaskLayer.path = maskPath
+                astraShadowView.layer.shadowPath = slabPath
+            }
         }
     }
     
@@ -231,6 +276,8 @@ final class ActionSheetItemGroupNode: ASDisplayNode, ASScrollViewDelegate {
         for node in [self.centerDimView, self.topDimView, self.bottomDimView] {
             node.layer.animateAlpha(from: from, to: to, duration: duration)
         }
+        // The Folio shadow fades with the dims, so it never appears before the sheet does.
+        self.astraShadowView?.layer.animateAlpha(from: from, to: to, duration: duration)
     }
     
     func itemNode(at index: Int) -> ActionSheetItemNode {

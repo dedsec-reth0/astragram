@@ -148,11 +148,24 @@ public class ActionSheetButtonNode: ActionSheetItemNode {
             case .disabled:
                 textColor = self.theme.disabledActionTextColor
         }
-        switch item.font {
-            case .default:
-                textFont = Font.regular(floor(theme.baseFontSize * 20.0 / 17.0))
-            case .bold:
-                textFont = Font.medium(floor(theme.baseFontSize * 20.0 / 17.0))
+        if AstraLook.design2027 {
+            // Folio buttons are 19pt Medium; the cancel (bold) and destructive buttons step up to Semibold, so the
+            // two decisions that matter read heavier than the rest.
+            let folioSize = floor(theme.baseFontSize * 19.0 / 17.0)
+            if case .bold = item.font {
+                textFont = Font.semibold(folioSize)
+            } else if case .destructive = item.color {
+                textFont = Font.semibold(folioSize)
+            } else {
+                textFont = Font.medium(folioSize)
+            }
+        } else {
+            switch item.font {
+                case .default:
+                    textFont = Font.regular(floor(theme.baseFontSize * 20.0 / 17.0))
+                case .bold:
+                    textFont = Font.medium(floor(theme.baseFontSize * 20.0 / 17.0))
+            }
         }
         self.label.attributedText = NSAttributedString(string: item.title, font: textFont, textColor: textColor)
         self.label.isAccessibilityElement = false
@@ -169,7 +182,8 @@ public class ActionSheetButtonNode: ActionSheetItemNode {
     }
     
     public override func updateLayout(constrainedSize: CGSize, transition: ContainedViewLayoutTransition) -> CGSize {
-        let size = CGSize(width: constrainedSize.width, height: 57.0)
+        // Folio rows are 56pt, on the 4pt grid.
+        let size = CGSize(width: constrainedSize.width, height: AstraLook.design2027 ? 56.0 : 57.0)
         
         self.button.frame = CGRect(origin: CGPoint(), size: size)
         

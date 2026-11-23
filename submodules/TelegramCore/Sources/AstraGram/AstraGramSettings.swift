@@ -110,6 +110,11 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var aiConsentEndpoint: String
     /// Look: with Monochrome, chats get a plain black or white background instead of the chosen one.
     public var monochromePlainBackground: Bool
+    /// Look: the 2027 «Folio» design (ink, paper and one electric accent). It is exclusive with Monochrome, and
+    /// Folio wins when an old save has both on.
+    public var design2027: Bool
+    /// Look: with Folio, chats get a slowly rotating four-stop gradient background instead of the solid paper one.
+    public var design2027LivingWallpaper: Bool
     /// The AstraGram mark in the account's name, so other AstraGram users see a badge beside it (see `AstraBadge`).
     public var astraBadge: Bool
     /// Whether the user has been asked about the AstraGram badge.
@@ -209,6 +214,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         clipboardLocalOnly: false,
         aiConsentEndpoint: "",
         monochromePlainBackground: false,
+        design2027: false,
+        design2027LivingWallpaper: false,
         astraBadge: false,
         astraBadgeAsked: false,
         streakBotUsername: "",
@@ -283,6 +290,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         clipboardLocalOnly: Bool,
         aiConsentEndpoint: String,
         monochromePlainBackground: Bool,
+        design2027: Bool,
+        design2027LivingWallpaper: Bool,
         astraBadge: Bool,
         astraBadgeAsked: Bool,
         streakBotUsername: String,
@@ -355,6 +364,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.clipboardLocalOnly = clipboardLocalOnly
         self.aiConsentEndpoint = aiConsentEndpoint
         self.monochromePlainBackground = monochromePlainBackground
+        self.design2027 = design2027
+        self.design2027LivingWallpaper = design2027LivingWallpaper
         self.astraBadge = astraBadge
         self.astraBadgeAsked = astraBadgeAsked
         self.streakBotUsername = streakBotUsername
@@ -432,6 +443,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.clipboardLocalOnly = try container.decodeIfPresent(Bool.self, forKey: .clipboardLocalOnly) ?? d.clipboardLocalOnly
         self.aiConsentEndpoint = try container.decodeIfPresent(String.self, forKey: .aiConsentEndpoint) ?? d.aiConsentEndpoint
         self.monochromePlainBackground = try container.decodeIfPresent(Bool.self, forKey: .monochromePlainBackground) ?? d.monochromePlainBackground
+        self.design2027 = try container.decodeIfPresent(Bool.self, forKey: .design2027) ?? d.design2027
+        self.design2027LivingWallpaper = try container.decodeIfPresent(Bool.self, forKey: .design2027LivingWallpaper) ?? d.design2027LivingWallpaper
         self.astraBadge = try container.decodeIfPresent(Bool.self, forKey: .astraBadge) ?? d.astraBadge
         self.astraBadgeAsked = try container.decodeIfPresent(Bool.self, forKey: .astraBadgeAsked) ?? d.astraBadgeAsked
         self.streakBotUsername = try container.decodeIfPresent(String.self, forKey: .streakBotUsername) ?? d.streakBotUsername

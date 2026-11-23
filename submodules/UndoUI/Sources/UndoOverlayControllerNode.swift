@@ -69,6 +69,14 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
     
     private let effectView: UIView
     
+    /// AstraGram Folio: the toast is a solid slab (ink in light mode, paper in dark mode) instead of a dark blur. It is
+    /// decided once when the toast is made, because a toast lives only a few seconds; blurred toasts over media keep
+    /// the stock look.
+    private let astraFolio: Bool
+    private let astraFolioDark: Bool
+    /// AstraGram Folio: carries the Z2 shadow, because the panel itself clips its content and would cut it off.
+    private var astraShadowNode: ASDisplayNode?
+    
     private let animationBackgroundColor: UIColor
         
     private var isTimeoutDisabled: Bool = false
@@ -87,6 +95,8 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
         self.placementPosition = placementPosition
         self.appearance = appearance
         self.content = content
+        self.astraFolio = AstraLook.design2027 && appearance?.isBlurred != true
+        self.astraFolioDark = presentationData.theme.overallDarkAppearance
         
         self.additionalView = additionalView?()
         
@@ -117,9 +127,19 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
         
         var displayUndo = true
         var undoText = presentationData.strings.Undo_Undo
-        var undoTextColor = presentationData.theme.list.itemAccentColor.withMultiplied(hue: 0.933, saturation: 0.61, brightness: 1.0)
+        var undoTextColor: UIColor
+        if self.astraFolio {
+            undoTextColor = UndoOverlayControllerNode.astraFolioActionColor(dark: self.astraFolioDark)
+        } else {
+            undoTextColor = presentationData.theme.list.itemAccentColor.withMultiplied(hue: 0.933, saturation: 0.61, brightness: 1.0)
+        }
         
-        if presentationData.theme.overallDarkAppearance {
+        if self.astraFolio {
+            // AstraGram Folio: the animated icons cut their inner shapes out with this colour, so it has to match the
+            // slab. In dark mode the icons are drawn inverted onto the paper slab, so the cut-out colour is the
+            // inverse of paper.
+            self.animationBackgroundColor = self.astraFolioDark ? UIColor(rgb: 0x0B0C11) : UIColor(rgb: 0x161617)
+        } else if presentationData.theme.overallDarkAppearance {
             self.animationBackgroundColor = presentationData.theme.rootController.tabBar.backgroundColor
         } else {
             self.animationBackgroundColor = UIColor(rgb: 0x474747)
@@ -1555,7 +1575,11 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                     displayUndo = false
                 }
             
-                self.statusNode?.transitionToState(.progress(color: .white, lineWidth: nil, value: max(progress, 0.027), cancelEnabled: false, animateRotation: true), completion: {})
+                if self.astraFolio {
+                    self.statusNode?.transitionToState(.progress(color: UndoOverlayControllerNode.astraFolioForeground(dark: self.astraFolioDark), lineWidth: nil, value: max(progress, 0.027), cancelEnabled: false, animateRotation: true), completion: {})
+                } else {
+                    self.statusNode?.transitionToState(.progress(color: .white, lineWidth: nil, value: max(progress, 0.027), cancelEnabled: false, animateRotation: true), completion: {})
+                }
         }
         
         self.remainingSeconds = self.originalRemainingSeconds
@@ -1568,13 +1592,16 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
         self.undoButtonNode = HighlightTrackingButtonNode()
         
         self.panelNode = ASDisplayNode()
-        if presentationData.theme.overallDarkAppearance && !(self.appearance?.isBlurred == true) {
+        if self.astraFolio {
+            // AstraGram Folio: a solid slab, ink in light mode and paper in dark mode (the blur is hidden in didLoad).
+            self.panelNode.backgroundColor = self.astraFolioDark ? UIColor(rgb: 0xF4F3EE, alpha: 0.94) : UIColor(rgb: 0x0B0B0C, alpha: 0.92)
+        } else if presentationData.theme.overallDarkAppearance && !(self.appearance?.isBlurred == true) {
             self.panelNode.backgroundColor = presentationData.theme.rootController.tabBar.backgroundColor
         } else {
             self.panelNode.backgroundColor = .clear
         }
         self.panelNode.clipsToBounds = true
-        self.panelNode.cornerRadius = 25.0
+        self.panelNode.cornerRadius = self.astraFolio ? AstraLook.Folio.toastRadius : 25.0
 
         self.panelWrapperNode = ASDisplayNode()
         
@@ -1650,6 +1677,12 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
             self.panelWrapperNode.addSubnode(self.changeButtonBackground)
             self.panelWrapperNode.addSubnode(self.changeButtonTextNode)
         }
+        if self.astraFolio {
+            let astraShadowNode = ASDisplayNode()
+            astraShadowNode.isUserInteractionEnabled = false
+            self.astraShadowNode = astraShadowNode
+            self.addSubnode(astraShadowNode)
+        }
         self.addSubnode(self.panelNode)
         self.addSubnode(self.panelWrapperNode)
         
@@ -1702,6 +1735,13 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
         }
         
         self.panelNode.view.addSubview(self.effectView)
+        if self.astraFolio {
+            // AstraGram Folio: the slab is solid, so the dark blur under it is not shown.
+            self.effectView.isHidden = true
+        }
+        if let astraShadowNode = self.astraShadowNode {
+            AstraLook.Folio.z2Shadow(astraShadowNode.layer, dark: self.astraFolioDark)
+        }
         
         if self.additionalView != nil {
             self.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:))))
@@ -1770,6 +1810,8 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                 let timerColor: UIColor
                 if case .starsSent = self.content {
                     timerColor = self.undoTextColor
+                } else if self.astraFolio {
+                    timerColor = UndoOverlayControllerNode.astraFolioForeground(dark: self.astraFolioDark)
                 } else {
                     timerColor = .white
                 }
@@ -1800,7 +1842,12 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
         let previousContent = self.content
         self.content = content
         
-        var undoTextColor = self.presentationData.theme.list.itemAccentColor.withMultiplied(hue: 0.933, saturation: 0.61, brightness: 1.0)
+        var undoTextColor: UIColor
+        if self.astraFolio {
+            undoTextColor = UndoOverlayControllerNode.astraFolioActionColor(dark: self.astraFolioDark)
+        } else {
+            undoTextColor = self.presentationData.theme.list.itemAccentColor.withMultiplied(hue: 0.933, saturation: 0.61, brightness: 1.0)
+        }
         
         var transition: ContainedViewLayoutTransition = .immediate
         
@@ -1879,7 +1926,11 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
             self.titleNode.attributedText = NSAttributedString(string: title, font: Font.semibold(14.0), textColor: .white)
             self.textNode.attributedText = attributedText
             
-            self.statusNode?.transitionToState(.progress(color: .white, lineWidth: nil, value: max(progress, 0.027), cancelEnabled: false, animateRotation: true), completion: {})
+            if self.astraFolio {
+                self.statusNode?.transitionToState(.progress(color: UndoOverlayControllerNode.astraFolioForeground(dark: self.astraFolioDark), lineWidth: nil, value: max(progress, 0.027), cancelEnabled: false, animateRotation: true), completion: {})
+            } else {
+                self.statusNode?.transitionToState(.progress(color: .white, lineWidth: nil, value: max(progress, 0.027), cancelEnabled: false, animateRotation: true), completion: {})
+            }
         default:
             break
         }
@@ -1891,6 +1942,10 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
     
     func containerLayoutUpdated(layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         self.validLayout = layout
+        
+        if self.astraFolio {
+            self.astraApplyFolioContentStyle()
+        }
         
         var preferredSize: CGSize?
         var verticalOffset: CGFloat = 0.0
@@ -1956,8 +2011,8 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
             textSize = textComponent.update(
                 transition: ComponentTransition(transition),
                 component: AnyComponent(AnimatedTextComponent(
-                    font: Font.regular(14.0),
-                    color: .white,
+                    font: self.astraFolio ? Font.medium(15.0) : Font.regular(14.0),
+                    color: self.astraFolio ? UndoOverlayControllerNode.astraFolioForeground(dark: self.astraFolioDark) : .white,
                     items: animatedTextItems
                 )),
                 environment: {},
@@ -2012,6 +2067,10 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
         
         transition.updateFrame(node: self.panelNode, frame: panelFrame)
         transition.updateFrame(node: self.panelWrapperNode, frame: panelWrapperFrame)
+        if let astraShadowNode = self.astraShadowNode {
+            transition.updateFrame(node: astraShadowNode, frame: panelFrame)
+            astraShadowNode.layer.shadowPath = UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: panelFrame.size), cornerRadius: AstraLook.Folio.toastRadius).cgPath
+        }
         self.effectView.frame = CGRect(x: 0.0, y: 0.0, width: panelWidth, height: contentHeight)
         
         var buttonTextFrame = CGRect(origin: CGPoint(x: horizontalLayout.contentWidth - rightInset - buttonTextSize.width, y: floor((contentHeight - buttonTextSize.height) / 2.0)), size: buttonTextSize)
@@ -2159,6 +2218,8 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
                     let statusColor: UIColor
                     if case .starsSent = self.content {
                         statusColor = self.undoTextColor
+                    } else if self.astraFolio {
+                        statusColor = UndoOverlayControllerNode.astraFolioForeground(dark: self.astraFolioDark)
                     } else {
                         statusColor = .white
                     }
@@ -2197,6 +2258,23 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
             
             self.panelWrapperNode.layer.animatePosition(from: CGPoint(x: 0.0, y: offset), to: CGPoint(), duration: 0.35, delay: 0.0, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, additive: true, completion: nil)
             self.panelNode.layer.animatePosition(from: CGPoint(x: 0.0, y: offset), to: CGPoint(), duration: 0.35, delay: 0.0, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, additive: true, completion: nil)
+            self.astraShadowNode?.layer.animatePosition(from: CGPoint(x: 0.0, y: offset), to: CGPoint(), duration: 0.35, delay: 0.0, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false, additive: true, completion: nil)
+        } else if self.astraFolio {
+            // AstraGram Folio (spec §2.7): a still 0.25s ease-out entrance that rises 12pt towards its resting place,
+            // or only fades under Reduce Motion.
+            let rise: CGFloat
+            switch self.placementPosition {
+            case .top:
+                rise = -12.0
+            case .bottom:
+                rise = 12.0
+            }
+            for layer in self.astraFolioAnimatedLayers {
+                layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue)
+                if !UIAccessibility.isReduceMotionEnabled {
+                    layer.animatePosition(from: CGPoint(x: 0.0, y: rise), to: CGPoint(), duration: 0.25, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, additive: true)
+                }
+            }
         } else {
             self.panelNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
             self.panelWrapperNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
@@ -2232,6 +2310,33 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
             return
         }
         self.dismissed = true
+        if self.astraFolio {
+            // AstraGram Folio (spec §2.7): the exit mirrors the entrance, 0.25s ease-out sinking 12pt back the way it
+            // came, or only fading under Reduce Motion.
+            let fall: CGFloat
+            switch self.placementPosition {
+            case .top:
+                fall = -12.0
+            case .bottom:
+                fall = 12.0
+            }
+            for layer in self.astraFolioAnimatedLayers where layer !== self.panelWrapperNode.layer {
+                layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, removeOnCompletion: false)
+                if !UIAccessibility.isReduceMotionEnabled {
+                    layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: fall), duration: 0.25, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, removeOnCompletion: false, additive: true)
+                }
+            }
+            if !UIAccessibility.isReduceMotionEnabled {
+                self.panelWrapperNode.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: fall), duration: 0.25, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, removeOnCompletion: false, additive: true)
+            }
+            self.panelWrapperNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, delay: 0.0, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, removeOnCompletion: false) { _ in
+                completion()
+            }
+            if let additionalView = self.additionalView {
+                additionalView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false)
+            }
+            return
+        }
         self.panelNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, delay: 0.0, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, removeOnCompletion: false, completion: { _ in })
         self.panelWrapperNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, delay: 0.0, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, removeOnCompletion: false) { _ in
             completion()
@@ -2253,6 +2358,73 @@ final class UndoOverlayControllerNode: ViewControllerTracingNode {
             completion()
         })
         self.panelNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
+        // AstraGram Folio: the shadow leaves with the panel it belongs to.
+        self.astraShadowNode?.layer.animateScale(from: 1.0, to: 0.1, duration: 0.3, removeOnCompletion: false)
+        self.astraShadowNode?.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
+    }
+    
+    /// AstraGram Folio: the layers the entrance and exit move together, the shadow included.
+    private var astraFolioAnimatedLayers: [CALayer] {
+        var layers: [CALayer] = [self.panelNode.layer, self.panelWrapperNode.layer]
+        if let astraShadowNode = self.astraShadowNode {
+            layers.append(astraShadowNode.layer)
+        }
+        return layers
+    }
+    
+    /// AstraGram Folio: the text colour on the slab, paper on the ink slab (light mode) and ink on the paper slab
+    /// (dark mode).
+    private static func astraFolioForeground(dark: Bool) -> UIColor {
+        return dark ? UIColor(rgb: 0x0B0B0C) : UIColor(rgb: 0xF7F6F2)
+    }
+    
+    /// AstraGram Folio: the action colour flips with the slab, so it keeps its contrast: the light volt on the ink slab
+    /// and the deep volt on the paper slab.
+    private static func astraFolioActionColor(dark: Bool) -> UIColor {
+        return dark ? UIColor(rgb: 0x3D2BFF) : UIColor(rgb: 0x8B7DFF)
+    }
+    
+    /// AstraGram Folio: restyles the text the content cases built for the stock dark toast. The stock text is 14pt and
+    /// white everywhere, so white runs take the slab's text colour and 14pt runs become 15 Medium (bold runs 15
+    /// Semibold); coloured runs such as links keep their colour. In dark mode the white animated icons are inverted,
+    /// so they read as ink on the paper slab. Running it again changes nothing, so it is safe on every layout.
+    private func astraApplyFolioContentStyle() {
+        let foreground = UndoOverlayControllerNode.astraFolioForeground(dark: self.astraFolioDark)
+        func restyle(_ text: NSAttributedString?) -> NSAttributedString? {
+            guard let text, text.length != 0 else {
+                return text
+            }
+            let result = NSMutableAttributedString(attributedString: text)
+            let fullRange = NSRange(location: 0, length: result.length)
+            result.enumerateAttribute(.foregroundColor, in: fullRange, options: []) { value, range, _ in
+                if let color = value as? UIColor, color.alpha > 0.0, color.lightness > 0.97 {
+                    result.addAttribute(.foregroundColor, value: foreground, range: range)
+                }
+            }
+            result.enumerateAttribute(.font, in: fullRange, options: []) { value, range, _ in
+                if let font = value as? UIFont, font.pointSize == 14.0 {
+                    let isBold = font.fontDescriptor.symbolicTraits.contains(.traitBold)
+                    result.addAttribute(.font, value: isBold ? Font.semibold(15.0) : Font.medium(15.0), range: range)
+                }
+            }
+            if result.isEqual(to: text) {
+                return text
+            }
+            return result
+        }
+        if let text = self.titleNode.attributedText, let restyled = restyle(text), restyled !== text {
+            self.titleNode.attributedText = restyled
+        }
+        if let text = self.textNode.attributedText, let restyled = restyle(text), restyled !== text {
+            self.textNode.attributedText = restyled
+        }
+        if self.astraFolioDark {
+            for node in [self.animationNode, self.iconCheckNode] as [ASDisplayNode?] {
+                if let node, node.layer.filters == nil, let filter = CALayer.colorInvert() {
+                    node.layer.filters = [filter]
+                }
+            }
+        }
     }
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {

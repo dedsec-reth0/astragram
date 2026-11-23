@@ -5717,7 +5717,8 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             self.edgeEffectView.update(content: self.presentationData.theme.list.blocksBackgroundColor, rect: edgeEffectFrame, edge: .bottom, edgeSize: edgeEffectFrame.height, transition: ComponentTransition(transition))
         }
         
-        let sectionSpacing: CGFloat = 24.0
+        // Folio sets the profile cards a little tighter (20pt), on its 4pt grid; stock keeps 24.
+        let sectionSpacing: CGFloat = AstraLook.design2027 ? 20.0 : 24.0
         
         var contentHeight: CGFloat = 0.0
         
@@ -6141,9 +6142,44 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     /// On a colored surface the cards' texts are white, as in the concept: a light theme's dark texts would not read.
     private var astraSectionPresentationData: PresentationData {
         if self.astraFlowTint != nil {
+            if AstraLook.design2027 && self.presentationData.theme.isAstraFolio {
+                // Under Folio the white-text card theme is derived from the Folio theme itself, so the cards keep
+                // Folio's resources and stay recognised as Folio (the chart object is passed on).
+                return self.presentationData.withUpdated(theme: self.astraFolioSurfaceTheme(base: self.presentationData.theme))
+            }
             return self.presentationData.withUpdated(theme: astraSurfaceTheme)
         }
         return self.presentationData
+    }
+
+    /// The last Folio surface theme and the theme it was made from. A fresh theme instance regenerates every
+    /// per-theme resource, so it is made once per base theme rather than on every layout pass.
+    private var astraFolioSurfaceThemeCache: (base: PresentationTheme, theme: PresentationTheme)?
+
+    /// The Folio counterpart of `astraSurfaceTheme`: the same white texts on a coloured profile, over the Folio theme
+    /// that is current instead of a freshly built stock dark theme.
+    private func astraFolioSurfaceTheme(base: PresentationTheme) -> PresentationTheme {
+        if let cached = self.astraFolioSurfaceThemeCache, cached.base === base {
+            return cached.theme
+        }
+        let white = UIColor(rgb: 0xffffff)
+        let list = base.list.withUpdated(
+            itemPrimaryTextColor: white,
+            itemSecondaryTextColor: UIColor(white: 1.0, alpha: 0.72),
+            itemDisabledTextColor: UIColor(white: 1.0, alpha: 0.5),
+            itemAccentColor: white,
+            itemHighlightedColor: white,
+            itemPlaceholderTextColor: UIColor(white: 1.0, alpha: 0.5),
+            itemBlocksSeparatorColor: UIColor(white: 1.0, alpha: 0.16),
+            disclosureArrowColor: UIColor(white: 1.0, alpha: 0.5),
+            sectionHeaderTextColor: UIColor(white: 1.0, alpha: 0.72),
+            freeTextColor: UIColor(white: 1.0, alpha: 0.72)
+        )
+        // The stock surface theme is a dark one, so the dark appearance is kept here too: the cards are a see-through
+        // white over a coloured surface, which reads as dark whatever the app's own appearance is.
+        let theme = PresentationTheme(name: base.name, index: base.index, referenceTheme: base.referenceTheme, overallDarkAppearance: true, intro: base.intro, passcode: base.passcode, rootController: base.rootController, list: list, chatList: base.chatList, chat: base.chat, actionSheet: base.actionSheet, contextMenu: base.contextMenu, inAppNotification: base.inAppNotification, chart: base.chart, preview: base.preview)
+        self.astraFolioSurfaceThemeCache = (base, theme)
+        return theme
     }
 
     fileprivate func astraApplyFlowTint(_ color: UIColor?) {

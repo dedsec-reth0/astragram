@@ -123,7 +123,23 @@ final class ChatListBadgeNode: ASDisplayNode {
                         
                         if currentIsEmpty && !nextIsEmpty {
                             strongSelf.isHiddenInternal = false
-                            if !strongSelf.disableBounce {
+                            if !strongSelf.disableBounce && AstraLook.design2027 {
+                                // Folio motion is still and precise: one small pop with no second bounce, and a
+                                // plain fade when Reduce Motion is on.
+                                if UIAccessibility.isReduceMotionEnabled {
+                                    strongSelf.containerNode.layer.removeAnimation(forKey: "transform.scale")
+                                    strongSelf.containerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                                } else {
+                                    let animation = CAKeyframeAnimation(keyPath: "transform.scale")
+                                    animation.values = [0.6 as NSNumber, 1.08 as NSNumber, 1.0 as NSNumber]
+                                    animation.keyTimes = [0.0 as NSNumber, 0.6 as NSNumber, 1.0 as NSNumber]
+                                    animation.duration = 0.30
+                                    animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                                    // The model scale is identity, so the animation can be removed when it ends.
+                                    animation.isRemovedOnCompletion = true
+                                    strongSelf.containerNode.layer.add(animation, forKey: "transform.scale")
+                                }
+                            } else if !strongSelf.disableBounce {
                                 if bounce {
                                     strongSelf.containerNode.layer.animateScale(from: 0.0001, to: 1.2, duration: 0.2, removeOnCompletion: false, completion: { [weak self] _ in
                                         if let strongSelf = self {
@@ -143,7 +159,13 @@ final class ChatListBadgeNode: ASDisplayNode {
                                 }
                             }
                             
-                            if animateScale && !strongSelf.disableBounce {
+                            if animateScale && !strongSelf.disableBounce && AstraLook.design2027 {
+                                // Under Folio a count change settles from slightly small instead of bouncing past
+                                // full size; Reduce Motion keeps only the crossfade below.
+                                if !UIAccessibility.isReduceMotionEnabled {
+                                    strongSelf.containerNode.layer.animateScale(from: 0.9, to: 1.0, duration: 0.18, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue)
+                                }
+                            } else if animateScale && !strongSelf.disableBounce {
                                 strongSelf.containerNode.layer.animateScale(from: 1.0, to: 1.2, duration: 0.12, removeOnCompletion: false, completion: { [weak self] finished in
                                     if let strongSelf = self {
                                         strongSelf.containerNode.layer.animateScale(from: 1.2, to: 1.0, duration: 0.12, removeOnCompletion: false)

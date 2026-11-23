@@ -299,7 +299,9 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
             alphaTransition.updateAlpha(node: self.textNode, alpha: isActive ? 1.0 : 0.3)
         }
         
-        self.textNode.attributedText = NSAttributedString(string: text.lowercased(), font: Font.regular(11.0), textColor: .white)
+        // Folio labels the buttons in 12 Medium; stock keeps 11 Regular.
+        let labelFont: UIFont = AstraLook.design2027 ? Font.medium(12.0) : Font.regular(11.0)
+        self.textNode.attributedText = NSAttributedString(string: text.lowercased(), font: labelFont, textColor: .white)
         self.accessibilityLabel = text
         let titleSize = self.textNode.updateLayout(CGSize(width: 120.0, height: .greatestFiniteMagnitude))
         
@@ -330,7 +332,9 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
         } else {
             let backgroundY: CGFloat = size.height * (1.0 - fraction)
             backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: backgroundY), size: CGSize(width: size.width, height: max(0.0, size.height - backgroundY)))
-            backgroundCornerRadius = min(16.0, backgroundFrame.height * 0.5)
+            // Folio's slab button: the stock default already is 16pt (Folio.profileButtonRadius), so only the
+            // corner curve changes to continuous, and the context menu source path below follows the same radius.
+            backgroundCornerRadius = min(AstraLook.design2027 ? AstraLook.Folio.profileButtonRadius : 16.0, backgroundFrame.height * 0.5)
             iconOriginY = 1.0
             textOriginY = size.height - titleSize.height - 9.0
         }
@@ -339,6 +343,8 @@ final class PeerInfoHeaderButtonNode: HighlightableButtonNode {
         
         transition.updateSublayerTransformScale(node: self.contentNode, scale: 1.0 * fraction + 0.001 * (1.0 - fraction))
         
+        // Round buttons stay true circles; the stock corner curve is restored when Folio is off.
+        self.backgroundView.layer.cornerCurve = (AstraLook.design2027 && !astraRound) ? .continuous : .circular
         transition.updateCornerRadius(layer: self.backgroundView.layer, cornerRadius: backgroundCornerRadius)
         // The context source contains only the foreground; its backdrop is a
         // separate shared-blur mask. Match both its rounded shape and its visible

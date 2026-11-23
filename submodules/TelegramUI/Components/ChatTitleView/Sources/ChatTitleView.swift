@@ -23,8 +23,21 @@ import ComponentDisplayAdapters
 import GlassBackgroundComponent
 import AnimatedTextComponent
 
-private let titleFont = Font.with(size: 17.0, design: .regular, weight: .semibold, traits: [.monospacedNumbers])
-private let subtitleFont = Font.regular(13.0)
+private let stockTitleFont = Font.with(size: 17.0, design: .regular, weight: .semibold, traits: [.monospacedNumbers])
+private let stockSubtitleFont = Font.regular(13.0)
+// Folio sets the chat title in Bold with tabular digits (so a changing count does not shift the line) and the
+// subtitle in Medium, per the typography table of docs/astragram-redesign-2027.md.
+private let folioTitleFont = Font.with(size: 17.0, design: .regular, weight: .bold, traits: [.monospacedNumbers])
+private let folioSubtitleFont = Font.medium(13.0)
+
+// Computed rather than stored so that turning Folio on or off restyles the title on its next update, without a
+// restart. The flag is read here, at the read site, because it can change at any time on the main queue.
+private var titleFont: UIFont {
+    return AstraLook.design2027 ? folioTitleFont : stockTitleFont
+}
+private var subtitleFont: UIFont {
+    return AstraLook.design2027 ? folioSubtitleFont : stockSubtitleFont
+}
 
 public enum ChatTitleContent: Equatable {
     public struct PeerData: Equatable {

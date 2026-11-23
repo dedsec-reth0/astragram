@@ -160,7 +160,7 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         }
         return container.convert(container.bounds, to: self.view)
     }
-    private var sendButtonGlassIconCache: (source: UIImage, image: UIImage)?
+    private var sendButtonGlassIconCache: (source: UIImage, color: UIColor, image: UIImage)?
     private var sendButtonBackgroundImageDiameter: CGFloat?
     private var sendButtonBackgroundEffectLayer: StarsParticleEffectLayer?
     public let sendButton: HighlightTrackingButtonNode
@@ -358,13 +358,16 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         guard let image, self.usesSendButtonGlass(interfaceState: interfaceState) else {
             return image
         }
-        if let cache = self.sendButtonGlassIconCache, cache.source === image {
+        // Folio's glass is volt, and the glyph on volt is the theme's onVolt colour: white in light mode, ink in dark
+        // mode, where volt is the light #8B7DFF and a white glyph would not meet contrast. Stock always uses white.
+        let glyphColor: UIColor = interfaceState.theme.isAstraFolio ? interfaceState.theme.chat.inputPanel.actionControlForegroundColor : .white
+        if let cache = self.sendButtonGlassIconCache, cache.source === image, cache.color.isEqual(glyphColor) {
             return cache.image
         }
-        guard let tinted = generateTintedImage(image: image, color: .white) else {
+        guard let tinted = generateTintedImage(image: image, color: glyphColor) else {
             return image
         }
-        self.sendButtonGlassIconCache = (image, tinted)
+        self.sendButtonGlassIconCache = (image, glyphColor, tinted)
         return tinted
     }
     
@@ -555,6 +558,10 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         
         if self.isSendDisabled {
             transition.updateTintColor(view: self.sendButtonBackgroundView, color: interfaceState.theme.chat.inputPanel.panelControlAccentColor.withMultiplied(hue: 1.0, saturation: 0.0, brightness: 0.5).withMultipliedAlpha(0.25))
+        } else if interfaceState.theme.isAstraFolio {
+            // Folio's send button is a solid circle in the action fill (volt), with no gradient or glow. A paid send
+            // keeps its own colour, as in stock.
+            transition.updateTintColor(view: self.sendButtonBackgroundView, color: self.customSendColor ?? interfaceState.theme.chat.inputPanel.actionControlFillColor)
         } else {
             transition.updateTintColor(view: self.sendButtonBackgroundView, color: self.customSendColor ?? interfaceState.theme.chat.inputPanel.panelControlAccentColor)
         }
@@ -587,6 +594,12 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
             if self.isSendDisabled {
                 glassTintColor = defaultGlassTintColor
                 self.sendButtonGlassTintColor = nil
+            } else if interfaceState.theme.isAstraFolio {
+                // Folio's glass send circle is tinted with the action fill (volt) as it is, because the system-blue
+                // substitution below exists only for Telegram's built-in blues and would never pick volt anyway.
+                let accentColor = interfaceState.theme.chat.inputPanel.actionControlFillColor
+                glassTintColor = .init(kind: .custom(style: .default, color: accentColor))
+                self.sendButtonGlassTintColor = accentColor
             } else {
                 let accentColor = bubblelessSendButtonGlassColor(accentColor: interfaceState.theme.chat.inputPanel.panelControlAccentColor, dark: interfaceState.theme.overallDarkAppearance)
                 glassTintColor = .init(kind: .custom(style: .default, color: accentColor))

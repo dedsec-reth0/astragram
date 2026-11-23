@@ -185,6 +185,8 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
         private var component: SheetComponent<ChildEnvironmentType>?
         
         private let dimView: UIView
+        /// AstraGram Folio: whether the dim currently has the Folio colour, so turning the flag off restores stock.
+        private var astraAppliedFolioDim = false
         private let scrollView: ScrollView
         private let backgroundView: SheetBackgroundView
         private var effectView: SheetBackgroundBlurView?
@@ -630,6 +632,22 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             
             if !component.hasDimView {
                 self.dimView.backgroundColor = .clear
+            } else if AstraLook.design2027 {
+                // AstraGram Folio: the dim is warm ink in light mode and deeper black in dark mode. The sheet does not
+                // know its theme, so its appearance is read from its own background.
+                let isDarkSheet: Bool
+                switch component.backgroundColor {
+                case let .blur(style):
+                    isDarkSheet = style == .dark
+                case let .color(color):
+                    isDarkSheet = color.lightness < 0.5
+                }
+                self.dimView.backgroundColor = AstraLook.Folio.dim(dark: isDarkSheet)
+                self.astraAppliedFolioDim = true
+            } else if self.astraAppliedFolioDim {
+                // Folio was turned off while this sheet existed: put back the stock dim it was created with.
+                self.dimView.backgroundColor = UIColor(white: 0.0, alpha: 0.4)
+                self.astraAppliedFolioDim = false
             }
             
             if environment[SheetComponentEnvironment.self].value.isDisplaying, !self.previousIsDisplaying, let _ = transition.userData(ViewControllerComponentContainer.AnimateInTransition.self) {

@@ -99,10 +99,15 @@ public func itemListNeighborsGroupedInsets(_ neighbors: ItemListNeighbors, _ par
         return UIEdgeInsets()
     }
     
+    // Folio sets lists on a 4pt grid: 20 before the first section, 28 between sections, 12 for a reduced gap and 32
+    // after the last one. The flag is read here on every layout, so a live toggle takes effect on the next relayout.
+    let folio = AstraLook.design2027
     let topInset: CGFloat
     switch neighbors.top {
     case .none:
-        if itemListHasRoundedBlockLayout(params) {
+        if folio {
+            topInset = UIScreenPixel + 20.0
+        } else if itemListHasRoundedBlockLayout(params) {
             topInset = UIScreenPixel + 24.0
         } else {
             topInset = UIScreenPixel + 35.0
@@ -114,9 +119,9 @@ public func itemListNeighborsGroupedInsets(_ neighbors: ItemListNeighbors, _ par
         case .none:
             topInset = 0.0
         case .full:
-            topInset = UIScreenPixel + 35.0
+            topInset = UIScreenPixel + (folio ? 28.0 : 35.0)
         case .reduced:
-            topInset = UIScreenPixel + 16.0
+            topInset = UIScreenPixel + (folio ? 12.0 : 16.0)
         }
     }
     let bottomInset: CGFloat
@@ -124,7 +129,7 @@ public func itemListNeighborsGroupedInsets(_ neighbors: ItemListNeighbors, _ par
     case .sameSection, .otherSection:
         bottomInset = 0.0
     case .none:
-        bottomInset = UIScreenPixel + 35.0
+        bottomInset = UIScreenPixel + (folio ? 32.0 : 35.0)
     }
     return UIEdgeInsets(top: topInset, left: 0.0, bottom: bottomInset, right: 0.0)
 }

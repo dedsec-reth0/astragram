@@ -40,12 +40,19 @@ private final class RestingBackgroundView: UIVisualEffectView {
 
     /// AstraGram look: the resting selection only changes the colors of what is behind it, so on the black page of
     /// Monochrome, and under matte glass, there is nothing to see. There it gets a fill of its own.
+    /// AstraGram Folio frosts the bars too, so its lens needs a fill of its own as well.
     static var astraHasOwnFill: Bool {
-        return GlassBackgroundView.astraMonochrome || AstraLook.glassMaterial == 2
+        return GlassBackgroundView.astraMonochrome || AstraLook.glassMaterial == 2 || AstraLook.design2027
     }
 
     func update(isDark: Bool) {
-        let fillColor: UIColor = RestingBackgroundView.astraHasOwnFill ? (isDark ? UIColor(white: 1.0, alpha: 0.2) : UIColor(white: 0.0, alpha: 0.09)) : UIColor.clear
+        let fillColor: UIColor
+        if AstraLook.design2027 {
+            // AstraGram Folio: the lens is a soft wash of Klein Volt, the one accent marking the selected tab.
+            fillColor = isDark ? UIColor(rgb: 0x8B7DFF, alpha: 0.18) : UIColor(rgb: 0x3D2BFF, alpha: 0.12)
+        } else {
+            fillColor = RestingBackgroundView.astraHasOwnFill ? (isDark ? UIColor(white: 1.0, alpha: 0.2) : UIColor(white: 0.0, alpha: 0.09)) : UIColor.clear
+        }
         if self.contentView.backgroundColor != fillColor {
             self.contentView.backgroundColor = fillColor
         }
@@ -800,7 +807,12 @@ public final class LiquidLensView: UIView {
             transition.setFrame(view: legacyContentMaskBlobView, frame: effectiveLensFrame)
             transition.setFrame(view: legacyLiftedContentBlobMaskView, frame: effectiveLensFrame)
             
-            legacySelectionView.tintColor = UIColor(white: params.isDark ? 1.0 : 0.0, alpha: params.isDark ? 0.1 : 0.075)
+            if AstraLook.design2027 {
+                // AstraGram Folio: the legacy lens takes the same volt wash as the native one.
+                legacySelectionView.tintColor = params.isDark ? UIColor(rgb: 0x8B7DFF, alpha: 0.18) : UIColor(rgb: 0x3D2BFF, alpha: 0.12)
+            } else {
+                legacySelectionView.tintColor = UIColor(white: params.isDark ? 1.0 : 0.0, alpha: params.isDark ? 0.1 : 0.075)
+            }
             transition.setFrame(view: legacySelectionView, frame: effectiveLensFrame)
             transition.setAlpha(view: legacySelectionView, alpha: params.isCollapsed ? 0.0 : 1.0)
         }

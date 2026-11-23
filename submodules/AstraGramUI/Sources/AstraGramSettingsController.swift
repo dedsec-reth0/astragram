@@ -358,7 +358,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
             60, 61, 62, 63, 64, 65, 73, 74, 75, 76, 77, 78, 66, 67, 68, 69, 100, 101, 102, 103, 104, 70, 71, 72,
             80, 81, 82, 85, 105, 106, 90, 91, 92,
             130, 139, 134, 133, 131, 132, 135, 136, 137, 138, 140, 141,
-            110, 111, 121, 112, 113, 114, 115, 119, 120, 122, 123, 124, 116, 117, 118, 199, 200
+            110, 125, 126, 127, 111, 121, 112, 113, 114, 115, 119, 120, 122, 123, 124, 116, 117, 118, 199, 200
         ]
         var order: [Int32: Int] = [:]
         for (index, id) in ids.enumerated() {
@@ -470,6 +470,14 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         case let .flag(_, _, title, value, enabled, keyPath):
             return toggle(title, value, enabled: enabled) { settings, value in
                 settings[keyPath: keyPath] = value
+                // Folio and Monochrome are two whole looks, so turning one on turns the other off, in the same update.
+                if value {
+                    if keyPath == \AstraGramSettingsValues.design2027 {
+                        settings.monochrome = false
+                    } else if keyPath == \AstraGramSettingsValues.monochrome {
+                        settings.design2027 = false
+                    }
+                }
             }
         case let .header(_, _, text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: section)
@@ -732,6 +740,15 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.button(id: 140, section: .securityTelegram, title: strings.telegramPrivacy, label: "", kind: .telegramPrivacy))
     entries.append(.footer(id: 141, section: .securityTelegram, text: strings.securityFooter))
     entries.append(.header(id: 110, section: .look, text: strings.lookHeader))
+    entries.append(.flag(id: 125, section: .look, title: strings.design2027, value: settings.design2027, enabled: true, keyPath: \.design2027))
+    if settings.design2027 {
+        entries.append(.flag(id: 126, section: .look, title: strings.design2027LivingWallpaper, value: settings.design2027LivingWallpaper, enabled: true, keyPath: \.design2027LivingWallpaper))
+    }
+    // The settings icons are drawn once per launch, so a restart is offered whenever the switch differs from the value
+    // the app launched with, in either direction.
+    if settings.design2027 != AstraLook.design2027AtLaunch {
+        entries.append(.button(id: 127, section: .look, title: strings.restartApp, label: "", kind: .restartApp))
+    }
     entries.append(.flag(id: 111, section: .look, title: strings.monochrome, value: settings.monochrome, enabled: true, keyPath: \.monochrome))
     if settings.monochrome {
         entries.append(.flag(id: 121, section: .look, title: strings.monochromePlainBackground, value: settings.monochromePlainBackground, enabled: true, keyPath: \.monochromePlainBackground))
@@ -740,12 +757,14 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.flag(id: 113, section: .look, title: strings.profileMusicCapsule, value: settings.musicCapsule, enabled: true, keyPath: \.musicCapsule))
     entries.append(.flag(id: 114, section: .look, title: strings.contactsTab, value: settings.contactsTab, enabled: true, keyPath: \.contactsTab))
     entries.append(.flag(id: 115, section: .look, title: strings.callsTab, value: settings.callsTab, enabled: true, keyPath: \.callsTab))
-    entries.append(.button(id: 119, section: .look, title: strings.glassMaterial, label: [strings.glassMaterialStandard, strings.glassMaterialClear, strings.glassMaterialMatte][max(0, min(2, settings.glassMaterial))], kind: .glassMaterial))
+    // Folio sets its own glass tint, so while it is on the material row only names it and does not cycle.
+    let glassMaterialLabel = settings.design2027 ? strings.glassMaterialFolio : [strings.glassMaterialStandard, strings.glassMaterialClear, strings.glassMaterialMatte][max(0, min(2, settings.glassMaterial))]
+    entries.append(.button(id: 119, section: .look, title: strings.glassMaterial, label: glassMaterialLabel, kind: .glassMaterial))
     entries.append(.flag(id: 120, section: .look, title: strings.springPresses, value: settings.springPresses, enabled: true, keyPath: \.springPresses))
     entries.append(.flag(id: 122, section: .look, title: strings.astraBadge, value: settings.astraBadge, enabled: true, keyPath: \.astraBadge))
     entries.append(.button(id: 123, section: .look, title: strings.astraBadgeClear, label: "", kind: .clearBadge))
     entries.append(.button(id: 124, section: .look, title: strings.streaks, label: "", kind: .streaks))
-    entries.append(.footer(id: 116, section: .look, text: strings.lookFooter))
+    entries.append(.footer(id: 116, section: .look, text: settings.design2027 ? strings.lookFooter + " " + strings.design2027Footer : strings.lookFooter))
     entries.append(.button(id: 117, section: .onlineExceptions, title: strings.restartApp, label: "", kind: .restartApp))
     entries.append(.footer(id: 118, section: .onlineExceptions, text: strings.restartFooter))
     entries.append(.reset(strings.resetSettings))
@@ -851,6 +870,10 @@ public func astraGramSettingsController(context: AccountContext, page: AstraGram
             case .bookmarks:
                 pushControllerImpl?(astraBookmarksController(context: context))
             case .glassMaterial:
+                // The material does not apply under Folio, so the row does nothing while Folio is on.
+                if AstraGramSettings.current.design2027 {
+                    return
+                }
                 AstraGramSettings.update { $0.glassMaterial = (max(0, $0.glassMaterial) + 1) % 3 }
             case .securityCheck:
                 let resultController = AstraTextResultController(title: strings.securityCheck, isRussian: strings.isRussian, load: { completion in

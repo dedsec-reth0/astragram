@@ -11,6 +11,8 @@ final class NavigationModalContainer: ASDisplayNode, ASScrollViewDelegate, ASGes
     private let dim: ASDisplayNode
     private let scrollNode: ASScrollNode
     let container: NavigationContainer
+    /// AstraGram Folio: whether the container's corners were made continuous for the Folio modal slab.
+    private var astraAppliedContinuousCorners = false
     
     private var panRecognizer: InteractiveTransitionGestureRecognizer?
     
@@ -410,11 +412,26 @@ final class NavigationModalContainer: ASDisplayNode, ASScrollViewDelegate, ASGes
             if isStandaloneModal || isLandscape || (self.isFlat && !flatReceivesModalTransition) {
                 self.container.cornerRadius = 0.0
             } else {
-                var cornerRadius: CGFloat = 10.0
+                // AstraGram Folio: a plain modal card is a 16pt continuous slab. The glass-style modal stays 38, so it
+                // remains concentric with the device corner.
+                var cornerRadius: CGFloat = AstraLook.design2027 ? AstraLook.Folio.modalRadius : 10.0
+                var isFolioSlab = AstraLook.design2027
                 if let controller = controllers.first, controller._hasGlassStyle {
                     cornerRadius = 38.0
+                    isFolioSlab = false
                 }
                 self.container.cornerRadius = cornerRadius
+                // Only the Folio slab gets continuous corners. The curve is put back only if Folio set it, so with the
+                // flag off this layer is never touched, exactly as in stock.
+                if #available(iOS 13.0, *) {
+                    if isFolioSlab {
+                        self.container.layer.cornerCurve = .continuous
+                        self.astraAppliedContinuousCorners = true
+                    } else if self.astraAppliedContinuousCorners {
+                        self.container.layer.cornerCurve = .circular
+                        self.astraAppliedContinuousCorners = false
+                    }
+                }
             }
             
             if #available(iOS 11.0, *) {

@@ -74,14 +74,19 @@ public struct PresentationChatBubbleCorners: Equatable, Hashable {
     public var bubbleMode: Bool
     // Mirrors PresentationChatBubbleSettings.serifMessageFont: message text is set in New York.
     public var serifMessageText: Bool
+    // AstraGram Folio: outgoing bubbles lose their tail too, while `bubbleMode` keeps its meaning. Only the Folio
+    // presentation data sets it; every other constructor keeps the default, so stock bubbles are unchanged. It is a
+    // stored property, so it takes part in the synthesized == and hash.
+    public var astraNoOutgoingTail: Bool
     
-    public init(mainRadius: CGFloat, auxiliaryRadius: CGFloat, mergeBubbleCorners: Bool, hasTails: Bool = true, bubbleMode: Bool = true, serifMessageText: Bool = false) {
+    public init(mainRadius: CGFloat, auxiliaryRadius: CGFloat, mergeBubbleCorners: Bool, hasTails: Bool = true, bubbleMode: Bool = true, serifMessageText: Bool = false, astraNoOutgoingTail: Bool = false) {
         self.mainRadius = mainRadius
         self.auxiliaryRadius = auxiliaryRadius
         self.mergeBubbleCorners = mergeBubbleCorners
         self.hasTails = hasTails
         self.bubbleMode = bubbleMode
         self.serifMessageText = serifMessageText
+        self.astraNoOutgoingTail = astraNoOutgoingTail
     }
     
     /// The corners the app's presentation data takes from the stored settings.
@@ -407,6 +412,14 @@ public func currentPresentationDataAndSettings(accountManager: AccountManager<Te
         let experimentalUISettings: ExperimentalUISettings = internalData.experimentalUISettings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
         
         let contactSettings: ContactSynchronizationSettings = internalData.contactSynchronizationSettings?.get(ContactSynchronizationSettings.self) ?? ContactSynchronizationSettings.defaultSettings
+        
+        // AstraGram "Folio" replaces the chosen theme. It is checked before Monochrome, so Folio wins when an old save
+        // has both switches on.
+        if AstraGramSettings.current.design2027 {
+            let autoNightModeTriggered = automaticThemeShouldSwitchNow(AutomaticThemeSwitchParameters(settings: themeSettings.automaticThemeSwitchSetting), systemUserInterfaceStyle: systemUserInterfaceStyle)
+            let presentationData = astraFolioPresentationData(mediaBox: accountManager.mediaBox, themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered, localizationSettings: localizationSettings, nameDisplayOrder: contactSettings.nameDisplayOrder)
+            return InitialPresentationDataAndSettings(presentationData: presentationData, automaticMediaDownloadSettings: automaticMediaDownloadSettings, autodownloadSettings: autodownloadSettings, callListSettings: callListSettings, inAppNotificationSettings: inAppNotificationSettings, mediaInputSettings: mediaInputSettings, mediaDisplaySettings: mediaDisplaySettings, stickerSettings: stickerSettings, chatSettings: chatSettings, experimentalUISettings: experimentalUISettings)
+        }
         
         // AstraGram "Monochrome" replaces the chosen theme.
         if AstraGramSettings.current.monochrome {
@@ -761,9 +774,10 @@ public func chatServiceBackgroundColor(wallpaper: TelegramWallpaper, mediaBox: M
 }
 
 public func updatedPresentationData(accountManager: AccountManager<TelegramAccountManagerTypes>, applicationInForeground: Signal<Bool, NoError>, systemUserInterfaceStyle: Signal<WindowUserInterfaceStyle, NoError>) -> Signal<PresentationData, NoError> {
-    return combineLatest(accountManager.sharedData(keys: [SharedDataKeys.localizationSettings, ApplicationSpecificSharedDataKeys.presentationThemeSettings, ApplicationSpecificSharedDataKeys.contactSynchronizationSettings]), systemUserInterfaceStyle, AstraGramSettings.signal |> map { ($0.monochrome ? 1 : 0) | ($0.monochromePlainBackground ? 2 : 0) } |> distinctUntilChanged)
+    return combineLatest(accountManager.sharedData(keys: [SharedDataKeys.localizationSettings, ApplicationSpecificSharedDataKeys.presentationThemeSettings, ApplicationSpecificSharedDataKeys.contactSynchronizationSettings]), systemUserInterfaceStyle, AstraGramSettings.signal |> map { ($0.monochrome ? 1 : 0) | ($0.monochromePlainBackground ? 2 : 0) | ($0.design2027 ? 4 : 0) | ($0.design2027 && $0.design2027LivingWallpaper ? 8 : 0) } |> distinctUntilChanged)
     |> mapToSignal { sharedData, systemUserInterfaceStyle, astraMonochromeState -> Signal<PresentationData, NoError> in
-        // Both switches are in the state, so the presentation follows either of them at once.
+        // Both switches are in the state, so the presentation follows either of them at once. The living background
+        // counts only while Folio is on, so switching it with Folio off does not rebuild the stock presentation.
         let astraMonochrome = (astraMonochromeState & 1) != 0
         let themeSettings: PresentationThemeSettings
         if let current = sharedData.entries[ApplicationSpecificSharedDataKeys.presentationThemeSettings]?.get(PresentationThemeSettings.self) {
@@ -773,6 +787,23 @@ public func updatedPresentationData(accountManager: AccountManager<TelegramAccou
         }
         
         let contactSettings: ContactSynchronizationSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.contactSynchronizationSettings]?.get(ContactSynchronizationSettings.self) ?? ContactSynchronizationSettings.defaultSettings
+        
+        // AstraGram "Folio" replaces the chosen theme, ahead of Monochrome (Folio wins when both are stored on).
+        if (astraMonochromeState & 4) != 0 {
+            return applicationInForeground
+            |> mapToSignal { inForeground -> Signal<PresentationData, NoError> in
+                if inForeground {
+                    return automaticThemeShouldSwitch(themeSettings.automaticThemeSwitchSetting, systemUserInterfaceStyle: systemUserInterfaceStyle)
+                    |> distinctUntilChanged
+                    |> map { autoNightModeTriggered in
+                        let localizationSettings = sharedData.entries[SharedDataKeys.localizationSettings]?.get(LocalizationSettings.self)
+                        return astraFolioPresentationData(mediaBox: accountManager.mediaBox, themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered, localizationSettings: localizationSettings, nameDisplayOrder: contactSettings.nameDisplayOrder)
+                    }
+                } else {
+                    return .complete()
+                }
+            }
+        }
         
         // AstraGram "Monochrome" replaces the chosen theme.
         if astraMonochrome {
@@ -968,6 +999,56 @@ private func astraMonochromePresentationData(mediaBox: MediaBox, themeSettings: 
     }
     
     return PresentationData(strings: stringsValue, theme: theme, autoNightModeTriggered: autoNightModeTriggered, chatWallpaper: chatWallpaper, chatFontSize: chatFontSize, chatBubbleCorners: chatBubbleCorners, listsFontSize: listsFontSize, dateTimeFormat: dateTimeFormat, nameDisplayOrder: nameDisplayOrder, nameSortOrder: nameSortOrder, reduceMotion: themeSettings.reduceMotion, largeEmoji: themeSettings.largeEmoji)
+}
+
+// AstraGram "Folio": the presentation data with the Folio theme, whatever theme is chosen. Bubbles are tailless on
+// both sides with 16/4 corners; strings, formats and font sizes as usual.
+private func astraFolioPresentationData(mediaBox: MediaBox, themeSettings: PresentationThemeSettings, autoNightModeTriggered: Bool, localizationSettings: LocalizationSettings?, nameDisplayOrder: PresentationPersonNameOrder) -> PresentationData {
+    let dark = astraMonochromeIsDark(themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered)
+    let bubbleMode = themeSettings.chatBubbleSettings.bubbleMode
+    let livingWallpaper = AstraGramSettings.current.design2027LivingWallpaper
+    let theme = makeAstraFolioPresentationTheme(dark: dark, bubbleMode: bubbleMode, livingWallpaper: livingWallpaper)
+    
+    let dateTimeFormat = currentDateTimeFormat()
+    let stringsValue: PresentationStrings
+    if let localizationSettings = localizationSettings {
+        stringsValue = PresentationStrings(primaryComponent: PresentationStrings.Component(languageCode: localizationSettings.primaryComponent.languageCode, localizedName: localizationSettings.primaryComponent.localizedName, pluralizationRulesCode: localizationSettings.primaryComponent.customPluralizationCode, dict: dictFromLocalization(localizationSettings.primaryComponent.localization)), secondaryComponent: localizationSettings.secondaryComponent.flatMap({ PresentationStrings.Component(languageCode: $0.languageCode, localizedName: $0.localizedName, pluralizationRulesCode: $0.customPluralizationCode, dict: dictFromLocalization($0.localization)) }), groupingSeparator: dateTimeFormat.groupingSeparator)
+    } else {
+        stringsValue = defaultPresentationStrings
+    }
+    let nameSortOrder = currentPersonNameSortOrder()
+    
+    let (chatFontSize, listsFontSize) = resolveFontSize(settings: themeSettings)
+    
+    let chatBubbleCorners = PresentationChatBubbleCorners(mainRadius: 16.0, auxiliaryRadius: 4.0, mergeBubbleCorners: true, hasTails: false, bubbleMode: bubbleMode, serifMessageText: themeSettings.chatBubbleSettings.serifMessageFont, astraNoOutgoingTail: true)
+    
+    // Bubble-free chats sit on the plain page as usual. With bubbles, a background the user picked stays; otherwise
+    // (and always with the living background, which the user asked for) the chat takes Folio's own paper or gradient.
+    let chatWallpaper: TelegramWallpaper
+    if !bubbleMode {
+        chatWallpaper = bubblelessChatWallpaper(theme: theme)
+    } else if !livingWallpaper, let chosen = astraUserChosenChatWallpaper(themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered) {
+        chatWallpaper = chosen
+    } else {
+        chatWallpaper = theme.chat.defaultWallpaper
+    }
+    
+    return PresentationData(strings: stringsValue, theme: theme, autoNightModeTriggered: autoNightModeTriggered, chatWallpaper: chatWallpaper, chatFontSize: chatFontSize, chatBubbleCorners: chatBubbleCorners, listsFontSize: listsFontSize, dateTimeFormat: dateTimeFormat, nameDisplayOrder: nameDisplayOrder, nameSortOrder: nameSortOrder, reduceMotion: themeSettings.reduceMotion, largeEmoji: themeSettings.largeEmoji)
+}
+
+// AstraGram "Folio": the chat background the user picked for the theme in use, or nil when none was picked (a stored
+// built-in background counts as none, since it is only the stock default). The lookup is the one
+// `astraChosenChatWallpaper` makes, without its fallback to the theme's own background.
+private func astraUserChosenChatWallpaper(themeSettings: PresentationThemeSettings, autoNightModeTriggered: Bool) -> TelegramWallpaper? {
+    let effectiveTheme: PresentationThemeReference = autoNightModeTriggered ? themeSettings.automaticThemeSwitchSetting.theme : themeSettings.theme
+    let effectiveColors = themeSettings.themeSpecificAccentColors[effectiveTheme.index]
+    guard let chosen = themeSettings.themeSpecificChatWallpapers[coloredThemeIndex(reference: effectiveTheme, accentColor: effectiveColors)] ?? themeSettings.themeSpecificChatWallpapers[effectiveTheme.index] else {
+        return nil
+    }
+    if case .builtin = chosen {
+        return nil
+    }
+    return chosen
 }
 
 // AstraGram "Monochrome": the chat background chosen for the theme in use, resolved as the regular presentation does.

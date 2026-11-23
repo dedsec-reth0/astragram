@@ -510,18 +510,28 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         // AstraGram look: the glass material and the springy presses, for the modules below the settings.
         AstraLook.glassMaterial = AstraGramSettings.current.glassMaterial
         AstraLook.springPresses = AstraGramSettings.current.springPresses
-        GlassBackgroundView.astraMonochrome = AstraGramSettings.current.monochrome
+        // The Folio design: the live flag, the launch value (for resources rendered once per process, such as the
+        // settings icons) and the living background. This runs before the first presentation data is built, so every
+        // module sees the right value on its first layout.
+        AstraLook.design2027 = AstraGramSettings.current.design2027
+        AstraLook.design2027AtLaunch = AstraGramSettings.current.design2027
+        AstraLook.livingWallpaper = AstraGramSettings.current.design2027LivingWallpaper
+        // Folio wins over Monochrome when both are stored on, so the monochrome glass is off while Folio is on.
+        GlassBackgroundView.astraMonochrome = AstraGramSettings.current.monochrome && !AstraGramSettings.current.design2027
         let _ = (AstraGramSettings.signal
-        |> map { settings -> (Int, Bool, Bool) in
-            return (settings.glassMaterial, settings.springPresses, settings.monochrome)
+        |> map { settings -> (Int, Bool, Bool, Bool, Bool) in
+            return (settings.glassMaterial, settings.springPresses, settings.monochrome, settings.design2027, settings.design2027LivingWallpaper)
         }
         |> distinctUntilChanged(isEqual: { lhs, rhs in
             return lhs == rhs
         })
-        |> deliverOnMainQueue).start(next: { glassMaterial, springPresses, monochrome in
+        |> deliverOnMainQueue).start(next: { glassMaterial, springPresses, monochrome, design2027, design2027LivingWallpaper in
             AstraLook.glassMaterial = glassMaterial
             AstraLook.springPresses = springPresses
-            GlassBackgroundView.astraMonochrome = monochrome
+            GlassBackgroundView.astraMonochrome = monochrome && !design2027
+            // Only the live value follows the setting; design2027AtLaunch keeps the launch value on purpose.
+            AstraLook.design2027 = design2027
+            AstraLook.livingWallpaper = design2027LivingWallpaper
         })
         let astraWindowLayer = window.layer
         let _ = (AstraGramSettings.signal

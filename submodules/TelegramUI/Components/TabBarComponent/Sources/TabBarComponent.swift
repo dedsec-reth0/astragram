@@ -331,11 +331,21 @@ private final class TabBarBadgeView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// The badge's size for `text`.
-    func update(text: String, isDark: Bool) -> CGSize {
+    /// The badge's size for `text`. `folioColors` (fill, text) are the theme's badge colours while Folio is on, where
+    /// an unread count is marked in volt like every other count; nil keeps the system look.
+    func update(text: String, isDark: Bool, folioColors: (background: UIColor, foreground: UIColor)? = nil) -> CGSize {
         self.label.text = text
-        // UIKit's systemRed, resolved for light and dark.
-        self.backgroundColor = isDark ? UIColor(red: 1.0, green: 66.0 / 255.0, blue: 69.0 / 255.0, alpha: 1.0) : UIColor(red: 1.0, green: 56.0 / 255.0, blue: 60.0 / 255.0, alpha: 1.0)
+        if let folioColors {
+            // Tabular digits keep the capsule from changing width as the count changes.
+            self.label.font = Font.with(size: 12.0, weight: .semibold, traits: .monospacedNumbers)
+            self.label.textColor = folioColors.foreground
+            self.backgroundColor = folioColors.background
+        } else {
+            self.label.font = Font.medium(12.0)
+            self.label.textColor = .white
+            // UIKit's systemRed, resolved for light and dark.
+            self.backgroundColor = isDark ? UIColor(red: 1.0, green: 66.0 / 255.0, blue: 69.0 / 255.0, alpha: 1.0) : UIColor(red: 1.0, green: 56.0 / 255.0, blue: 60.0 / 255.0, alpha: 1.0)
+        }
 
         let labelSize = self.label.sizeThatFits(CGSize(width: 1000.0, height: 1000.0))
         let labelWidth = ceilToScreenPixels(labelSize.width)
@@ -1321,7 +1331,10 @@ private final class ItemComponent: Component {
             self.component = component
             self.state = state
 
-            let unselectedColor = tabBarUnselectedItemColor(theme: component.theme)
+            // Folio takes the unselected ink from the theme (warm ink, not pure black or white), and sets the
+            // unselected labels a step quieter in the secondary ink.
+            let unselectedColor = AstraLook.design2027 ? component.theme.rootController.tabBar.iconColor : tabBarUnselectedItemColor(theme: component.theme)
+            let unselectedTitleColor = AstraLook.design2027 ? component.theme.rootController.tabBar.textColor : unselectedColor
             let iconTintColor = (component.isSelected && component.tintSelectedItem && !component.isSearchActive) ? component.theme.rootController.tabBar.selectedTextColor : unselectedColor
 
             let title: String
@@ -1531,7 +1544,7 @@ private final class ItemComponent: Component {
             let titleSize = self.title.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(string: title, font: titleFont, textColor: (component.isSelected && component.tintSelectedItem) ? component.theme.rootController.tabBar.selectedTextColor : unselectedColor))
+                    text: .plain(NSAttributedString(string: title, font: titleFont, textColor: (component.isSelected && component.tintSelectedItem) ? component.theme.rootController.tabBar.selectedTextColor : unselectedTitleColor))
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: 100.0)
@@ -1558,7 +1571,7 @@ private final class ItemComponent: Component {
                     self.badge = badge
                     self.contextContainerView.contentView.addSubview(badge)
                 }
-                let badgeSize = badge.update(text: badgeText, isDark: component.theme.overallDarkAppearance)
+                let badgeSize = badge.update(text: badgeText, isDark: component.theme.overallDarkAppearance, folioColors: AstraLook.design2027 ? (background: component.theme.rootController.tabBar.badgeBackgroundColor, foreground: component.theme.rootController.tabBar.badgeTextColor) : nil)
                 // `_UIBarBadgeView` hangs 5pt into the icon's right edge, 2pt below the item's top.
                 let badgeFrame = CGRect(origin: CGPoint(x: iconMaxX - 5.0, y: 2.0 + badgeOffsetY), size: badgeSize)
                 badgeTransition.setFrame(view: badge, frame: badgeFrame)

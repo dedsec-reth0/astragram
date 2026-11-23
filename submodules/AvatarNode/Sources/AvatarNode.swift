@@ -80,9 +80,29 @@ public final class AvatarNodeParameters: NSObject {
     }
 }
 
+/// AstraGram Folio: the flat avatar placeholder fills (section 2.2), in the spec's print-set order. They are picked by
+/// the same index as `AvatarNode.gradientColors`, so a peer keeps its slot, though not its hue.
+private let astraFolioAvatarLightColors: [UIColor] = [0x3D2BFF, 0xE5162D, 0x00A86B, 0xB25E00, 0x0B0B0C, 0x7A3CFF, 0x0E7C86].map { UIColor(rgb: $0) }
+private let astraFolioAvatarDarkColors: [UIColor] = [0x8B7DFF, 0xFF4D5E, 0x2EE59D, 0xFFB347, 0xF4F3EE, 0xB08CFF, 0x3FC7D1].map { UIColor(rgb: $0) }
+private let astraFolioAvatarDarkRGB: Set<UInt32> = [0x8B7DFF, 0xFF4D5E, 0x2EE59D, 0xFFB347, 0xF4F3EE, 0xB08CFF, 0x3FC7D1]
+
+/// AstraGram Folio: the initials' colour on a placeholder. The light set's fills are deep, so the initials are white;
+/// the dark set's fills are light, so the initials are ink. Off Folio (and on any other fill) they stay white.
+private func astraFolioInitialsColor(colors: [UIColor]) -> UIColor {
+    guard AstraGramSettings.current.design2027, colors.count == 2, let first = colors.first, let last = colors.last else {
+        return UIColor.white
+    }
+    let rgb = first.rgb
+    if rgb == last.rgb && astraFolioAvatarDarkRGB.contains(rgb) {
+        return UIColor(rgb: 0x0B0B0C)
+    }
+    return UIColor.white
+}
+
 public func calculateAvatarColors(context: AccountContext?, explicitColorIndex: Int?, peerId: EnginePeer.Id?, nameColor: PeerColor?, icon: AvatarNodeIcon, theme: PresentationTheme?) -> [UIColor] {
-    // AstraGram "Monochrome": placeholders (initials and icons) are gray.
-    if AstraGramSettings.current.monochrome {
+    // AstraGram "Monochrome": placeholders (initials and icons) are gray. Folio wins when both are somehow stored on,
+    // as it does for the theme.
+    if AstraGramSettings.current.monochrome && !AstraGramSettings.current.design2027 {
         if let theme, theme.overallDarkAppearance {
             return [UIColor(rgb: 0x4a4a4a), UIColor(rgb: 0x2e2e2e)]
         } else {
@@ -153,6 +173,18 @@ public func calculateAvatarColors(context: AccountContext?, explicitColorIndex: 
             colors = AvatarNode.grayscaleColors
         }
     } else {
+        // AstraGram Folio: the initials placeholders are flat print-set colours, chosen by the same index as
+        // Telegram's gradients (two equal stops draw flat). Dark is the theme's when the call site has one.
+        let astraFolioDark = theme?.overallDarkAppearance ?? false
+        func placeholderColors(_ index: Int) -> [UIColor] {
+            if AstraGramSettings.current.design2027 {
+                let palette = astraFolioDark ? astraFolioAvatarDarkColors : astraFolioAvatarLightColors
+                let color = palette[index % palette.count]
+                return [color, color]
+            } else {
+                return AvatarNode.gradientColors[index % AvatarNode.gradientColors.count]
+            }
+        }
         if let nameColor {
             func colorIndexFromColor(color: UIColor) -> Int {
                 let hue = color.hsb.h
@@ -180,18 +212,18 @@ public func calculateAvatarColors(context: AccountContext?, explicitColorIndex: 
                 if let context, nameColor.rawValue > 13 {
                     let nameColors = context.peerNameColors.get(nameColor)
                     let index = colorIndexFromColor(color: nameColors.main)
-                    colors = AvatarNode.gradientColors[index % AvatarNode.gradientColors.count]
+                    colors = placeholderColors(index)
                 } else {
-                    colors = AvatarNode.gradientColors[Int(nameColor.rawValue) % AvatarNode.gradientColors.count]
+                    colors = placeholderColors(Int(nameColor.rawValue))
                 }
             case let .collectible(peerCollectibleColor):
                 let color = UIColor(rgb: peerCollectibleColor.accentColor)
                 let index = colorIndexFromColor(color: color)
-                colors = AvatarNode.gradientColors[index % AvatarNode.gradientColors.count]
+                colors = placeholderColors(index)
             }
             
         } else {
-            colors = AvatarNode.gradientColors[colorIndex % AvatarNode.gradientColors.count]
+            colors = placeholderColors(colorIndex)
         }
     }
     
@@ -470,7 +502,7 @@ public func drawAvatarNodeContent(bounds: CGRect, parameters: Any?, isRasterizin
             }
             
             let string = letters.count == 0 ? "" : (letters[0] + (letters.count == 1 ? "" : letters[1]))
-            let attributedString = NSAttributedString(string: string, attributes: [NSAttributedString.Key.font: parameters.font, NSAttributedString.Key.foregroundColor: UIColor.white])
+            let attributedString = NSAttributedString(string: string, attributes: [NSAttributedString.Key.font: parameters.font, NSAttributedString.Key.foregroundColor: astraFolioInitialsColor(colors: colors)])
             
             let line = CTLineCreateWithAttributedString(attributedString)
             let lineBounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)

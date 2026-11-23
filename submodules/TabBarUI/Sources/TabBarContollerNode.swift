@@ -145,7 +145,8 @@ final class TabBarControllerNode: ASDisplayNode {
             }
         }
         
-        self.backgroundColor = theme.list.plainBackgroundColor
+        // Folio sets the screens on the page colour; the plain list colour is the white card there.
+        self.backgroundColor = AstraLook.design2027 ? theme.chatList.backgroundColor : theme.list.plainBackgroundColor
         
         //self.addSubnode(self.tabBarNode)
         //self.addSubnode(self.disabledOverlayNode)
@@ -165,7 +166,8 @@ final class TabBarControllerNode: ASDisplayNode {
     
     func updateTheme(_ theme: PresentationTheme) {
         self.theme = theme
-        self.backgroundColor = theme.list.plainBackgroundColor
+        // Folio sets the screens on the page colour; the plain list colour is the white card there.
+        self.backgroundColor = AstraLook.design2027 ? theme.chatList.backgroundColor : theme.list.plainBackgroundColor
         
         self.disabledOverlayNode.backgroundColor = theme.rootController.tabBar.backgroundColor.withAlphaComponent(0.5)
         self.requestUpdate()

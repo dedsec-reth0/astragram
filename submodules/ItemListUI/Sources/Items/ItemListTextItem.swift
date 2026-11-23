@@ -159,7 +159,11 @@ public class ItemListTextItemNode: ListViewItemNode, ItemListItemNode {
         let currentItem = self.item
         
         return { [weak self] item, params, neighbors in
-            let leftInset: CGFloat = 15.0
+            // Folio footers line up with the 20pt section headers and breathe at 1.25x line height (TextNode takes
+            // the extra leading as a fraction of the line height). The 13pt Regular size already is the stock one.
+            let folio = AstraLook.design2027
+            let leftInset: CGFloat = folio ? 20.0 : 15.0
+            let lineSpacing: CGFloat = folio ? 0.25 : 0.12
             var topInset: CGFloat = 7.0
             var bottomInset: CGFloat = 7.0
             
@@ -202,7 +206,7 @@ public class ItemListTextItemNode: ListViewItemNode, ItemListItemNode {
             case let .custom(_, string):
                 attributedText = string
             }
-            let (titleLayout, titleApply) = makeTitleLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: params.width - leftInset * 2.0 - params.leftInset - params.rightInset, height: CGFloat.greatestFiniteMagnitude), alignment: item.textAlignment.textAlignment, cutout: nil, insets: UIEdgeInsets()))
+            let (titleLayout, titleApply) = makeTitleLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: params.width - leftInset * 2.0 - params.leftInset - params.rightInset, height: CGFloat.greatestFiniteMagnitude), alignment: item.textAlignment.textAlignment, lineSpacing: lineSpacing, cutout: nil, insets: UIEdgeInsets()))
             
             let contentSize: CGSize
             

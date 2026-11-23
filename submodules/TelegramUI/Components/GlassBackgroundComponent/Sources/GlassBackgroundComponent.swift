@@ -511,6 +511,10 @@ public class GlassBackgroundView: UIView {
     private var nativeView: UIVisualEffectView?
     private var nativeViewClippingContext: ClippingShapeContext?
     private let nativeParamsView: EffectSettingsContainerView?
+    /// AstraGram Folio: the hairline rim drawn over native glass. It lives beside `nativeParamsView` rather than inside
+    /// the effect view, so UIKit's own glass layers are never touched; it exists only while Folio is on, and only on
+    /// the native path, because the legacy glass image already draws a rim of its own.
+    private var astraRimView: AstraFolioRimView?
 
     public var nativeBlurRadius: CGFloat? {
         didSet {
@@ -583,6 +587,11 @@ public class GlassBackgroundView: UIView {
         previous.removeFromSuperview()
         self.nativeView = nativeView
         self.nativeViewClippingContext = clippingContext
+        // AstraGram Folio: the rim must stay above the glass, so it is put back above the params view that now holds
+        // the new effect view.
+        if let astraRimView = self.astraRimView {
+            self.insertSubview(astraRimView, aboveSubview: nativeParamsView)
+        }
     }
     
     public private(set) var params: Params?
@@ -915,6 +924,7 @@ public class GlassBackgroundView: UIView {
         if let nativeParamsView = self.nativeParamsView {
             transition.setFrame(view: nativeParamsView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: size))
         }
+        self.updateAstraRim(size: size, shape: shape, isDark: isDark, rawTintColor: rawTintColor, isVisible: isVisible, transition: transition)
         transition.setFrame(view: self.maskContainerView, frame: CGRect(origin: CGPoint(), size: CGSize(width: size.width + shadowInset * 2.0, height: size.height + shadowInset * 2.0)))
         transition.setFrame(view: self.maskContentView, frame: CGRect(origin: CGPoint(x: shadowInset, y: shadowInset), size: size))
         if let foregroundView = self.foregroundView {
@@ -2054,6 +2064,8 @@ extension GlassBackgroundView {
         }
         self.update(size: last, cornerRadius: lastRadius, isDark: isDark, tintColor: tintColor, transition: .immediate)
         self.addShapeKeyframes(sizes: sizes, timing: timing, tintColor: tintColor)
+        // AstraGram Folio: the rim's paths take the same keyframes as the glass, so it never lags a frame behind.
+        self.astraRimView?.addKeyframes(sizes: sizes, cornerRadii: zip(sizes, cornerRadii).map { Shape.roundedRect(cornerRadius: $0.1).cornerRadii(for: $0.0) }, timing: timing)
         glassCornerRadiusKeyframes(self.nativeView, radii: cornerRadii, timing: timing)
         if tintColor.innerColor != nil, let innerBackgroundView = self.innerBackgroundView {
             let inset = tintColor.innerInset
@@ -2079,6 +2091,8 @@ extension GlassBackgroundView {
             self.nativeView?.layer.setCornerRadii(Display.CornerRadii(topLeft: lastRadii.topLeft, topRight: lastRadii.topRight, bottomLeft: lastRadii.bottomLeft, bottomRight: lastRadii.bottomRight))
         }
         self.addShapeKeyframes(sizes: sizes, timing: timing, tintColor: tintColor)
+        // AstraGram Folio: the rim's paths take the same keyframes as the glass, so it never lags a frame behind.
+        self.astraRimView?.addKeyframes(sizes: sizes, cornerRadii: zip(sizes, cornerRadii).map { Shape.customRoundedRect(cornerRadii: $0.1).cornerRadii(for: $0.0) }, timing: timing)
         glassCornerRadiiKeyframes(self.nativeView, radii: cornerRadii, timing: timing)
         if tintColor.innerColor != nil, let innerBackgroundView = self.innerBackgroundView {
             let inset = tintColor.innerInset
@@ -2106,6 +2120,7 @@ extension GlassBackgroundView {
         glassShapeKeyframes(self.legacyHighlightContainerView, sizes: sizes, timing: timing, frame: filling)
         glassShapeKeyframes(self.foregroundView, sizes: sizes, timing: timing, frame: { CGRect(origin: CGPoint(), size: $0).insetBy(dx: -shadowInset, dy: -shadowInset) })
         glassShapeKeyframes(self.shadowView, sizes: sizes, timing: timing, frame: { CGRect(origin: CGPoint(), size: $0).insetBy(dx: -shadowInset, dy: -shadowInset) })
+        glassShapeKeyframes(self.astraRimView, sizes: sizes, timing: timing, frame: filling)
     }
 }
 
@@ -2132,6 +2147,11 @@ extension GlassBackgroundView {
     /// AstraGram look: the tint a panel gets under the chosen glass material. Clear turns plain panels into clear
     /// glass, matte fills them almost solid; tints with a color of their own stay as they are.
     static func astraMaterialTint(_ tintColor: TintColor, isDark: Bool) -> TintColor {
+        // AstraGram Folio overrides the material setting: the glass is frosted down to matte paper (light) or ink (dark),
+        // and this comes before the material and Monochrome cases so neither can mix with it.
+        if AstraLook.design2027 {
+            return GlassBackgroundView.folioTint(tintColor, isDark: isDark)
+        }
         switch AstraLook.glassMaterial {
         case 1:
             switch tintColor.kind {
@@ -2155,6 +2175,155 @@ extension GlassBackgroundView {
             }
         default:
             return tintColor
+        }
+    }
+}
+
+extension GlassBackgroundView {
+    /// AstraGram Folio: the frost each kind of glass gets (spec §2.3). Plain panels become paper or ink at a fixed
+    /// alpha, the untinted bars with a lens get a lighter frost so the lens still shows, and tints with a colour of
+    /// their own pass through unchanged because they carry meaning (accent buttons, media controls).
+    static func folioTint(_ tintColor: TintColor, isDark: Bool) -> TintColor {
+        let paper = UIColor(rgb: 0xF7F6F2)
+        let ink = UIColor(rgb: 0x0B0B0C)
+        switch tintColor.kind {
+        case .panel:
+            let color = isDark ? ink.withAlphaComponent(0.70) : paper.withAlphaComponent(0.72)
+            return TintColor(kind: .custom(style: .default, color: color), innerColor: tintColor.innerColor, innerInset: tintColor.innerInset)
+        case .clear:
+            // The clear style is kept so glass over media still reads as the lighter clear variant, only tinted.
+            let color = isDark ? ink.withAlphaComponent(0.55) : paper.withAlphaComponent(0.55)
+            return TintColor(kind: .custom(style: .clear, color: color), innerColor: tintColor.innerColor, innerInset: tintColor.innerInset)
+        case .untinted:
+            let color = isDark ? ink.withAlphaComponent(0.40) : paper.withAlphaComponent(0.45)
+            return TintColor(kind: .custom(style: .default, color: color), innerColor: tintColor.innerColor, innerInset: tintColor.innerInset)
+        case .custom:
+            return tintColor
+        }
+    }
+
+    /// AstraGram Folio: creates, updates or removes the rim. It is created only on the native path while Folio is on,
+    /// and only for the neutral glass kinds; glass with a colour of its own keeps its stock look. When Folio goes off
+    /// the rim is removed, so the glass is exactly stock again.
+    fileprivate func updateAstraRim(size: CGSize, shape: Shape, isDark: Bool, rawTintColor: TintColor, isVisible: Bool, transition: ComponentTransition) {
+        var wantsRim = false
+        if AstraLook.design2027, self.nativeParamsView != nil {
+            switch rawTintColor.kind {
+            case .panel, .untinted, .clear:
+                wantsRim = true
+            case .custom:
+                wantsRim = false
+            }
+        }
+        guard wantsRim, let nativeParamsView = self.nativeParamsView else {
+            if let astraRimView = self.astraRimView {
+                self.astraRimView = nil
+                astraRimView.removeFromSuperview()
+            }
+            return
+        }
+        var rimTransition = transition
+        let rimView: AstraFolioRimView
+        if let current = self.astraRimView {
+            rimView = current
+        } else {
+            rimView = AstraFolioRimView(frame: CGRect(origin: CGPoint(), size: size))
+            self.astraRimView = rimView
+            self.insertSubview(rimView, aboveSubview: nativeParamsView)
+            // A new rim takes its first shape at once; animating it in from an empty path would draw a stray line.
+            rimTransition = .immediate
+        }
+        rimTransition.setFrame(view: rimView, frame: CGRect(origin: CGPoint(), size: size))
+        rimView.update(size: size, cornerRadii: shape.cornerRadii(for: size), isDark: isDark, transition: rimTransition)
+        // A new rim takes its visibility at once too, so a rim made for hidden glass does not fade out from opaque.
+        rimTransition.setAlpha(view: rimView, alpha: isVisible ? 1.0 : 0.0)
+    }
+}
+
+/// AstraGram Folio: the top-lit hairline rim over native glass (spec §2.3). In light mode it is a uniform ink hairline
+/// with an inner white highlight that fades out by 40% of the height; in dark mode a single white stroke fading from
+/// the top to the bottom. The stroke is drawn inside the bounds so the glass's own edge is not widened.
+private final class AstraFolioRimView: UIView {
+    // The layers are the action-free Simple* kinds: plain sublayers would add a 0.25s implicit animation to every
+    // immediate path or frame change, so the rim would lag behind the glass it outlines.
+    private let hairlineLayer = SimpleShapeLayer()
+    private let highlightLayer = SimpleGradientLayer()
+    private let highlightMaskLayer = SimpleShapeLayer()
+    private var isDark: Bool?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.isUserInteractionEnabled = false
+
+        self.hairlineLayer.fillColor = nil
+        self.layer.addSublayer(self.hairlineLayer)
+
+        self.highlightMaskLayer.fillColor = nil
+        self.highlightMaskLayer.strokeColor = UIColor.black.cgColor
+        self.highlightLayer.mask = self.highlightMaskLayer
+        self.highlightLayer.startPoint = CGPoint(x: 0.5, y: 0.0)
+        self.highlightLayer.endPoint = CGPoint(x: 0.5, y: 1.0)
+        self.layer.addSublayer(self.highlightLayer)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private static func lineWidth(isDark: Bool) -> CGFloat {
+        return isDark ? 0.67 : 0.5
+    }
+
+    /// The path a stroke of `lineWidth` follows so that it lies inside the shape, `extraInset` further in.
+    private static func path(size: CGSize, cornerRadii: GlassBackgroundView.CornerRadii, lineWidth: CGFloat, extraInset: CGFloat) -> CGPath {
+        let inset = lineWidth * 0.5 + extraInset
+        let rect = CGRect(origin: CGPoint(), size: size).insetBy(dx: min(inset, size.width * 0.5), dy: min(inset, size.height * 0.5))
+        return GlassBackgroundView.generateRoundedRectPath(rect: rect, cornerRadii: cornerRadii.insetBy(inset))
+    }
+
+    func update(size: CGSize, cornerRadii: GlassBackgroundView.CornerRadii, isDark: Bool, transition: ComponentTransition) {
+        let lineWidth = AstraFolioRimView.lineWidth(isDark: isDark)
+        if self.isDark != isDark {
+            self.isDark = isDark
+            self.hairlineLayer.lineWidth = lineWidth
+            self.highlightMaskLayer.lineWidth = lineWidth
+            if isDark {
+                self.hairlineLayer.isHidden = true
+                self.highlightLayer.colors = [UIColor(white: 1.0, alpha: 0.16).cgColor, UIColor(white: 1.0, alpha: 0.06).cgColor]
+                self.highlightLayer.locations = [0.0, 1.0]
+            } else {
+                self.hairlineLayer.isHidden = false
+                self.hairlineLayer.strokeColor = UIColor(rgb: 0x0B0B0C, alpha: 0.10).cgColor
+                self.highlightLayer.colors = [UIColor(white: 1.0, alpha: 0.70).cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor]
+                self.highlightLayer.locations = [0.0, 0.4]
+            }
+        }
+        let bounds = CGRect(origin: CGPoint(), size: size)
+        transition.setShapeLayerPath(layer: self.hairlineLayer, path: AstraFolioRimView.path(size: size, cornerRadii: cornerRadii, lineWidth: lineWidth, extraInset: 0.0))
+        transition.setFrame(layer: self.highlightLayer, frame: bounds)
+        transition.setFrame(layer: self.highlightMaskLayer, frame: bounds)
+        transition.setShapeLayerPath(layer: self.highlightMaskLayer, path: AstraFolioRimView.path(size: size, cornerRadii: cornerRadii, lineWidth: lineWidth, extraInset: AstraFolioRimView.highlightInset(isDark: isDark, lineWidth: lineWidth)))
+    }
+
+    /// In light mode the highlight sits just inside the ink hairline; in dark mode it is the rim itself.
+    private static func highlightInset(isDark: Bool, lineWidth: CGFloat) -> CGFloat {
+        return isDark ? 0.0 : lineWidth
+    }
+
+    /// Keyframes for the rim's layers along a glass shape animation, one value per sample (`cornerRadii` already
+    /// clamped to each size). The rim view's own frame takes its keyframes with the other glass views.
+    func addKeyframes(sizes: [CGSize], cornerRadii: [GlassBackgroundView.CornerRadii], timing: NavigationKeyframeTiming) {
+        guard let isDark = self.isDark, sizes.count == cornerRadii.count, !sizes.isEmpty else {
+            return
+        }
+        let lineWidth = AstraFolioRimView.lineWidth(isDark: isDark)
+        let highlightInset = AstraFolioRimView.highlightInset(isDark: isDark, lineWidth: lineWidth)
+        let samples = Array(zip(sizes, cornerRadii))
+        addNavigationKeyframes(to: self.hairlineLayer, key: "navigationGlass.path", keyPath: "path", values: samples.map { AstraFolioRimView.path(size: $0.0, cornerRadii: $0.1, lineWidth: lineWidth, extraInset: 0.0) }, timing: timing)
+        addNavigationKeyframes(to: self.highlightMaskLayer, key: "navigationGlass.path", keyPath: "path", values: samples.map { AstraFolioRimView.path(size: $0.0, cornerRadii: $0.1, lineWidth: lineWidth, extraInset: highlightInset) }, timing: timing)
+        for layer in [self.highlightLayer, self.highlightMaskLayer] as [CALayer] {
+            addNavigationKeyframes(to: layer, key: "navigationGlass.bounds", keyPath: "bounds", values: sizes.map { NSValue(cgRect: CGRect(origin: CGPoint(), size: $0)) }, timing: timing)
+            addNavigationKeyframes(to: layer, key: "navigationGlass.position", keyPath: "position", values: sizes.map { NSValue(cgPoint: CGPoint(x: $0.width * 0.5, y: $0.height * 0.5)) }, timing: timing)
         }
     }
 }

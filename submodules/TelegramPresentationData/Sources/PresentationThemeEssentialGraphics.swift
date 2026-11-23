@@ -270,7 +270,9 @@ public final class PrincipalThemeEssentialGraphics {
         let maxCornerRadius = bubbleCorners.mainRadius
         let minCornerRadius = (bubbleCorners.mergeBubbleCorners && maxCornerRadius >= 10.0) ? bubbleCorners.auxiliaryRadius : bubbleCorners.mainRadius
         // Bubble mode off: outgoing bubbles keep their merge corners and lose the tail.
-        let outgoingTail = bubbleCorners.bubbleMode
+        // The Folio design drops the outgoing tail in bubble mode too, through its own flag, so `bubbleMode` keeps its
+        // meaning; the merge corners still give the 16/4 column. It is false outside Folio presentation data.
+        let outgoingTail = bubbleCorners.bubbleMode && !bubbleCorners.astraNoOutgoingTail
         
         let emptyImage = UIImage()
         if preview {

@@ -1467,6 +1467,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     
     private let backgroundNode: ASDisplayNode
     private let highlightedBackgroundNode: ASDisplayNode
+    /// The Folio pinned-row slab. It is the bottom subnode of `contextContainer`, so it slides with the swipe, and it
+    /// exists only while Folio is on and the row is pinned.
+    private var astraPinnedPlateNode: ASDisplayNode?
     
     let contextContainer: ContextControllerSourceNode
     let mainContentContainerNode: ASDisplayNode
@@ -2294,7 +2297,12 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         
         self.isHighlighted = highlighted
         
-        self.updateIsHighlighted(transition: (animated && !highlighted) ? .animated(duration: 0.3, curve: .easeInOut) : .immediate)
+        if AstraLook.design2027 && animated {
+            // The Folio press plate fades in quickly (0.12s) and out a little slower with an ease-out (0.22s).
+            self.updateIsHighlighted(transition: highlighted ? .animated(duration: 0.12, curve: .easeInOut) : .animated(duration: 0.22, curve: .custom(0.0, 0.0, 0.58, 1.0)))
+        } else {
+            self.updateIsHighlighted(transition: (animated && !highlighted) ? .animated(duration: 0.3, curve: .easeInOut) : .immediate)
+        }
     }
     
     var reallyHighlighted: Bool {
@@ -2359,6 +2367,13 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         // An unrelated row (or its swipe surface) must not acquire that highlight.
         let baseAlpha = self.reallyHighlighted ? highlightProgress : (self.highlightedBackgroundNode.supernode != nil && !self.isRevealOptionsActive ? 1.0 - highlightProgress : 0.0)
         self.updateRevealOptionsHighlightedBackgroundNode(self.highlightedBackgroundNode, isHighlighted: baseAlpha > 0, transition: transition, aboveNodes: [self.separatorNode, self.backgroundNode], highlightAlpha: baseAlpha, allowsRevealHighlight: allowsRevealHighlight)
+        if let astraPinnedPlateNode = self.astraPinnedPlateNode {
+            // The press plate lies below `contextContainer`, so the pinned plate above it gives way while the row is
+            // pressed. Both have the same shape, so the press reads as the plate changing colour.
+            let highlightAlpha = self.highlightedBackgroundNode.supernode == nil ? 0.0 : self.highlightedBackgroundNode.alpha
+            let inlineNavigationProgress = self.item?.interaction.inlineNavigationLocation?.progress ?? 0.0
+            transition.updateAlpha(node: astraPinnedPlateNode, alpha: (1.0 - inlineNavigationProgress) * (1.0 - highlightAlpha))
+        }
         if self.highlightedBackgroundNode.alpha > 0 && self.highlightedBackgroundNode.supernode != nil {
             if let compoundHighlightingNode = self.compoundHighlightingNode {
                 transition.updateAlpha(layer: compoundHighlightingNode.layer, alpha: self.authorNode.alpha * (1.0 - self.highlightedBackgroundNode.alpha))
@@ -2455,11 +2470,20 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         let currentCustomTextEntities = self.cachedCustomTextEntities
         
         return { [weak self] item, params, first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls in
-            let titleFont = Font.semibold(floor(item.presentationData.fontSize.itemListBaseFontSize * 16.0 / 17.0))
+            // The Folio flag is read once per layout pass, so every font, inset and plate of this pass agrees on it.
+            let astraFolio = AstraLook.design2027
+            // Folio sets the row like a magazine column: a bold 17pt title over a 15pt preview, and small tabular
+            // dates that do not jitter as the minutes change.
+            let stockTitleFont = Font.semibold(floor(item.presentationData.fontSize.itemListBaseFontSize * 16.0 / 17.0))
+            let titleFont = astraFolio ? Font.bold(floor(item.presentationData.fontSize.itemListBaseFontSize * 17.0 / 17.0)) : stockTitleFont
             let textFont = Font.regular(floor(item.presentationData.fontSize.itemListBaseFontSize * 15.0 / 17.0))
+            // The author name in the preview stands out by weight under Folio, not by colour alone.
+            let authorTextFont = astraFolio ? Font.semibold(floor(item.presentationData.fontSize.itemListBaseFontSize * 15.0 / 17.0)) : textFont
             let italicTextFont = Font.italic(floor(item.presentationData.fontSize.itemListBaseFontSize * 15.0 / 17.0))
-            let dateFont = Font.regular(floor(item.presentationData.fontSize.itemListBaseFontSize * 14.0 / 17.0))
-            let badgeFont = Font.with(size: floor(item.presentationData.fontSize.itemListBaseFontSize * 12.0 / 17.0), design: .regular, weight: .semibold, traits: [.monospacedNumbers])
+            let dateFont = astraFolio ? Font.with(size: floor(item.presentationData.fontSize.itemListBaseFontSize * 13.0 / 17.0), design: .regular, weight: .medium, traits: [.monospacedNumbers]) : Font.regular(floor(item.presentationData.fontSize.itemListBaseFontSize * 14.0 / 17.0))
+            // An unread row marks its date in volt and semibold under Folio, because volt is what needs you.
+            let astraUnreadDateFont = Font.with(size: floor(item.presentationData.fontSize.itemListBaseFontSize * 13.0 / 17.0), design: .regular, weight: .semibold, traits: [.monospacedNumbers])
+            let badgeFont = astraFolio ? Font.with(size: floor(item.presentationData.fontSize.itemListBaseFontSize * 13.0 / 17.0), design: .regular, weight: .bold, traits: [.monospacedNumbers]) : Font.with(size: floor(item.presentationData.fontSize.itemListBaseFontSize * 12.0 / 17.0), design: .regular, weight: .semibold, traits: [.monospacedNumbers])
             let avatarBadgeFont = Font.with(size: floor(item.presentationData.fontSize.itemListBaseFontSize * 16.0 / 17.0), design: .regular, weight: .regular, traits: [.monospacedNumbers])
             
             let account = item.context.account
@@ -3048,7 +3072,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         var composedString: NSMutableAttributedString
                         
                         if let peerText = peerText {
-                            authorAttributedString = NSAttributedString(string: peerText, font: textFont, textColor: theme.authorNameColor)
+                            authorAttributedString = NSAttributedString(string: peerText, font: authorTextFont, textColor: theme.authorNameColor)
                         }
                                        
                         var entities = chatListPreviewTextEntities(entities)
@@ -3118,10 +3142,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         }
                         var previewPrefix: NSAttributedString?
                         if let inlineAuthorPrefix {
-                            previewPrefix = NSAttributedString(string: "\(inlineAuthorPrefix): ", font: textFont, textColor: theme.titleColor)
+                            previewPrefix = NSAttributedString(string: "\(inlineAuthorPrefix): ", font: authorTextFont, textColor: theme.titleColor)
                         } else if sideListInlineAuthor, !hideAuthor, !authorIsCurrentChat, let peerText {
                             // An author that is not a user (a channel posting in the group) keeps its name too.
-                            previewPrefix = NSAttributedString(string: "\(peerText): ", font: textFont, textColor: theme.titleColor)
+                            previewPrefix = NSAttributedString(string: "\(peerText): ", font: authorTextFont, textColor: theme.titleColor)
                         }
                         if let communitySource, case .previewPrefix = communitySource.placement {
                             let communityPrefix = NSMutableAttributedString()
@@ -3414,7 +3438,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         }
                         
                         if let peerText = peerText {
-                            authorAttributedString = NSAttributedString(string: peerText, font: textFont, textColor: theme.authorNameColor)
+                            authorAttributedString = NSAttributedString(string: peerText, font: authorTextFont, textColor: theme.authorNameColor)
                         }
                     }
                 case let .group(peers):
@@ -3614,6 +3638,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     }
                     dateAttributedString = NSAttributedString(string: text, font: dateFont, textColor: theme.dateTextColor)
                 }
+            } else if astraFolio && unreadCount.unread && !unreadCount.muted {
+                dateAttributedString = NSAttributedString(string: dateText, font: astraUnreadDateFont, textColor: item.presentationData.theme.list.itemAccentColor)
             } else {
                 dateAttributedString = NSAttributedString(string: dateText, font: dateFont, textColor: theme.dateTextColor)
             }
@@ -4289,7 +4315,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 animateContent = true
             }
             
-            let (measureLayout, measureApply) = makeMeasureLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: " ", font: titleFont, textColor: .black), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: titleRectWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+            // The line pitch is measured with the stock title font even under Folio. It is counted three times for the
+            // preview lines, so the larger Folio title would otherwise add about 4pt on top of the planned +4.
+            let (measureLayout, measureApply) = makeMeasureLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: " ", font: stockTitleFont, textColor: .black), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: titleRectWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             
             let titleSpacing: CGFloat = -1.0
             let authorSpacing: CGFloat = -3.0
@@ -4308,10 +4336,15 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 itemHeight += titleSpacing
                 itemHeight += authorSpacing
             }
+            
+            // Folio gives the regular rows 4pt more air, split evenly above and below the text, so the bold title
+            // does not crowd the row. The side list keeps its own fitted rows.
+            let astraRowExtraHeight: CGFloat = (astraFolio && !(item.isSideListCompactPeerRow || (item.interaction.isSideListMode && item.interaction.isInlineMode))) ? 4.0 : 0.0
+            itemHeight += astraRowExtraHeight
                         
             // A side-list row centers its title and preview between the paddings.
             let sideListContentOffset: CGFloat = (item.isSideListCompactPeerRow || (item.interaction.isSideListMode && item.interaction.isInlineMode)) ? 4.0 : 0.0
-            let rawContentRect = CGRect(origin: CGPoint(x: 2.0, y: layoutOffset + floor(item.presentationData.fontSize.itemListBaseFontSize * 8.0 / 17.0) + sideListContentOffset), size: CGSize(width: rawContentWidth, height: itemHeight - 12.0 - 9.0))
+            let rawContentRect = CGRect(origin: CGPoint(x: 2.0, y: layoutOffset + floor(item.presentationData.fontSize.itemListBaseFontSize * 8.0 / 17.0) + sideListContentOffset + astraRowExtraHeight * 0.5), size: CGSize(width: rawContentWidth, height: itemHeight - 12.0 - 9.0 - astraRowExtraHeight))
             
             let insets = ChatListItemNode.insets(first: first, last: last, firstWithHeader: firstWithHeader)
             var heightOffset: CGFloat = 0.0
@@ -5650,10 +5683,12 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     } else if item.useCommunityViewLayout {
                         leftSeparatorInset = editingOffset + leftInset + rawContentRect.origin.x
                         rightSeparatorInset = contentRightSeparatorInset
-                    } else if (!nextIsPinned && isPinned) || last {
+                    } else if !astraFolio && ((!nextIsPinned && isPinned) || last) {
                         leftSeparatorInset = params.leftInset
                         rightSeparatorInset = fullWidthRightSeparatorInset
                     } else {
+                        // Folio sets every separator as a hairline from the text column to 16pt before the edge,
+                        // since the pinned rows are inset plates and a full-width rule would cut across them.
                         leftSeparatorInset = editingOffset + leftInset + rawContentRect.origin.x
                         rightSeparatorInset = contentRightSeparatorInset
                     }
@@ -5702,6 +5737,43 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
                     }
                     
+                    // Folio draws a pinned row as an inset slab instead of a full-width band, so the row background is
+                    // cleared and its colour moves to the plate.
+                    var astraPinnedPlateColor: UIColor?
+                    // A hidden archive row that does not appear pinned keeps its plain row colour, so it gets no slab.
+                    var astraAppearsPinned = isPinned
+                    if case let .groupReference(groupReferenceData) = item.content, groupReferenceData.hiddenByDefault, !groupReferenceData.appearsPinned {
+                        astraAppearsPinned = false
+                    }
+                    if astraFolio && astraAppearsPinned && !item.selected && !item.interaction.isSideListMode {
+                        astraPinnedPlateColor = backgroundColor
+                        backgroundColor = .clear
+                    }
+                    if let astraPinnedPlateColor {
+                        let plateFrame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: layout.contentSize.width - params.leftInset - params.rightInset, height: itemHeight)).insetBy(dx: 8.0, dy: 2.0)
+                        if let plateNode = strongSelf.astraPinnedPlateNode {
+                            transition.updateFrame(node: plateNode, frame: plateFrame)
+                            if animated {
+                                transition.updateBackgroundColor(node: plateNode, color: astraPinnedPlateColor)
+                            } else {
+                                plateNode.backgroundColor = astraPinnedPlateColor
+                            }
+                        } else {
+                            let plateNode = ASDisplayNode()
+                            plateNode.isLayerBacked = true
+                            plateNode.isUserInteractionEnabled = false
+                            plateNode.cornerRadius = AstraLook.Folio.rowPlateRadius
+                            plateNode.layer.cornerCurve = .continuous
+                            plateNode.backgroundColor = astraPinnedPlateColor
+                            plateNode.frame = plateFrame
+                            strongSelf.astraPinnedPlateNode = plateNode
+                            strongSelf.contextContainer.insertSubnode(plateNode, at: 0)
+                        }
+                    } else if let plateNode = strongSelf.astraPinnedPlateNode {
+                        strongSelf.astraPinnedPlateNode = nil
+                        plateNode.removeFromSupernode()
+                    }
+                    
                     // AstraGram Liquid Glass+ (beta): pinned rows stay inside the card, without a full-width background.
                     if AstraLiquidGlass.isEnabled && isPinned && !item.selected {
                         backgroundColor = .clear
@@ -5717,6 +5789,12 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     } else {
                         transition.updateAlpha(node: strongSelf.backgroundNode, alpha: 1.0)
                     }
+                    if let plateNode = strongSelf.astraPinnedPlateNode {
+                        // The pinned slab fades with the row background while a forum opens inline, and gives way to
+                        // the press plate as `updateIsHighlighted` does.
+                        let highlightAlpha = strongSelf.highlightedBackgroundNode.supernode == nil ? 0.0 : strongSelf.highlightedBackgroundNode.alpha
+                        transition.updateAlpha(node: plateNode, alpha: (1.0 - (item.interaction.inlineNavigationLocation?.progress ?? 0.0)) * (1.0 - highlightAlpha))
+                    }
                     
                     // The side list's plate matches its search field.
                     strongSelf.highlightedBackgroundNode.backgroundColor = item.interaction.isSideListMode ? item.presentationData.theme.rootController.navigationSearchBar.inputFillColor : highlightedBackgroundColor
@@ -5728,6 +5806,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             highlightedBackgroundFrame = highlightedBackgroundFrame.insetBy(dx: 8.0, dy: 0.0)
                         }
                         strongSelf.revealOptionsHighlightedBackgroundRestingCornerRadius = 24.0
+                    } else if astraFolio {
+                        // Folio: the pressed row is an inset slab of the same shape as the pinned plate, so a press
+                        // on a pinned row lights the plate it already has.
+                        highlightedBackgroundFrame = CGRect(origin: CGPoint(x: params.leftInset, y: layoutOffset), size: CGSize(width: layout.contentSize.width - params.leftInset - params.rightInset, height: itemHeight)).insetBy(dx: 8.0, dy: 2.0)
+                        strongSelf.revealOptionsHighlightedBackgroundRestingCornerRadius = AstraLook.Folio.rowPlateRadius
                     } else if AstraLook.springPresses {
                         // AstraGram look: the pressed row is a rounded plate here too.
                         highlightedBackgroundFrame = highlightedBackgroundFrame.insetBy(dx: 8.0, dy: 0.0)

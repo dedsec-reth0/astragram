@@ -128,6 +128,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     /// AstraGram: the color of the profile's surface last given to the screen.
     fileprivate var astraSurface: UIColor?
     private var astraSurfaceReported = false
+    /// AstraGram Folio: the 1pt editorial rule under the name and status (nil while Folio is off).
+    private var astraFolioRuleLayer: CALayer?
     /// AstraGram: the music's mood (the dark, drifting color while the profile's track plays).
     fileprivate var astraMusicMoodPlaying = false
     fileprivate var astraMusicMoodAmount: CGFloat = 0.0
@@ -1340,7 +1342,13 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         self.updateNavigationGlass?(navigationContentsCanBeExpanded ? .plain : .tinted(headerButtonBackgroundColor), navigationTransition)
         
         self.titleNode.updateTintColor(color: navigationContentsPrimaryColor, transition: navigationTransition)
-        self.subtitleNode.updateTintColor(color: navigationContentsSecondaryColor, transition: navigationTransition)
+        var subtitleTintColor = navigationContentsSecondaryColor
+        if AstraLook.design2027, !hasCoverColor, !self.isAvatarExpanded, !state.isEditing, !self.isSettings, !self.isMyProfile, threadData == nil, let statusData, statusData.isActivity {
+            // Folio marks "online" (and typing) in volt, as the chat title does; on a coloured cover and over an
+            // expanded photo the status stays white, where volt would not read.
+            subtitleTintColor = presentationData.theme.list.itemAccentColor
+        }
+        self.subtitleNode.updateTintColor(color: subtitleTintColor, transition: navigationTransition)
         self.panelSubtitleNode.updateTintColor(color: navigationContentsSecondaryColor, transition: navigationTransition)
         var titleBrightness: CGFloat = 0.0
         navigationContentsPrimaryColor.getHue(nil, saturation: nil, brightness: &titleBrightness, alpha: nil)
@@ -1412,8 +1420,15 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
 
             titleStringText = title
-            titleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white)
-            smallTitleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white, shadowColor: titleShadowColor)
+            if AstraLook.design2027 {
+                // Folio sets the profile name as a display line: Bold 30, tightened with a kern in the title's
+                // attributed text below (the MultiScaleText attributes carry only the font and colour).
+                titleAttributes = MultiScaleTextState.Attributes(font: Font.bold(30.0), color: .white)
+                smallTitleAttributes = MultiScaleTextState.Attributes(font: Font.bold(30.0), color: .white, shadowColor: titleShadowColor)
+            } else {
+                titleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white)
+                smallTitleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white, shadowColor: titleShadowColor)
+            }
             
             if self.isSettings, case let .user(user) = peer {
                 var subtitle = formatPhoneNumber(context: self.context, number: user.phone ?? "")
@@ -1546,10 +1561,21 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             titleConstrainedSize.width -= 60.0
         }
         
-        let titleNodeLayout = self.titleNode.updateLayout(text: titleStringText, states: [
+        let titleStates: [AnyHashable: MultiScaleTextState] = [
             TitleNodeStateRegular: MultiScaleTextState(attributes: titleAttributes, constrainedSize: titleConstrainedSize),
             TitleNodeStateExpanded: MultiScaleTextState(attributes: smallTitleAttributes, constrainedSize: titleConstrainedSize)
-        ], mainState: TitleNodeStateRegular)
+        ]
+        let titleNodeLayout: [AnyHashable: MultiScaleTextLayout]
+        if AstraLook.design2027 {
+            // The kern survives MultiScaleTextNode, which only adds the font and colour of each state on top.
+            let titleAttributedText = NSAttributedString(string: titleStringText, attributes: [.kern: -0.4 as NSNumber])
+            titleNodeLayout = self.titleNode.updateLayout(attributedText: titleAttributedText, accessibilityText: titleStringText, states: titleStates, mainState: TitleNodeStateRegular)
+        } else {
+            titleNodeLayout = self.titleNode.updateLayout(text: titleStringText, states: [
+                TitleNodeStateRegular: MultiScaleTextState(attributes: titleAttributes, constrainedSize: titleConstrainedSize),
+                TitleNodeStateExpanded: MultiScaleTextState(attributes: smallTitleAttributes, constrainedSize: titleConstrainedSize)
+            ], mainState: TitleNodeStateRegular)
+        }
         
         var subtitleRatingSize: CGSize?
 
@@ -2340,7 +2366,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         let buttonsTransitionFraction: CGFloat = 1.0 - max(0.0, min(1.0, buttonsTransitionDistance / buttonsTransitionDistanceNorm))
         
-        let buttonSpacing: CGFloat = 8.0
+        // Folio sets the header buttons 6pt apart (the 58pt height is unchanged); stock keeps 8.
+        let buttonSpacing: CGFloat = AstraLook.design2027 ? 6.0 : 8.0
         let buttonSideInset = max(16.0, containerInset)
         
         let actionButtonWidth = (width - stripLeft - stripRight - buttonSideInset * 2.0 + buttonSpacing) / CGFloat(actionButtonKeys.count) - buttonSpacing
@@ -2527,6 +2554,65 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         buttonNode?.removeFromSupernode()
                     }
                 }
+            }
+        }
+        
+        // Folio's editorial rule: a 1pt line in ink (white on a coloured cover, like the name) under the name and
+        // status block, inset 16 inside the Duo strips. It is created only while Folio is on and removed otherwise.
+        // The music capsule stands in the same gap under the status, so a profile showing the capsule keeps the
+        // capsule there and the rule only hides.
+        if AstraLook.design2027 && !self.isAvatarExpanded && !state.isEditing && !isSearching && !displayStandardTitle && !astraMusicCapsule && !titleSize.height.isZero {
+            let ruleLayer: CALayer
+            var ruleWasAdded = false
+            if let current = self.astraFolioRuleLayer {
+                ruleLayer = current
+            } else {
+                ruleLayer = CALayer()
+                ruleLayer.isOpaque = false
+                self.astraFolioRuleLayer = ruleLayer
+                self.regularContentNode.layer.addSublayer(ruleLayer)
+                ruleWasAdded = true
+            }
+            ruleLayer.backgroundColor = regularNavigationContentsPrimaryColor.cgColor
+            
+            var blockBottom = max(subtitleFrame.maxY, usernameFrame.maxY)
+            if currentWalletBalance != nil && !self.isSettings {
+                // The balance pill sits 8pt under the status and is 20pt high: the rule goes under it instead.
+                blockBottom += 8.0 + 20.0
+            }
+            var ruleY = blockBottom + titleOffset + 12.0
+            if !buttonKeys.isEmpty {
+                // Never closer than 6pt to the buttons row, whatever the title block's height.
+                ruleY = min(ruleY, buttonRightOrigin.y - 6.0 - 1.0)
+            }
+            if !actionButtonKeys.isEmpty {
+                // The wide action buttons (join, message) stand above the regular row, so they bound the rule too.
+                ruleY = min(ruleY, actionButtonRightOrigin.y - 6.0 - 1.0)
+            }
+            let ruleInset: CGFloat = 16.0
+            let ruleFrame = CGRect(x: stripLeft + ruleInset, y: ruleY, width: max(0.0, width - stripLeft - stripRight - ruleInset * 2.0), height: 1.0)
+            // It fades out as the header collapses, together with the subtitle.
+            let ruleAlpha = max(0.0, min(subtitleAlpha, 1.0 - titleCollapseFraction))
+            if ruleWasAdded {
+                ruleLayer.frame = ruleFrame
+                ruleLayer.opacity = Float(ruleAlpha)
+            } else {
+                if additive {
+                    transition.updateFrameAdditive(layer: ruleLayer, frame: ruleFrame)
+                } else {
+                    transition.updateFrame(layer: ruleLayer, frame: ruleFrame)
+                }
+                transition.updateAlpha(layer: ruleLayer, alpha: ruleAlpha)
+            }
+        } else if let ruleLayer = self.astraFolioRuleLayer {
+            if AstraLook.design2027 {
+                // Over an expanded photo, while editing or searching, or beside the music capsule, the rule only
+                // hides, to come back in place.
+                transition.updateAlpha(layer: ruleLayer, alpha: 0.0)
+            } else {
+                // Folio was turned off: the rule is removed, so the header is stock again.
+                self.astraFolioRuleLayer = nil
+                ruleLayer.removeFromSuperlayer()
             }
         }
         

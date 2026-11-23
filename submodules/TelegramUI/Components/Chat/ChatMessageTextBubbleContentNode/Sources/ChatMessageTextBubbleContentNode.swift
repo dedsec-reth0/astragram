@@ -514,6 +514,12 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                     if !messageTheme.primaryTextColor.isEqual(messageTheme.linkTextColor) {
                         underlineLinks = false
                     }
+                    // AstraGram Folio: links in an outgoing volt bubble are set in the text colour, so the underline is
+                    // what marks them. The theme already makes the two colours equal; this keeps the underline even
+                    // if a rounding difference made them compare unequal.
+                    if AstraLook.design2027 && !incoming {
+                        underlineLinks = true
+                    }
                     
                     let author = item.message.author
                     let mainColor: UIColor

@@ -21,10 +21,35 @@ final class AlertControllerNode: ASDisplayNode {
     
     private var containerLayout: ContainerViewLayout?
     
+    /// The alert radius, read once per alert so that the clip and the dim cutout always agree.
+    private let alertCornerRadius: CGFloat
+    /// Folio: the soft Z2 shadow of the alert, on a sibling below the clipped container (a clipped layer would cut
+    /// its own shadow off), masked to the outside of the slab. It exists only for alerts opened under Folio.
+    private let astraShadowView: UIView?
+    private let astraShadowMaskLayer: CAShapeLayer?
+    
     var dismiss: (() -> Void)?
     
     init(contentNode: AlertContentNode, theme: AlertControllerTheme, allowInputInset: Bool) {
         self.allowInputInset = allowInputInset
+        
+        // Folio alerts are 20pt slabs.
+        self.alertCornerRadius = AstraLook.design2027 ? AstraLook.Folio.legacyAlertRadius : 14.0
+        if AstraLook.design2027 {
+            let astraShadowView = UIView()
+            astraShadowView.isUserInteractionEnabled = false
+            astraShadowView.backgroundColor = .clear
+            let astraShadowMaskLayer = CAShapeLayer()
+            astraShadowMaskLayer.fillRule = .evenOdd
+            astraShadowMaskLayer.fillColor = UIColor.black.cgColor
+            astraShadowView.layer.mask = astraShadowMaskLayer
+            AstraLook.Folio.z2Shadow(astraShadowView.layer, dark: theme.backgroundType == .dark)
+            self.astraShadowView = astraShadowView
+            self.astraShadowMaskLayer = astraShadowMaskLayer
+        } else {
+            self.astraShadowView = nil
+            self.astraShadowMaskLayer = nil
+        }
         
         let dimColor = UIColor(white: 0.0, alpha: 0.5)
         
@@ -48,7 +73,7 @@ final class AlertControllerNode: ASDisplayNode {
         self.rightDimView.backgroundColor = dimColor
         
         self.containerNode = ASDisplayNode()
-        self.containerNode.layer.cornerRadius = 14.0
+        self.containerNode.layer.cornerRadius = self.alertCornerRadius
         self.containerNode.layer.masksToBounds = true
         
         self.backgroundNode = ASDisplayNode()
@@ -70,6 +95,9 @@ final class AlertControllerNode: ASDisplayNode {
         self.dimContainerView.addSubview(self.bottomDimView)
         self.dimContainerView.addSubview(self.leftDimView)
         self.dimContainerView.addSubview(self.rightDimView)
+        if let astraShadowView = self.astraShadowView {
+            self.view.addSubview(astraShadowView)
+        }
         
         self.containerNode.view.addSubview(self.effectView)
 //        self.containerNode.addSubnode(self.effectNode)
@@ -129,8 +157,14 @@ final class AlertControllerNode: ASDisplayNode {
             self.existingAlertControllerNode = nil
         } else {
             self.centerDimView.backgroundColor = nil
-            self.centerDimView.image = generateStretchableFilledCircleImage(radius: 16.0, color: nil, backgroundColor: UIColor(white: 0.0, alpha: 0.5))
+            // Under Folio the dim cutout matches the 20pt slab, so no dark sliver shows at the corners.
+            self.centerDimView.image = generateStretchableFilledCircleImage(radius: AstraLook.design2027 ? self.alertCornerRadius : 16.0, color: nil, backgroundColor: UIColor(white: 0.0, alpha: 0.5))
             self.centerDimView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
+            if let astraShadowView = self.astraShadowView {
+                // The shadow appears and grows with the alert itself.
+                astraShadowView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
+                astraShadowView.layer.animateSpring(from: 0.8 as NSNumber, to: 1.0 as NSNumber, keyPath: "transform.scale", duration: 0.5, initialVelocity: 0.0, removeOnCompletion: true, additive: false, completion: nil)
+            }
             
             self.topDimView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
             self.bottomDimView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
@@ -158,6 +192,10 @@ final class AlertControllerNode: ASDisplayNode {
         self.leftDimView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
         self.rightDimView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
         self.containerNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
+        if let astraShadowView = self.astraShadowView {
+            astraShadowView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
+            astraShadowView.layer.animateScale(from: 1.0, to: 0.8, duration: 0.4, removeOnCompletion: false)
+        }
         self.containerNode.layer.animateScale(from: 1.0, to: 0.8, duration: 0.4, removeOnCompletion: false, completion: { _ in
             completion()
         })
@@ -194,6 +232,17 @@ final class AlertControllerNode: ASDisplayNode {
         transition.updateFrame(view: self.rightDimView, frame: CGRect(origin: CGPoint(x: containerFrame.maxX, y: containerFrame.minY), size: CGSize(width: layout.size.width - containerFrame.maxX + outerEdge, height: containerFrame.height)))
         
         transition.updateFrame(node: self.containerNode, frame: containerFrame)
+        if let astraShadowView = self.astraShadowView, let astraShadowMaskLayer = self.astraShadowMaskLayer {
+            transition.updateFrame(view: astraShadowView, frame: containerFrame)
+            let shadowBounds = CGRect(origin: CGPoint(), size: containerFrame.size)
+            let slabPath = UIBezierPath(roundedRect: shadowBounds, cornerRadius: self.alertCornerRadius).cgPath
+            let maskPath = CGMutablePath()
+            maskPath.addRect(shadowBounds.insetBy(dx: -64.0, dy: -64.0))
+            maskPath.addPath(slabPath)
+            astraShadowMaskLayer.frame = shadowBounds
+            astraShadowMaskLayer.path = maskPath
+            astraShadowView.layer.shadowPath = slabPath
+        }
         transition.animateView {
             self.effectView.frame = CGRect(origin: CGPoint(), size: containerFrame.size)
         }

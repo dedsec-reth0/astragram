@@ -4507,7 +4507,21 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             strongSelf.backgroundNode.astraFillAlpha = astraFillAlpha
             strongSelf.backgroundWallpaperNode.alpha = astraFillAlpha
         }
-        strongSelf.backgroundNode.astraOutlineColor = astraIsDeleted ? UIColor(rgb: 0xFF3B30) : nil
+        // The anti-delete outline always wins. Under the Folio design an incoming bubble in bubble mode gets a hairline
+        // rim instead of a theme stroke (the theme's incoming stroke is clear), so it stays visible on the paper
+        // wallpaper; outgoing volt bubbles need none.
+        if astraIsDeleted {
+            strongSelf.backgroundNode.astraOutlineLineWidth = 1.5
+            strongSelf.backgroundNode.astraOutlineColor = UIColor(rgb: 0xFF3B30)
+        } else if AstraLook.design2027 && incoming && !astraIsRoundVideo && item.presentationData.chatBubbleCorners.bubbleMode {
+            // A round video is skipped for the same reason as above: the bubble behind it is not its shape.
+            let astraFolioRimColor: UIColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor(white: 1.0, alpha: 0.08) : UIColor(rgb: 0x0B0B0C, alpha: 0.08)
+            strongSelf.backgroundNode.astraOutlineLineWidth = 0.75
+            strongSelf.backgroundNode.astraOutlineColor = astraFolioRimColor
+        } else {
+            strongSelf.backgroundNode.astraOutlineLineWidth = 1.5
+            strongSelf.backgroundNode.astraOutlineColor = nil
+        }
         
         // Without bubbles a card is its bubble's outline alone, starting below its author header; the clipping node and
         // every content frame still use the full `backgroundFrame`. Two pixels further out than a bubble's, the stroke

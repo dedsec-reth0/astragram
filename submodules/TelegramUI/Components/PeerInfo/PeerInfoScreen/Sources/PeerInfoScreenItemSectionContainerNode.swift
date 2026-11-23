@@ -58,7 +58,7 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
     /// While tinted the items' corner images (painted in the theme's background) would show as dark corners: the card
     /// is clipped to its rounded shape instead.
     private func astraUpdateClipping() {
-        guard self.astraTint != nil, self.astraHasCorners, self.astraCardRect.height > 0.0 else {
+        guard self.astraUsesRoundedCard, self.astraCardRect.height > 0.0 else {
             self.itemContainerNode.layer.mask = nil
             self.backgroundNode.cornerRadius = 0.0
             return
@@ -66,12 +66,22 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
         let card = self.astraCardRect
         let path = UIBezierPath(rect: CGRect(x: 0.0, y: 0.0, width: self.astraWidth, height: card.minY))
         // A hair inside the items' own corner images, whose edge is painted in the theme's background.
-        path.append(UIBezierPath(roundedRect: card.insetBy(dx: 0.75, dy: 0.75), cornerRadius: 25.25))
+        path.append(UIBezierPath(roundedRect: card.insetBy(dx: 0.75, dy: 0.75), cornerRadius: AstraLook.design2027 ? AstraLook.Folio.cardClipRadius : 25.25))
         path.append(UIBezierPath(rect: CGRect(x: 0.0, y: card.maxY, width: self.astraWidth, height: max(0.0, self.astraContentHeight - card.maxY))))
         let mask = (self.itemContainerNode.layer.mask as? CAShapeLayer) ?? CAShapeLayer()
         mask.frame = CGRect(x: 0.0, y: 0.0, width: self.astraWidth, height: self.astraContentHeight)
         mask.path = path.cgPath
         self.itemContainerNode.layer.mask = mask
+    }
+    
+    /// Whether the card is drawn as a rounded slab of its own. Stock does so only while the card is tinted; Folio
+    /// always does, so every profile card has the same 20pt continuous corners whatever its items' corner images say.
+    private var astraUsesRoundedCard: Bool {
+        if AstraLook.design2027 {
+            return self.astraHasCorners
+        } else {
+            return self.astraTint != nil && self.astraHasCorners
+        }
     }
     
     func update(context: AccountContext, width: CGFloat, safeInsets: UIEdgeInsets, hasCorners: Bool, presentationData: PresentationData, items: [PeerInfoScreenItem], transition: ContainedViewLayoutTransition) -> CGFloat {
@@ -168,11 +178,19 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
         self.astraContentHeight = contentHeight
         self.astraWidth = width
         self.astraHasCorners = hasCorners
-        if self.astraTint != nil && hasCorners {
-            // The tinted card in its rounded shape.
+        if self.astraUsesRoundedCard {
+            // The tinted card (or, under Folio, every card) in its rounded shape.
             transition.updateFrame(node: self.backgroundNode, frame: cardRect)
-            self.backgroundNode.cornerRadius = 26.0
+            if AstraLook.design2027 {
+                self.backgroundNode.layer.cornerCurve = .continuous
+                self.backgroundNode.cornerRadius = AstraLook.Folio.cardRadius
+            } else {
+                self.backgroundNode.layer.cornerCurve = .circular
+                self.backgroundNode.cornerRadius = 26.0
+            }
         } else {
+            // The stock corner curve is restored too, so turning Folio off on a live card leaves no trace.
+            self.backgroundNode.layer.cornerCurve = .circular
             self.backgroundNode.cornerRadius = 0.0
             transition.updateFrame(node: self.backgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: contentWithBackgroundOffset), size: CGSize(width: width, height: max(0.0, contentWithBackgroundHeight - contentWithBackgroundOffset))))
         }

@@ -2,7 +2,15 @@ import UIKit
 import AsyncDisplayKit
 import SwiftSignalKit
 
-private let containerInsets = UIEdgeInsets(top: 10.0, left: 10.0, bottom: 10.0, right: 10.0)
+// Folio lifts the sheet 12pt off the bottom edge (4pt grid) and keeps the 10pt side margins. It is computed so that
+// every layout pass follows the live flag.
+private var containerInsets: UIEdgeInsets {
+    if AstraLook.design2027 {
+        return UIEdgeInsets(top: 10.0, left: 10.0, bottom: 12.0, right: 10.0)
+    } else {
+        return UIEdgeInsets(top: 10.0, left: 10.0, bottom: 10.0, right: 10.0)
+    }
+}
 
 final class ActionSheetControllerNode: ASDisplayNode, ASScrollViewDelegate {
     var theme: ActionSheetControllerTheme {

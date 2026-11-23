@@ -427,7 +427,13 @@ public final class NavigationBarNode: ASDisplayNode, NavigationBar, NavigationBa
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: -20.0), size: CGSize(width: size.width, height: 20.0 + edgeEffectHeight))
             transition.updatePosition(layer: self.edgeEffectViewImpl.layer, position: edgeEffectFrame.center)
             transition.updateBounds(layer: self.edgeEffectViewImpl.layer, bounds: CGRect(origin: CGPoint(), size: edgeEffectFrame.size))
-            self.edgeEffectViewImpl.update(content: theme.edgeEffectColor ?? .white, blur: true, rect: CGRect(origin: CGPoint(), size: edgeEffectFrame.size), edge: .top, edgeSize: min(64.0, edgeEffectHeight), transition: ComponentTransition(transition))
+            if AstraLook.design2027 {
+                // AstraGram Folio: the fade under the bar is the theme's own colour (the Folio theme supplies the page
+                // tone), laid on more densely so the bar reads as matte paper rather than a liquid wash.
+                self.edgeEffectViewImpl.update(content: theme.edgeEffectColor ?? .white, blur: true, alpha: 0.92, rect: CGRect(origin: CGPoint(), size: edgeEffectFrame.size), edge: .top, edgeSize: min(64.0, edgeEffectHeight), transition: ComponentTransition(transition))
+            } else {
+                self.edgeEffectViewImpl.update(content: theme.edgeEffectColor ?? .white, blur: true, rect: CGRect(origin: CGPoint(), size: edgeEffectFrame.size), edge: .top, edgeSize: min(64.0, edgeEffectHeight), transition: ComponentTransition(transition))
+            }
         }
 
         let apparentAdditionalHeight: CGFloat = self.secondaryContentNode != nil ? (self.secondaryContentHeight) : 0.0

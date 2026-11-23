@@ -989,7 +989,12 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
                 }
             }
 
-            self.dimView.backgroundColor = component.isEmbedded ? .clear : UIColor(white: 0.0, alpha: 0.4)
+            if AstraLook.design2027 {
+                // AstraGram Folio: warm ink dim in light mode, deeper black in dark mode. The 40pt corners stay stock.
+                self.dimView.backgroundColor = component.isEmbedded ? .clear : AstraLook.Folio.dim(dark: sheetEnvironment.theme.overallDarkAppearance)
+            } else {
+                self.dimView.backgroundColor = component.isEmbedded ? .clear : UIColor(white: 0.0, alpha: 0.4)
+            }
 
             let backgroundColor: UIColor
             switch component.backgroundColor {

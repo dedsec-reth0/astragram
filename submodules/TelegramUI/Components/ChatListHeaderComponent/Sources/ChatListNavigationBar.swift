@@ -288,7 +288,11 @@ public final class ChatListNavigationBar: Component {
 
         /// The edge effect's tint and gradient length; a navigation transition draws the same backdrop
         /// (`componentTransitionState`).
-        fileprivate static let edgeEffectTintAlpha: CGFloat = 0.85
+        /// Folio frosts the top edge a little denser (0.92), so the paper reads as matte under the header. It is
+        /// computed so it follows the live flag at every layout.
+        fileprivate static var edgeEffectTintAlpha: CGFloat {
+            return AstraLook.design2027 ? 0.92 : 0.85
+        }
         fileprivate static let edgeEffectEdgeLength: CGFloat = 54.0
 
         /// Everything the header draws; a navigation transition lifts it (`takeView()`) while the view stays in the
@@ -920,6 +924,10 @@ public final class ChatListNavigationBar: Component {
             let color: UIColor
             if let edgeEffectColor = component.edgeEffectColor {
                 color = edgeEffectColor
+            } else if AstraLook.design2027 && component.hasEdgeEffect {
+                // Folio fades the header into the page colour the chat list is set on. Pinned rows are inset plates
+                // there, not a full-width band, so the header does not take on their colour as they scroll under.
+                color = component.theme.chatList.backgroundColor
             } else {
                 var defaultColor = component.theme.list.plainBackgroundColor
                 if component.activeSearch == nil {

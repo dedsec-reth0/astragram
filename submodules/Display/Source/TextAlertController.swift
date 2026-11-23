@@ -491,7 +491,8 @@ public final class TextAlertContentNode: AlertContentNode {
         }
         let textSize = self.textNode.updateLayout(CGSize(width: size.width - insets.left - insets.right, height: CGFloat.greatestFiniteMagnitude))
         
-        let actionButtonHeight: CGFloat = 44.0
+        // Folio action rows are 48pt, on the 4pt grid.
+        let actionButtonHeight: CGFloat = AstraLook.design2027 ? 48.0 : 44.0
         
         var minActionsWidth: CGFloat = 0.0
         let maxActionWidth: CGFloat = floor(size.width / CGFloat(self.actionNodes.count))
@@ -596,9 +597,13 @@ public func textAlertController(theme: AlertControllerTheme, title: NSAttributed
 public func standardTextAlertController(theme: AlertControllerTheme, title: String?, text: String, actions: [TextAlertAction], actionLayout: TextAlertContentActionLayout = .horizontal, allowInputInset: Bool = true, parseMarkdown: Bool = false, dismissOnOutsideTap: Bool = true, linkAction: (([NSAttributedString.Key: Any], Int) -> Void)? = nil) -> AlertController {
     var dismissImpl: (() -> Void)?
     let attributedText: NSAttributedString
+    // Folio sets the alert like a page: a Bold 18 title over a 15 Regular body. An alert without a title keeps the
+    // stock Semibold text, since that text is the title.
+    let folio = AstraLook.design2027
+    let bodySize: CGFloat = folio ? floor(theme.baseFontSize * 15.0 / 17.0) : floor(theme.baseFontSize * 13.0 / 17.0)
     if parseMarkdown {
-        let font = title == nil ? Font.semibold(theme.baseFontSize) : Font.regular(floor(theme.baseFontSize * 13.0 / 17.0))
-        let boldFont = title == nil ? Font.bold(theme.baseFontSize) : Font.semibold(floor(theme.baseFontSize * 13.0 / 17.0))
+        let font = title == nil ? Font.semibold(theme.baseFontSize) : Font.regular(bodySize)
+        let boldFont = title == nil ? Font.bold(theme.baseFontSize) : Font.semibold(bodySize)
         let body = MarkdownAttributeSet(font: font, textColor: theme.primaryColor)
         let bold = MarkdownAttributeSet(font: boldFont, textColor: theme.primaryColor)
         let link = MarkdownAttributeSet(font: font, textColor: theme.accentColor)
@@ -606,9 +611,10 @@ public func standardTextAlertController(theme: AlertControllerTheme, title: Stri
             return ("URL", url)
         }), textAlignment: .center)
     } else {
-        attributedText = NSAttributedString(string: text, font: title == nil ? Font.semibold(theme.baseFontSize) : Font.regular(floor(theme.baseFontSize * 13.0 / 17.0)), textColor: theme.primaryColor, paragraphAlignment: .center)
+        attributedText = NSAttributedString(string: text, font: title == nil ? Font.semibold(theme.baseFontSize) : Font.regular(bodySize), textColor: theme.primaryColor, paragraphAlignment: .center)
     }
-    let controller = AlertController(theme: theme, contentNode: TextAlertContentNode(theme: theme, title: title != nil ? NSAttributedString(string: title!, font: Font.semibold(theme.baseFontSize), textColor: theme.primaryColor, paragraphAlignment: .center) : nil, text: attributedText, actions: actions.map { action in
+    let titleFont = folio ? Font.bold(floor(theme.baseFontSize * 18.0 / 17.0)) : Font.semibold(theme.baseFontSize)
+    let controller = AlertController(theme: theme, contentNode: TextAlertContentNode(theme: theme, title: title != nil ? NSAttributedString(string: title!, font: titleFont, textColor: theme.primaryColor, paragraphAlignment: .center) : nil, text: attributedText, actions: actions.map { action in
         return TextAlertAction(type: action.type, title: action.title, action: {
             dismissImpl?()
             action.action()

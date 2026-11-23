@@ -6,6 +6,8 @@ private struct CachedMaskParams: Equatable {
     let size: CGSize
     let relativeArrowPosition: CGFloat
     let arrowOnBottom: Bool
+    // The radius is part of the key so that toggling Folio live redraws the mask even when the size is unchanged.
+    let cornerRadius: CGFloat
 }
 
 private final class ContextMenuContainerMaskView: UIView {
@@ -62,11 +64,14 @@ public final class ContextMenuContainerNode: ASDisplayNode {
         
         self.effectView?.frame = self.bounds
         
-        let maskParams = CachedMaskParams(size: self.bounds.size, relativeArrowPosition: self.relativeArrowPosition?.0 ?? self.bounds.size.width / 2.0, arrowOnBottom: self.relativeArrowPosition?.1 ?? true)
+        let verticalInset: CGFloat = 9.0
+        // Folio menus are slabs with 16pt corners, capped at half the body height so a one-line menu stays a slab
+        // rather than producing overlapping arcs.
+        let resolvedCornerRadius: CGFloat = AstraLook.design2027 ? max(0.0, min(AstraLook.Folio.legacyMenuRadius, floor((self.bounds.height - verticalInset * 2.0) * 0.5))) : 10.0
+        let maskParams = CachedMaskParams(size: self.bounds.size, relativeArrowPosition: self.relativeArrowPosition?.0 ?? self.bounds.size.width / 2.0, arrowOnBottom: self.relativeArrowPosition?.1 ?? true, cornerRadius: resolvedCornerRadius)
         if self.cachedMaskParams != maskParams {
             let path = UIBezierPath()
-            let cornerRadius: CGFloat = 10.0
-            let verticalInset: CGFloat = 9.0
+            let cornerRadius: CGFloat = maskParams.cornerRadius
             let arrowWidth: CGFloat = 18.0
             let requestedArrowPosition = maskParams.relativeArrowPosition
             let arrowPosition = max(cornerRadius + arrowWidth / 2.0, min(maskParams.size.width - cornerRadius - arrowWidth / 2.0, requestedArrowPosition))

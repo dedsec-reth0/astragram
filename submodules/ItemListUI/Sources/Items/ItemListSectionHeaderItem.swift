@@ -177,10 +177,13 @@ public class ItemListSectionHeaderItemNode: ListViewItemNode, ItemListItemNode {
         let previousItem = self.item
         
         return { [weak self] item, params, neighbors in
-            let leftInset: CGFloat = 15.0 + params.leftInset
-            let rightInset: CGFloat = 15.0 + params.rightInset
+            // Folio headers are tracked small caps at the 20pt list inset; the flag is read on every layout so that
+            // a live toggle restyles the header on the next relayout.
+            let folio = AstraLook.design2027
+            let leftInset: CGFloat = (folio ? 20.0 : 15.0) + params.leftInset
+            let rightInset: CGFloat = (folio ? 20.0 : 15.0) + params.rightInset
             
-            let titleFont = Font.regular(item.presentationData.fontSize.itemListBaseHeaderFontSize)
+            let titleFont = folio ? Font.semibold(floor(item.presentationData.fontSize.itemListBaseFontSize * 12.0 / 17.0)) : Font.regular(item.presentationData.fontSize.itemListBaseHeaderFontSize)
             
             var badgeLayoutAndApply: (TextNodeLayout, () -> TextNode)?
             if let badge = item.badge {
@@ -206,7 +209,18 @@ public class ItemListSectionHeaderItemNode: ListViewItemNode, ItemListItemNode {
                 textRightInset += actionLayoutAndApplyValue.0.size.width + 2.0
             }
             
-            let (titleLayout, titleApply) = makeTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: item.text, font: titleFont, textColor: item.presentationData.theme.list.sectionHeaderTextColor), backgroundColor: nil, maximumNumberOfLines: item.multiline ? 0 : 1, truncationType: .end, constrainedSize: CGSize(width: params.width - params.leftInset - params.rightInset - textRightInset, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+            let titleString: NSAttributedString
+            if folio {
+                // The header is uppercased in the current locale and tracked by 0.9pt, like a magazine running head.
+                titleString = NSAttributedString(string: item.text.uppercased(with: Locale.current), attributes: [
+                    .font: titleFont,
+                    .foregroundColor: item.presentationData.theme.list.sectionHeaderTextColor,
+                    .kern: 0.9 as NSNumber
+                ])
+            } else {
+                titleString = NSAttributedString(string: item.text, font: titleFont, textColor: item.presentationData.theme.list.sectionHeaderTextColor)
+            }
+            let (titleLayout, titleApply) = makeTitleLayout(TextNodeLayoutArguments(attributedString: titleString, backgroundColor: nil, maximumNumberOfLines: item.multiline ? 0 : 1, truncationType: .end, constrainedSize: CGSize(width: params.width - params.leftInset - params.rightInset - textRightInset, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             var accessoryTextString: NSAttributedString?
             var accessoryIcon: UIImage?
             if let accessoryText = item.accessoryText {

@@ -1314,6 +1314,10 @@ private final class ItemComponent: Component {
             var size = CGSize(width: sideInset, height: availableSize.height)
             
             var titleContentSize: CGSize?
+            // The Folio selected title is Semibold, a little wider than the Medium regular one it lies over. The
+            // selected copy is placed in the regular copy's frame, so it is laid out by the regular width and
+            // centred on it by this much (negative: it overhangs both sides equally).
+            var astraSelectedTitleWidthDelta: CGFloat = 0.0
             if case let .title(title) = component.tab.content {
                 let titleContent: ComponentView<Empty>
                 if let current = self.titleContent {
@@ -1323,7 +1327,8 @@ private final class ItemComponent: Component {
                     self.titleContent = titleContent
                 }
                 
-                let font = Font.medium(15.0)
+                // Folio marks the selected folder by weight as well as by the lens.
+                let font = (AstraLook.design2027 && component.isSelected) ? Font.semibold(15.0) : Font.medium(15.0)
                 
                 let rawAttributedString = ChatTextInputStateText(text: title.text, attributes: title.entities.compactMap { entity -> ChatTextInputStateTextAttribute? in
                     if case let .CustomEmoji(_, fileId) = entity.type {
@@ -1351,6 +1356,13 @@ private final class ItemComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: 300.0, height: 100.0)
                 )
+                if AstraLook.design2027 && component.isSelected {
+                    let regularString = NSMutableAttributedString(attributedString: titleString)
+                    regularString.addAttribute(.font, value: Font.medium(15.0), range: NSRange(location: 0, length: regularString.length))
+                    let selectedWidth = titleString.boundingRect(with: CGSize(width: 300.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).width
+                    let regularWidth = regularString.boundingRect(with: CGSize(width: 300.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).width
+                    astraSelectedTitleWidthDelta = max(0.0, selectedWidth - regularWidth)
+                }
             } else if let titleContent = self.titleContent {
                 self.titleContent = nil
                 titleContent.view?.removeFromSuperview()
@@ -1378,7 +1390,7 @@ private final class ItemComponent: Component {
             }
             
             if let titleContentSize {
-                size.width += titleContentSize.width
+                size.width += titleContentSize.width - astraSelectedTitleWidthDelta
             }
             if let customContentSize {
                 size.width += customContentSize.width
@@ -1398,7 +1410,8 @@ private final class ItemComponent: Component {
                     transition: badgeTransition,
                     component: AnyComponent(TextBadgeComponent(
                         text: badgeData.title,
-                        font: Font.medium(12.0),
+                        // Folio counters are bold with tabular digits, so a changing count does not shift the tab.
+                        font: AstraLook.design2027 ? Font.with(size: 12.0, weight: .bold, traits: .monospacedNumbers) : Font.medium(12.0),
                         background: badgeData.isAccent ? component.theme.list.itemCheckColors.fillColor : component.theme.chatList.unreadBadgeInactiveBackgroundColor,
                         foreground: component.theme.list.itemCheckColors.foregroundColor,
                         insets: UIEdgeInsets(top: 1.0, left: 5.0, bottom: 2.0, right: 5.0)
@@ -1477,7 +1490,7 @@ private final class ItemComponent: Component {
             size.width += sideInset
             
             if let titleView = self.titleContent?.view, let titleContentSize {
-                let titleFrame = CGRect(origin: CGPoint(x: sideInset, y: floorToScreenPixels((size.height - titleContentSize.height) * 0.5)), size: titleContentSize)
+                let titleFrame = CGRect(origin: CGPoint(x: sideInset - astraSelectedTitleWidthDelta * 0.5, y: floorToScreenPixels((size.height - titleContentSize.height) * 0.5)), size: titleContentSize)
                 if titleView.superview == nil {
                     titleView.layer.anchorPoint = CGPoint()
                     self.extractedContainerView.contentView.addSubview(titleView)

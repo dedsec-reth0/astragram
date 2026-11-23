@@ -115,7 +115,9 @@ public final class ToastContentComponent: Component {
             self.backgroundContainerView.update(size: CGRect(origin: CGPoint(), size: size).insetBy(dx: -backgroundContainerInset, dy: -backgroundContainerInset).size, isDark: true, transition: transition)
             transition.setFrame(view: self.backgroundContainerView, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -backgroundContainerInset, dy: -backgroundContainerInset))
             
-            self.backgroundView.update(size: size, cornerRadius: min(25.0, size.height * 0.5), isDark: true, tintColor: .init(kind: .panel), transition: transition)
+            // AstraGram Folio: toasts are slabs with 16pt corners rather than near-capsules. The glass stays always dark,
+            // because this toast is shared with the media UI.
+            self.backgroundView.update(size: size, cornerRadius: AstraLook.design2027 ? min(AstraLook.Folio.toastRadius, size.height * 0.5) : min(25.0, size.height * 0.5), isDark: true, tintColor: .init(kind: .panel), transition: transition)
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: backgroundContainerInset, y: backgroundContainerInset), size: size))
             
             return size
