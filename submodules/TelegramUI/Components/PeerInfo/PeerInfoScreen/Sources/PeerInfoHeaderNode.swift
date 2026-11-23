@@ -140,6 +140,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     fileprivate var astraLevelPrevious: CGFloat = 0.0
     fileprivate var astraLastBeat: Double = 0.0
     fileprivate var astraBeatKick: CGFloat = 0.0
+    /// AstraGram: the track of this profile's music playing now (nil: none playing).
+    fileprivate var astraNowPlaying: (title: String?, performer: String?)?
+    fileprivate let astraAvatarFlash = CALayer()
     /// AstraGram: recolors the header's background (its luminance and pattern kept) with the profile's flowing color.
     private let astraFlowOverlay = UIView()
     /// AstraGram: the rest of the profile takes on the flowing color too (nil: back to the theme).
@@ -2837,6 +2840,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         break
                     }
                 }
+                // AstraGram: while this profile's music plays, the capsule names the track playing now.
+                if let playing = self.astraNowPlaying {
+                    track = playing.title ?? track
+                    artist = playing.performer ?? artist
+                }
                 if track == nil {
                     if let fileName = currentSavedMusic.fileName {
                         track = fileName
@@ -3280,7 +3288,11 @@ extension PeerInfoHeaderNode {
                 return
             }
             var playback: (fraction: Double, secondsLeft: Double, playing: Bool)?
+            var nowPlaying: (title: String?, performer: String?)?
             if let (account, stateOrLoading, _) = value, account.peerId == accountPeerId, case let .state(state) = stateOrLoading, let location = state.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = location, savedMusicContext.peerId == peerId {
+                if case let .music(title, performer, _, _, _)? = state.item.displayData {
+                    nowPlaying = (title, performer)
+                }
                 let status = state.status
                 if status.duration > 0.0 {
                     var timestamp = status.timestamp
@@ -3294,6 +3306,10 @@ extension PeerInfoHeaderNode {
                 }
             }
             self.astraMusicPlayback = playback
+            if self.astraNowPlaying?.title != nowPlaying?.title || self.astraNowPlaying?.performer != nowPlaying?.performer {
+                self.astraNowPlaying = nowPlaying
+                self.requestUpdateLayout?(false)
+            }
             self.astraUpdateMusicFill()
             (self.giftsCover.view as? PeerInfoGiftsCoverComponent.View)?.astraSetMusicPlaying(playback?.playing == true)
             self.astraSetMusicMood(playback?.playing == true)
@@ -3343,6 +3359,31 @@ extension PeerInfoHeaderNode {
             let strength = min(1.0, max(0.0, (level / average - 1.3) / 0.9))
             self.astraBeatKick = max(self.astraBeatKick, 0.6 + 0.4 * strength)
             (self.giftsCover.view as? PeerInfoGiftsCoverComponent.View)?.astraBeat(strength: strength)
+            // The avatar beats too: a quick swell and back, with a flash of light.
+            if !self.isAvatarExpanded {
+                let layer = self.avatarListNode.avatarContainerNode.layer
+                let scale = 1.0 + 0.05 + 0.05 * strength
+                let pulse = CAKeyframeAnimation(keyPath: "transform.scale")
+                pulse.values = [1.0, scale, 1.0]
+                pulse.keyTimes = [0.0, 0.25, 1.0]
+                pulse.duration = 0.32
+                pulse.timingFunctions = [CAMediaTimingFunction(name: .easeOut), CAMediaTimingFunction(name: .easeInEaseOut)]
+                pulse.isAdditive = false
+                layer.add(pulse, forKey: "astraBeat")
+                let flash = self.astraAvatarFlash
+                if flash.superlayer !== layer {
+                    flash.backgroundColor = UIColor.white.cgColor
+                    flash.opacity = 0.0
+                    layer.addSublayer(flash)
+                }
+                flash.frame = layer.bounds
+                flash.cornerRadius = layer.bounds.width / 2.0
+                let blink = CAKeyframeAnimation(keyPath: "opacity")
+                blink.values = [0.0, Float(0.18 + 0.17 * strength), 0.0]
+                blink.keyTimes = [0.0, 0.2, 1.0]
+                blink.duration = 0.32
+                flash.add(blink, forKey: "astraBeat")
+            }
         }
     }
 
