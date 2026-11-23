@@ -797,9 +797,13 @@ public final class AccountContextImpl: AccountContext {
         switch location {
         case .peer:
             let _ = self.engine.messages.applyMaxReadIndexInteractively(index: messageIndex).start()
+            // AstraGram: read here, the chat's notifications go away at once, as in Telegram. Telegram takes them down
+            // when the server reports the read, which never comes while ghost mode hides read receipts.
+            self.sharedContext.applicationBindings.clearMessageNotifications([messageIndex.id])
         case let .replyThread(data):
             let context = chatLocationContext(holder: contextHolder, account: self.account, data: data)
             context.applyMaxReadIndex(messageIndex: messageIndex)
+            self.sharedContext.applicationBindings.clearMessageNotifications([messageIndex.id])
         case .customChatContents:
             break
         }

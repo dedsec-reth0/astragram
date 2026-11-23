@@ -959,7 +959,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         // White texts read on a color; a light theme's dark ones would not. The panes' own backgrounds are
         // see-through, so they follow the surface as its color moves (with the music).
         let base = presentationData.theme.overallDarkAppearance ? presentationData.theme : defaultDarkColorPresentationTheme
-        let list = base.list.withUpdated(blocksBackgroundColor: UIColor.clear, plainBackgroundColor: UIColor.clear, itemBlocksBackgroundColor: UIColor(white: 1.0, alpha: 0.09))
+        let list = base.list.withUpdated(blocksBackgroundColor: UIColor.clear, plainBackgroundColor: UIColor.clear, itemBlocksBackgroundColor: UIColor(white: 1.0, alpha: 0.16))
         let theme = PresentationTheme(name: base.name, index: base.index, referenceTheme: base.referenceTheme, overallDarkAppearance: base.overallDarkAppearance, intro: base.intro, passcode: base.passcode, rootController: base.rootController, list: list, chatList: base.chatList, chat: base.chat, actionSheet: base.actionSheet, contextMenu: base.contextMenu, inAppNotification: base.inAppNotification, chart: base.chart, preview: base.preview)
         self.astraPaneTheme = (presentationData.theme, theme)
         return presentationData.withUpdated(theme: theme)

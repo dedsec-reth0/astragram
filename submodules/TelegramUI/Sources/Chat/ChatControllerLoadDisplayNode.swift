@@ -129,6 +129,7 @@ import ComponentFlow
 import ComponentDisplayAdapters
 import UIKitRuntimeUtils
 import ChatHistoryListViewBackend
+import AstraGramUI
 
 extension ChatControllerImpl {
     func reloadChatLocation(chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, historyNode: ChatHistoryListNodeImpl, apply: @escaping ((ContainedViewLayoutTransition?) -> Void) -> Void) {
@@ -997,6 +998,46 @@ extension ChatControllerImpl {
         
         self.chatDisplayNode.sendMessages = { [weak self] messages, silentPosting, scheduleTime, repeatPeriod, isAnyMessageTextPartitioned, postpone in
             guard let strongSelf = self else {
+                return
+            }
+            // AstraGram: "Translate my messages" in this chat: the texts go out translated (the originals are not sent).
+            if !strongSelf.astraSendingTranslated, let peerId = strongSelf.chatLocation.peerId, let toLang = AstraOutgoingTranslation.language(peerId: peerId), messages.contains(where: { message in
+                if case let .message(text, _, _, _, _, _, _, _, _, _) = message {
+                    return !text.isEmpty
+                }
+                return false
+            }) {
+                let signals: [Signal<EnqueueMessage, NoError>] = messages.map { message in
+                    guard case let .message(text, attributes, inlineStickers, mediaReference, threadId, replyToMessageId, replyToStoryId, localGroupingKey, correlationId, bubbleUpEmojiOrStickersets) = message, !text.isEmpty else {
+                        return .single(message)
+                    }
+                    let entities = attributes.compactMap({ $0 as? TextEntitiesMessageAttribute }).first?.entities ?? []
+                    return strongSelf.context.engine.messages.translate(text: text, toLang: toLang, entities: entities)
+                    |> map { result -> EnqueueMessage in
+                        guard let (translated, translatedEntities) = result, !translated.isEmpty else {
+                            return message
+                        }
+                        var attributes = attributes.filter({ !($0 is TextEntitiesMessageAttribute) })
+                        if !translatedEntities.isEmpty {
+                            attributes.append(TextEntitiesMessageAttribute(entities: translatedEntities))
+                        }
+                        return .message(text: translated, attributes: attributes, inlineStickers: inlineStickers, mediaReference: mediaReference, threadId: threadId, replyToMessageId: replyToMessageId, replyToStoryId: replyToStoryId, localGroupingKey: localGroupingKey, correlationId: correlationId, bubbleUpEmojiOrStickersets: bubbleUpEmojiOrStickersets)
+                    }
+                    // Untranslated if the translation fails: the message is not lost.
+                    |> `catch` { _ -> Signal<EnqueueMessage, NoError> in
+                        return .single(message)
+                    }
+                }
+                let _ = (combineLatest(signals)
+                |> take(1)
+                |> deliverOnMainQueue).startStandalone(next: { [weak strongSelf] translated in
+                    guard let strongSelf else {
+                        return
+                    }
+                    strongSelf.astraSendingTranslated = true
+                    strongSelf.chatDisplayNode.sendMessages(translated, silentPosting, scheduleTime, repeatPeriod, isAnyMessageTextPartitioned, postpone)
+                    strongSelf.astraSendingTranslated = false
+                })
                 return
             }
 

@@ -398,8 +398,10 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
             var force = CGPoint.zero
             if bubble === self.dragged {
                 // Follows the finger through a stiff spring, so it lags a little and wobbles.
+                // Held above the finger, so the finger never covers it (the bigger it grows, the higher).
+                let lift = self.dragMoved ? bubble.radius * AstraGiftBubblesView.eggHeight + 16.0 : 0.0
                 force.x += (self.dragPoint.x - bubble.position.x) * 260.0 - bubble.velocity.x * 22.0
-                force.y += (self.dragPoint.y - bubble.position.y) * 260.0 - bubble.velocity.y * 22.0
+                force.y += (self.dragPoint.y - lift - bubble.position.y) * 260.0 - bubble.velocity.y * 22.0
             } else {
                 // Round the tilted ring, all together (quicker with music).
                 bubble.orbitAngle = self.ringAngle + bubble.orbitSlot

@@ -7861,4 +7861,9 @@ struct ClearPeerHistory {
 }
 
 /// AstraGram: the texts of the cards on a colored profile: white, the links too (a blue link does not read on a color).
-private let astraSurfaceTheme: PresentationTheme = customizeDefaultDarkPresentationTheme(theme: defaultDarkPresentationTheme, editing: false, title: nil, accentColor: UIColor(rgb: 0xffffff), backgroundColors: [], bubbleColors: [], animateBubbleColors: false, wallpaper: nil, baseColor: nil)
+private let astraSurfaceTheme: PresentationTheme = {
+    let base = customizeDefaultDarkPresentationTheme(theme: defaultDarkPresentationTheme, editing: false, title: nil, accentColor: UIColor(rgb: 0xffffff), backgroundColors: [], bubbleColors: [], animateBubbleColors: false, wallpaper: nil, baseColor: nil)
+    // Grey secondary texts (business hours, labels) are lost on a coloured card: they are a see-through white.
+    let list = base.list.withUpdated(itemSecondaryTextColor: UIColor(white: 1.0, alpha: 0.72), itemPlaceholderTextColor: UIColor(white: 1.0, alpha: 0.5), itemBlocksSeparatorColor: UIColor(white: 1.0, alpha: 0.16))
+    return PresentationTheme(name: base.name, index: base.index, referenceTheme: base.referenceTheme, overallDarkAppearance: base.overallDarkAppearance, intro: base.intro, passcode: base.passcode, rootController: base.rootController, list: list, chatList: base.chatList, chat: base.chat, actionSheet: base.actionSheet, contextMenu: base.contextMenu, inAppNotification: base.inAppNotification, chart: base.chart, preview: base.preview)
+}()

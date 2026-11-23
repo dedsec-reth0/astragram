@@ -304,7 +304,10 @@ struct ScrolledToMessageId: Equatable {
     var allowedReplacementDirection: AllowedReplacementDirections
 }
 
-public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate {    
+public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate {
+    /// AstraGram: set while the translated messages are being sent (so they are not translated again).
+    var astraSendingTranslated = false
+    
     var validLayout: ContainerViewLayout?
     /// AstraGram: the streak buddy (серийчик) floating over a chat that has a streak.
     var astraStreakPet: AstraStreakPetAttachment?
