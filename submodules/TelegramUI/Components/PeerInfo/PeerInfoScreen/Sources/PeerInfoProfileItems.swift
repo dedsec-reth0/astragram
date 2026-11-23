@@ -983,7 +983,9 @@ func infoItems(
         let current = AstraOutgoingTranslation.language(peerId: peerId)
         let text = current.flatMap { AstraOutgoingTranslation.languageName($0, russian: isRussian) } ?? (isRussian ? "Выключен" : "Off")
         items[.astraInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.translateOutgoing", label: isRussian ? "Перевод моих сообщений" : "Translate My Messages", text: text, textColor: .accent, action: { _, _ in
-            AstraOutgoingTranslation.presentPicker(peerId: peerId, russian: isRussian, completion: {
+            AstraOutgoingTranslation.presentPicker(context: context, peerId: peerId, present: { controller in
+                interaction.getController()?.present(controller, in: .window(.root))
+            }, completion: {
                 interaction.requestLayout(true)
             })
         }, requestLayout: { animated in

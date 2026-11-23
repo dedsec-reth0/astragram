@@ -1,6 +1,8 @@
 import Foundation
 import UIKit
+import Display
 import TelegramCore
+import AccountContext
 
 /// AstraGram: "Translate my messages" in chosen chats. What the user sends there is translated (by Telegram's
 /// translation) into the language picked for that chat, and the translation is sent in its place.
@@ -50,32 +52,38 @@ public enum AstraOutgoingTranslation {
         return russian ? language.ru : language.en
     }
 
-    /// Picks the language for a chat (or turns translation off), from the top screen.
-    public static func presentPicker(peerId: EnginePeer.Id, russian: Bool, completion: @escaping () -> Void) {
-        guard let top = astraTopViewController() else {
-            return
-        }
-        let sheet = UIAlertController(title: russian ? "Переводить мои сообщения" : "Translate My Messages", message: russian ? "Перед отправкой ваше сообщение переводится на выбранный язык, и в чат уходит перевод." : "Before sending, your message is translated into the chosen language, and the translation is sent.", preferredStyle: .actionSheet)
+    /// Picks the language for a chat (or turns translation off), in Telegram's own action sheet.
+    public static func presentPicker(context: AccountContext, peerId: EnginePeer.Id, present: @escaping (ViewController) -> Void, completion: @escaping () -> Void) {
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let russian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
+        let actionSheet = ActionSheetController(presentationData: presentationData)
         let current = AstraOutgoingTranslation.language(peerId: peerId)
+        var items: [ActionSheetItem] = [
+            ActionSheetTextItem(title: russian ? "Перед отправкой ваше сообщение переводится на выбранный язык, и в чат уходит перевод." : "Before sending, your message is translated into the chosen language, and the translation is sent.")
+        ]
         for language in AstraOutgoingTranslation.languages {
-            let title = (russian ? language.ru : language.en) + (language.code == current ? " ✓" : "")
-            sheet.addAction(UIAlertAction(title: title, style: .default, handler: { _ in
+            items.append(ActionSheetCheckboxItem(title: russian ? language.ru : language.en, label: "", value: language.code == current, action: { [weak actionSheet] _ in
+                actionSheet?.dismissAnimated()
                 AstraOutgoingTranslation.setLanguage(language.code, peerId: peerId)
                 completion()
             }))
         }
+        var groups = [ActionSheetItemGroup(items: items)]
         if current != nil {
-            sheet.addAction(UIAlertAction(title: russian ? "Не переводить" : "Don't Translate", style: .destructive, handler: { _ in
-                AstraOutgoingTranslation.setLanguage(nil, peerId: peerId)
-                completion()
-            }))
+            groups.append(ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: russian ? "Не переводить" : "Don't Translate", color: .destructive, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                    AstraOutgoingTranslation.setLanguage(nil, peerId: peerId)
+                    completion()
+                })
+            ]))
         }
-        sheet.addAction(UIAlertAction(title: russian ? "Отмена" : "Cancel", style: .cancel))
-        if let popover = sheet.popoverPresentationController {
-            popover.sourceView = top.view
-            popover.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 1.0, height: 1.0)
-            popover.permittedArrowDirections = []
-        }
-        top.present(sheet, animated: true)
+        groups.append(ActionSheetItemGroup(items: [
+            ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+            })
+        ]))
+        actionSheet.setItemGroups(groups)
+        present(actionSheet)
     }
 }
