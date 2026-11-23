@@ -11,7 +11,7 @@ import TextFormat
 /// Touching one tells the header (`touched`), which takes on the gift's colors; holding one opens it. While the
 /// profile's music plays the bubbles pulse and glow on the beat, and every few bars the header moves on to the next
 /// gift's colors, as a light flickering behind the avatar. A ring around the avatar glows in the bubbles' colors.
-final class AstraGiftBubblesView: UIView {
+final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
     struct Item {
         let id: AnyHashable
         let gift: ProfileGiftsContext.State.StarGift
@@ -22,7 +22,11 @@ final class AstraGiftBubblesView: UIView {
         var gift: ProfileGiftsContext.State.StarGift
         let view: AstraGiftBubbleView
         /// The bubble's own resting size (they differ, as in the concept).
-        let baseRadius: CGFloat
+        /// A share of the middle size (`AstraGiftBubblesView.radius`).
+        let sizeFactor: CGFloat
+        var baseRadius: CGFloat {
+            return AstraGiftBubblesView.radius * self.sizeFactor
+        }
         var home: CGPoint = .zero
         /// The resting place as distance and angle from the avatar: it turns slowly, so the bubbles swirl.
         var homeDistance: CGFloat = 0.0
@@ -51,15 +55,15 @@ final class AstraGiftBubblesView: UIView {
             self.id = id
             self.gift = gift
             self.view = view
-            self.baseRadius = baseRadius
+            self.sizeFactor = baseRadius
             self.radius = 2.0
-            self.targetRadius = baseRadius
+            self.targetRadius = AstraGiftBubblesView.radius * baseRadius
         }
     }
 
     /// The middle resting size: in the concept a bubble is about 0.4 of the avatar wide, an egg a bit taller than wide.
-    static let radius: CGFloat = 19.0
-    static let eggHeight: CGFloat = 1.2
+    static var radius: CGFloat { return AstraBubbleTuning.current.radius }
+    static var eggHeight: CGFloat { return AstraBubbleTuning.current.eggHeight }
     static let pulledRadius: CGFloat = 86.0
     private static let sizeFactors: [CGFloat] = [1.25, 0.8, 1.05, 0.7, 1.15, 0.9, 0.78, 1.1, 0.85, 1.0]
     /// Beats a minute of the pulse while music plays.
@@ -93,7 +97,7 @@ final class AstraGiftBubblesView: UIView {
     private static let flowPeriod: CGFloat = 3.2
     /// A snapshot of what is under the bubbles, for the lens of a pulled one.
     private var lensImage: CGImage?
-    private var lensImageScale: CGFloat = 1.0
+    private var lensTime: CGFloat = -1.0
     private let ringContainer = CALayer()
     private let ringGlow = CAShapeLayer()
     private let ringGradient = CAGradientLayer()
@@ -102,8 +106,12 @@ final class AstraGiftBubblesView: UIView {
     /// On a light profile the bubbles are clear soap bubbles; on a dark one, glowing neon jelly (as in the concept).
     private var soap = true
     private var dragged: Bubble?
-    /// Where the bubbles' layer sits among the header's views when none is held.
-    private var restingIndex: Int?
+    private let avatarMask = CAShapeLayer()
+    private weak var rotationHost: UIView?
+    private var rotationRecognizer: UIPanGestureRecognizer?
+    private var rotationLastAngle: CGFloat = 0.0
+    /// Radians a second the bubbles keep turning after a swipe (it dies away).
+    private var spin: CGFloat = 0.0
     private var dragPoint: CGPoint = .zero
     private var dragStart: CGPoint = .zero
     private var dragMoved = false
@@ -211,15 +219,15 @@ final class AstraGiftBubblesView: UIView {
                     bubble.view.update(context: context, gift: item.gift)
                 }
             } else {
-                let baseRadius = AstraGiftBubblesView.radius * AstraGiftBubblesView.sizeFactors[index % AstraGiftBubblesView.sizeFactors.count]
-                let view = AstraGiftBubbleView(frame: CGRect(origin: .zero, size: CGSize(width: baseRadius * 2.0, height: baseRadius * 2.0 * AstraGiftBubblesView.eggHeight)))
+                let baseRadius = AstraGiftBubblesView.sizeFactors[index % AstraGiftBubblesView.sizeFactors.count]
+                let view = AstraGiftBubbleView(frame: CGRect(origin: .zero, size: CGSize(width: AstraGiftBubblesView.radius * baseRadius * 2.0, height: AstraGiftBubblesView.radius * baseRadius * 2.0 * AstraGiftBubblesView.eggHeight)))
                 view.soap = soap
                 view.update(context: context, gift: item.gift)
                 bubble = Bubble(id: item.id, gift: item.gift, view: view, baseRadius: baseRadius)
                 self.addSubview(view)
             }
             bubble.home = homes[index]
-            bubble.homeDistance = sqrt(pow(homes[index].x - avatarCenter.x, 2.0) + pow(homes[index].y - avatarCenter.y, 2.0))
+            bubble.homeDistance = max(sqrt(pow(homes[index].x - avatarCenter.x, 2.0) + pow(homes[index].y - avatarCenter.y, 2.0)), avatarRadius + bubble.baseRadius * AstraBubbleTuning.current.restMin)
             bubble.homeAngle = atan2(homes[index].y - avatarCenter.y, homes[index].x - avatarCenter.x)
             if !bubble.placed {
                 bubble.placed = true
@@ -240,6 +248,7 @@ final class AstraGiftBubblesView: UIView {
             })
         }
         self.bubbles = next
+        self.updateAvatarMask()
         self.updateRing()
         self.updateDisplayLink()
         self.layoutBubbles()
@@ -285,6 +294,23 @@ final class AstraGiftBubblesView: UIView {
     fileprivate func tick(_ link: CADisplayLink) {
         let dt = CGFloat(min(1.0 / 30.0, max(1.0 / 120.0, link.targetTimestamp - link.timestamp)))
         self.time += dt
+        // shortcut: the picture under the bubbles is retaken 5 times a second, not every frame (cost); a faster
+        // moving header (a video avatar) shows through a little behind.
+        if self.time - self.lensTime > 0.2 || self.lensImage == nil {
+            self.lensTime = self.time
+            self.captureLens()
+            if AstraBubbleTuning.reload() {
+                for bubble in self.bubbles {
+                    if bubble !== self.dragged {
+                        bubble.targetRadius = bubble.baseRadius
+                    }
+                    if let context = self.context {
+                        bubble.view.update(context: context, gift: bubble.gift)
+                    }
+                    bubble.view.setNeedsLayout()
+                }
+            }
+        }
         self.updateBeat(dt: dt)
         self.step(dt: dt)
         self.layoutBubbles()
@@ -315,7 +341,7 @@ final class AstraGiftBubblesView: UIView {
                             bubble.restAngle = bubble.homeAngle
                         }
                         bubble.restAngle += turn + CGFloat.random(in: -0.25 ..< 0.25)
-                        bubble.restDistance = self.avatarRadius * CGFloat.random(in: 1.05 ..< 1.8)
+                        bubble.restDistance = self.restDistance(bubble)
                         bubble.whirlUntil = self.time + 0.75
                         bubble.nextMoveTime = self.time + 30.0
                     }
@@ -363,6 +389,12 @@ final class AstraGiftBubblesView: UIView {
     }
 
     private func step(dt: CGFloat) {
+        if abs(self.spin) > 0.02 {
+            self.turn(by: self.spin * dt)
+            self.spin *= exp(-dt * 2.6)
+        } else {
+            self.spin = 0.0
+        }
         for bubble in self.bubbles {
             var force = CGPoint.zero
             if bubble === self.dragged {
@@ -379,13 +411,13 @@ final class AstraGiftBubblesView: UIView {
                     bubble.nextMoveTime = self.time + CGFloat.random(in: 5.0 ..< 11.0)
                     if bubble.restDistance > 0.0 {
                         bubble.restAngle += CGFloat.random(in: -1.1 ..< 1.1)
-                        bubble.restDistance = self.avatarRadius * CGFloat.random(in: 0.95 ..< 1.75)
+                        bubble.restDistance = self.restDistance(bubble)
                     } else {
                         bubble.restAngle = bubble.homeAngle
                         bubble.restDistance = bubble.homeDistance
                     }
                 }
-                let rest = CGPoint(x: self.avatarCenter.x + cos(bubble.restAngle) * bubble.restDistance * 1.15, y: self.avatarCenter.y + sin(bubble.restAngle) * bubble.restDistance * 0.9)
+                let rest = CGPoint(x: self.avatarCenter.x + cos(bubble.restAngle) * bubble.restDistance * 1.1, y: self.avatarCenter.y + sin(bubble.restAngle) * bubble.restDistance)
                 let wander = CGPoint(x: sin(t * 0.55 + 1.3) * 5.0 + sin(t * 0.23) * 4.0, y: sin(t * 0.47) * 4.0 + sin(t * 0.19 + 2.0) * 3.0)
                 // A soft, slow pull: it glides there rather than jumps.
                 // (Let go, or just out of the avatar, it snaps back with a bounce first.)
@@ -484,16 +516,129 @@ final class AstraGiftBubblesView: UIView {
             view.transform = transform
             let pulled: CGFloat = bubble === self.dragged ? min(1.0, max(0.0, (bubble.radius - bubble.baseRadius) / (AstraGiftBubblesView.pulledRadius - bubble.baseRadius))) : 0.0
             view.updateShape(time: self.time + bubble.phase, pulled: pulled, glow: 0.3 * self.beatEnergy + 0.7 * kick)
-            if pulled > 0.01, let image = self.lensImage {
-                // What is under the bubble, magnified, in the bubble's own (untransformed) coordinates.
-                let shown = CGSize(width: view.bounds.width * scale / 1.35, height: view.bounds.height * scale / 1.35)
-                let center = self.convert(bubble.position, to: nil)
-                let imageSize = CGSize(width: CGFloat(image.width) / self.lensImageScale, height: CGFloat(image.height) / self.lensImageScale)
-                let rect = CGRect(x: (center.x - shown.width / 2.0) / imageSize.width, y: (center.y - shown.height / 2.0) / imageSize.height, width: shown.width / imageSize.width, height: shown.height / imageSize.height)
-                view.setLens(image: image, contentsRect: rect, amount: pulled)
+            if let image = self.lensImage, self.bounds.width > 0.0, self.bounds.height > 0.0 {
+                // What is under the bubble, magnified as through a drop of water (more when pulled big).
+                let magnification = AstraBubbleTuning.current.magnification + 0.15 * pulled
+                let shown = CGSize(width: view.bounds.width * scale / magnification, height: view.bounds.height * scale / magnification)
+                let size = self.bounds.size
+                let rect = CGRect(x: (bubble.position.x - shown.width / 2.0) / size.width, y: (bubble.position.y - shown.height / 2.0) / size.height, width: shown.width / size.width, height: shown.height / size.height)
+                view.setLens(image: image, contentsRect: rect, amount: 1.0)
             } else {
                 view.setLens(image: nil, contentsRect: .zero, amount: 0.0)
             }
+        }
+    }
+
+    /// The bubbles are over everything in the header but the avatar: its circle is cut out of them, so they pass
+    /// behind it. A held bubble is over the avatar too.
+    private func updateAvatarMask() {
+        guard self.dragged == nil, self.avatarRadius > 10.0, self.avatarRadius < 80.0 else {
+            self.layer.mask = nil
+            return
+        }
+        let path = UIBezierPath(rect: self.bounds.insetBy(dx: -400.0, dy: -400.0))
+        path.append(UIBezierPath(ovalIn: CGRect(x: self.avatarCenter.x - self.avatarRadius, y: self.avatarCenter.y - self.avatarRadius, width: self.avatarRadius * 2.0, height: self.avatarRadius * 2.0)))
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        self.avatarMask.frame = self.bounds
+        self.avatarMask.fillRule = .evenOdd
+        self.avatarMask.path = path.cgPath
+        if self.layer.mask !== self.avatarMask {
+            self.layer.mask = self.avatarMask
+        }
+        CATransaction.commit()
+    }
+
+    /// A distance from the avatar's center where the bubble mostly shows beside it (a little behind its edge at most).
+    private func restDistance(_ bubble: Bubble) -> CGFloat {
+        let t = AstraBubbleTuning.current
+        return self.avatarRadius + bubble.baseRadius * CGFloat.random(in: t.restMin ..< max(t.restMin + 0.01, t.restMax))
+    }
+
+    /// Turns all the bubbles around the avatar by `angle`.
+    private func turn(by angle: CGFloat) {
+        for bubble in self.bubbles where bubble !== self.dragged {
+            if bubble.restDistance <= 0.0 {
+                bubble.restAngle = bubble.homeAngle
+                bubble.restDistance = bubble.homeDistance
+            }
+            bubble.restAngle += angle
+            bubble.whirlUntil = self.time + 0.35
+            bubble.nextMoveTime = max(bubble.nextMoveTime, self.time + 6.0)
+        }
+    }
+
+    /// A sideways swipe around the avatar turns the bubbles (`host`: the header's view, which gets the gesture).
+    func attachRotation(to host: UIView) {
+        guard self.rotationHost !== host else {
+            return
+        }
+        if let recognizer = self.rotationRecognizer {
+            self.rotationHost?.removeGestureRecognizer(recognizer)
+        }
+        let recognizer = UIPanGestureRecognizer(target: self, action: #selector(self.rotationPan(_:)))
+        recognizer.delegate = self
+        host.addGestureRecognizer(recognizer)
+        self.rotationHost = host
+        self.rotationRecognizer = recognizer
+        // No swipe back from inside the bubbles' ring: it turns them.
+        host.interactiveTransitionGestureRecognizerTest = { [weak self, weak host] point in
+            guard let self, let host else {
+                return false
+            }
+            return self.isInRotationZone(host.convert(point, to: self))
+        }
+    }
+
+    private func isInRotationZone(_ point: CGPoint) -> Bool {
+        guard !self.bubbles.isEmpty, self.window != nil, !self.isHidden, self.alpha > 0.5, self.layer.opacity > 0.5, self.avatarRadius > 10.0, self.avatarRadius < 80.0 else {
+            return false
+        }
+        let dx = point.x - self.avatarCenter.x, dy = point.y - self.avatarCenter.y
+        let distance = sqrt(dx * dx + dy * dy)
+        return distance < self.avatarRadius * 2.5
+    }
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === self.rotationRecognizer, let recognizer = self.rotationRecognizer else {
+            return super.gestureRecognizerShouldBegin(gestureRecognizer)
+        }
+        guard self.dragged == nil, self.isInRotationZone(recognizer.location(in: self)) else {
+            return false
+        }
+        let velocity = recognizer.velocity(in: self)
+        return abs(velocity.x) > abs(velocity.y) * 1.2
+    }
+
+    @objc private func rotationPan(_ recognizer: UIPanGestureRecognizer) {
+        let point = recognizer.location(in: self)
+        let angle = atan2(point.y - self.avatarCenter.y, point.x - self.avatarCenter.x)
+        switch recognizer.state {
+        case .began:
+            self.rotationLastAngle = angle
+            self.spin = 0.0
+        case .changed:
+            var delta = angle - self.rotationLastAngle
+            if delta > .pi {
+                delta -= 2.0 * .pi
+            } else if delta < -.pi {
+                delta += 2.0 * .pi
+            }
+            // Near the avatar's middle the angle jumps: the finger's sideways travel turns them instead.
+            let dx = point.x - self.avatarCenter.x, dy = point.y - self.avatarCenter.y
+            if sqrt(dx * dx + dy * dy) < self.avatarRadius * 0.6 {
+                delta = 0.0
+            }
+            self.rotationLastAngle = angle
+            self.turn(by: delta)
+        case .ended, .cancelled:
+            let velocity = recognizer.velocity(in: self)
+            let dx = point.x - self.avatarCenter.x, dy = point.y - self.avatarCenter.y
+            let distanceSquared = max(900.0, dx * dx + dy * dy)
+            // The angular speed of the finger around the avatar.
+            self.spin = max(-9.0, min(9.0, (dx * velocity.y - dy * velocity.x) / distanceSquared))
+        default:
+            break
         }
     }
 
@@ -549,12 +694,7 @@ final class AstraGiftBubblesView: UIView {
         self.dragMoved = false
         self.bringSubviewToFront(bubble.view)
         // The bubbles live behind the avatar and the name; a held one comes over everything.
-        if let cover = self.superview, let header = cover.superview {
-            if self.restingIndex == nil {
-                self.restingIndex = header.subviews.firstIndex(of: cover)
-            }
-            header.bringSubviewToFront(cover)
-        }
+        self.updateAvatarMask()
         self.setScrollingEnabled(false)
         bubble.targetRadius = bubble.baseRadius * 1.25
         self.haptic.impact(.light)
@@ -583,7 +723,6 @@ final class AstraGiftBubblesView: UIView {
             self.holdTimer?.invalidate()
             bubble.targetRadius = AstraGiftBubblesView.pulledRadius
             self.haptic.impact(.soft)
-            self.captureLens()
         }
     }
 
@@ -616,31 +755,28 @@ final class AstraGiftBubblesView: UIView {
         }
         self.dragged = nil
         self.setScrollingEnabled(true)
-        self.lensImage = nil
         // Back behind the avatar once it has shrunk and flown back.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: { [weak self] in
-            guard let self, self.dragged == nil, let index = self.restingIndex, let cover = self.superview, let header = cover.superview else {
-                return
-            }
-            self.restingIndex = nil
-            header.insertSubview(cover, at: min(index, header.subviews.count - 1))
+            self?.updateAvatarMask()
         })
     }
 
-    /// The screen under the bubbles, once, when a bubble starts to be pulled: the lens magnifies it.
+    /// The header under the bubbles (without them), which each bubble shows through itself, refracted.
     private func captureLens() {
-        guard let window = self.window else {
+        guard let cover = self.superview, let host = cover.superview, self.window != nil, self.bounds.width > 0.0, self.bounds.height > 0.0 else {
             return
         }
-        self.isHidden = true
+        let rect = self.convert(self.bounds, to: host)
         let format = UIGraphicsImageRendererFormat()
-        format.scale = 2.0
-        let image = UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
-            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        format.scale = 1.5
+        format.opaque = false
+        // Hidden and shown again within this frame: nothing flickers, the picture just leaves the bubbles out.
+        cover.isHidden = true
+        let image = UIGraphicsImageRenderer(bounds: rect, format: format).image { context in
+            host.layer.render(in: context.cgContext)
         }
-        self.isHidden = false
+        cover.isHidden = false
         self.lensImage = image.cgImage
-        self.lensImageScale = 2.0
     }
 }
 
@@ -671,7 +807,13 @@ final class AstraGiftBubbleView: UIView {
     private let bodyLayer = CAGradientLayer()
     private let bodyMask = CAShapeLayer()
     private let rimLayer = CAShapeLayer()
+    /// The light inside the edge (as in glass or water held to the light): a wide soft band and a thin bright one.
+    private let innerGlowLayer = CAShapeLayer()
+    private let innerEdgeLayer = CAShapeLayer()
+    private let innerMask = CAShapeLayer()
+    private let innerContainer = CALayer()
     private let shineLayer = CAGradientLayer()
+    private let specularLayer = CAGradientLayer()
     private var sparkleLayers: [CALayer] = []
     private var stickerLayer: InlineStickerItemLayer?
     private var fileId: Int64?
@@ -697,22 +839,37 @@ final class AstraGiftBubbleView: UIView {
         self.lensLayer.isHidden = true
         self.layer.addSublayer(self.lensLayer)
 
-        self.bodyLayer.type = .radial
-        self.bodyLayer.startPoint = CGPoint(x: 0.42, y: 0.36)
-        self.bodyLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
+        // Lit from above: light at the top, deep and saturated at the bottom.
+        self.bodyLayer.type = .axial
+        self.bodyLayer.startPoint = CGPoint(x: 0.35, y: 0.0)
+        self.bodyLayer.endPoint = CGPoint(x: 0.65, y: 1.0)
         self.bodyLayer.mask = self.bodyMask
         self.layer.addSublayer(self.bodyLayer)
+
+        self.innerGlowLayer.fillColor = UIColor.clear.cgColor
+        self.innerEdgeLayer.fillColor = UIColor.clear.cgColor
+        self.innerContainer.addSublayer(self.innerGlowLayer)
+        self.innerContainer.addSublayer(self.innerEdgeLayer)
+        self.innerContainer.mask = self.innerMask
+        self.layer.addSublayer(self.innerContainer)
 
         self.rimLayer.fillColor = UIColor.clear.cgColor
         self.rimLayer.strokeColor = UIColor(white: 1.0, alpha: 0.38).cgColor
         self.rimLayer.lineWidth = 1.6
         self.layer.addSublayer(self.rimLayer)
 
+        // A broad soft highlight over the upper part, and a small sharp one in it.
         self.shineLayer.type = .radial
-        self.shineLayer.colors = [UIColor(white: 1.0, alpha: 0.7).cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor]
+        self.shineLayer.colors = [UIColor(white: 1.0, alpha: 0.42).cgColor, UIColor(white: 1.0, alpha: 0.16).cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor]
+        self.shineLayer.locations = [0.0, 0.5, 1.0]
         self.shineLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
         self.shineLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
         self.layer.addSublayer(self.shineLayer)
+        self.specularLayer.type = .radial
+        self.specularLayer.colors = [UIColor(white: 1.0, alpha: 0.9).cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor]
+        self.specularLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
+        self.specularLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
+        self.layer.addSublayer(self.specularLayer)
 
         for i in 0 ..< 6 {
             let sparkle = CALayer()
@@ -767,26 +924,32 @@ final class AstraGiftBubbleView: UIView {
     func update(context: AccountContext, gift: ProfileGiftsContext.State.StarGift) {
         var (inner, outer) = AstraGiftBubbleView.colors(gift: gift)
         // The concept's jelly is vivid even for a muted backdrop.
-        inner = inner.withMultiplied(hue: 1.0, saturation: 1.35, brightness: 1.25)
-        outer = outer.withMultiplied(hue: 1.0, saturation: 1.3, brightness: 1.3)
+        let t = AstraBubbleTuning.current
+        inner = inner.withMultiplied(hue: 1.0, saturation: t.saturation, brightness: t.brightness)
+        outer = outer.withMultiplied(hue: 1.0, saturation: t.saturation * 0.96, brightness: t.brightness * 1.04)
         if self.soap {
-            // A clear soap bubble: the profile shows through, the color gathers at the edge.
+            // Clear jelly: what is behind shows through, refracted; the color thickens toward the bottom.
             self.bodyLayer.colors = [
-                inner.withAlphaComponent(0.1).cgColor,
-                inner.withAlphaComponent(0.22).cgColor,
-                inner.mixedWith(.white, alpha: 0.25).withAlphaComponent(0.62).cgColor
+                inner.mixedWith(.white, alpha: t.topWhite).withAlphaComponent(t.soapTop).cgColor,
+                inner.withAlphaComponent(t.soapMiddle).cgColor,
+                outer.withAlphaComponent(t.soapBottom).cgColor
             ]
-            self.bodyLayer.locations = [0.0, 0.6, 1.0]
-            self.rimLayer.strokeColor = inner.mixedWith(.white, alpha: 0.7).withAlphaComponent(0.95).cgColor
+            self.rimLayer.strokeColor = inner.mixedWith(.white, alpha: 0.7).withAlphaComponent(t.rimAlpha).cgColor
         } else {
+            // Glowing jelly, nearly solid.
             self.bodyLayer.colors = [
-                inner.withMultipliedBrightnessBy(1.2).withAlphaComponent(0.62).cgColor,
-                inner.withAlphaComponent(0.74).cgColor,
-                outer.withAlphaComponent(0.9).cgColor
+                inner.mixedWith(.white, alpha: t.topWhite).withAlphaComponent(t.jellyTop).cgColor,
+                inner.withAlphaComponent(t.jellyMiddle).cgColor,
+                outer.withAlphaComponent(t.jellyBottom).cgColor
             ]
-            self.bodyLayer.locations = [0.0, 0.55, 1.0]
-            self.rimLayer.strokeColor = inner.mixedWith(.white, alpha: 0.55).withAlphaComponent(0.95).cgColor
+            self.rimLayer.strokeColor = inner.mixedWith(.white, alpha: 0.55).withAlphaComponent(t.rimAlpha).cgColor
         }
+        self.bodyLayer.locations = [0.0, 0.5, 1.0]
+        self.innerGlowLayer.strokeColor = inner.mixedWith(.white, alpha: 0.75).withAlphaComponent(t.innerGlowAlpha).cgColor
+        self.innerEdgeLayer.strokeColor = UIColor(white: 1.0, alpha: t.innerEdgeAlpha).cgColor
+        self.rimLayer.lineWidth = t.rimWidth
+        self.shineLayer.colors = [UIColor(white: 1.0, alpha: t.shineAlpha).cgColor, UIColor(white: 1.0, alpha: t.shineAlpha * 0.38).cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor]
+        self.specularLayer.colors = [UIColor(white: 1.0, alpha: t.specularAlpha).cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor]
         self.spillLayer.isHidden = self.soap
         self.glowColor = inner
         self.glowLayer.shadowColor = inner.cgColor
@@ -829,7 +992,7 @@ final class AstraGiftBubbleView: UIView {
         layer.shadowOffset = .zero
         layer.shadowRadius = 1.6
         layer.shadowOpacity = 0.75
-        self.layer.insertSublayer(layer, below: self.rimLayer)
+        self.layer.insertSublayer(layer, above: self.innerContainer)
         self.stickerLayer = layer
         self.setNeedsLayout()
     }
@@ -866,18 +1029,25 @@ final class AstraGiftBubbleView: UIView {
     /// Redraws the outline (it ripples), the lens look when pulled and the glow on the beat.
     func updateShape(time: CGFloat, pulled: CGFloat, glow: CGFloat) {
         let bounds = self.bounds
+        let t = AstraBubbleTuning.current
         let path = self.blobPath(in: bounds, time: time, wobble: 1.0 + pulled * 1.5)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         self.glowLayer.shadowPath = path
-        self.glowLayer.shadowRadius = bounds.width * 0.28 + glow * bounds.width * 0.25
-        self.glowLayer.shadowOpacity = self.soap ? Float(0.25 + 0.3 * glow) : Float(0.75 + 0.25 * glow)
+        self.glowLayer.shadowRadius = bounds.width * t.glowRadius + glow * bounds.width * 0.25
+        self.glowLayer.shadowOpacity = self.soap ? Float(0.25 + 0.3 * glow) : Float(t.glowOpacity + (1.0 - t.glowOpacity) * glow)
         self.bodyMask.path = path
         self.lensMask.path = path
         self.rimLayer.path = path
-        self.spillLayer.opacity = Float(0.45 + 0.55 * glow)
+        self.innerMask.path = path
+        self.innerGlowLayer.path = path
+        self.innerEdgeLayer.path = path
+        // Stroked on the outline and clipped to it, so only the inner half shows: a band inside the edge.
+        self.innerGlowLayer.lineWidth = bounds.width * t.innerGlowWidth
+        self.innerEdgeLayer.lineWidth = max(1.0, bounds.width * t.innerEdgeWidth)
+        self.spillLayer.opacity = Float(t.spillOpacity + (1.0 - t.spillOpacity) * glow)
         // Pulled big, the jelly thins out: the profile shows through it, as through a lens.
-        self.bodyLayer.opacity = Float(1.0 - 0.55 * pulled)
+        self.bodyLayer.opacity = Float(1.0 - 0.5 * pulled)
         CATransaction.commit()
     }
 
@@ -918,14 +1088,19 @@ final class AstraGiftBubbleView: UIView {
         self.bodyLayer.frame = bounds
         self.bodyMask.frame = bounds
         self.rimLayer.frame = bounds
-        self.shineLayer.frame = CGRect(x: bounds.width * 0.18, y: bounds.height * 0.1, width: bounds.width * 0.36, height: bounds.height * 0.22)
+        self.innerContainer.frame = bounds
+        self.innerMask.frame = bounds
+        self.innerGlowLayer.frame = bounds
+        self.innerEdgeLayer.frame = bounds
+        self.shineLayer.frame = CGRect(x: bounds.width * 0.08, y: bounds.height * 0.03, width: bounds.width * 0.7, height: bounds.height * 0.46)
+        self.specularLayer.frame = CGRect(x: bounds.width * 0.2, y: bounds.height * 0.12, width: bounds.width * 0.2, height: bounds.height * 0.12)
         let positions: [CGPoint] = [CGPoint(x: 0.28, y: 0.62), CGPoint(x: 0.72, y: 0.7), CGPoint(x: 0.4, y: 0.8), CGPoint(x: 0.66, y: 0.3), CGPoint(x: 0.24, y: 0.4), CGPoint(x: 0.56, y: 0.86)]
         for (i, sparkle) in self.sparkleLayers.enumerated() {
             sparkle.position = CGPoint(x: bounds.width * positions[i].x, y: bounds.height * positions[i].y)
         }
-        // The gift is small in its bubble, a little above the middle.
-        let side = bounds.width * 0.46
-        self.stickerLayer?.frame = CGRect(x: (bounds.width - side) / 2.0, y: bounds.height * 0.44 - side / 2.0, width: side, height: side)
+        // The gift in the middle of its bubble, about half as wide.
+        let side = bounds.width * AstraBubbleTuning.current.stickerSize
+        self.stickerLayer?.frame = CGRect(x: (bounds.width - side) / 2.0, y: bounds.height * 0.5 - side / 2.0, width: side, height: side)
         CATransaction.commit()
         self.updateShape(time: 0.0, pulled: 0.0, glow: 0.0)
     }
@@ -942,4 +1117,97 @@ private func astraColorsClose(_ a: UIColor, _ b: UIColor) -> Bool {
     a.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
     b.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
     return abs(r1 - r2) < 0.004 && abs(g1 - g2) < 0.004 && abs(b1 - b2) < 0.004
+}
+
+/// AstraGram: the bubbles' look in numbers. A file `Library/Caches/astra-bubbles.json` in the app's sandbox (written
+/// by hand on a simulator) overrides any of them and is reread while the profile is open, so the look can be tuned
+/// live. On a phone the file never exists and the defaults apply.
+struct AstraBubbleTuning: Codable {
+    var magnification: CGFloat = 1.22
+    var soapTop: CGFloat = 0.16
+    var soapMiddle: CGFloat = 0.2
+    var soapBottom: CGFloat = 0.42
+    var jellyTop: CGFloat = 0.8
+    var jellyMiddle: CGFloat = 0.88
+    var jellyBottom: CGFloat = 0.94
+    var topWhite: CGFloat = 0.45
+    var saturation: CGFloat = 1.35
+    var brightness: CGFloat = 1.25
+    var innerGlowWidth: CGFloat = 0.26
+    var innerGlowAlpha: CGFloat = 0.3
+    var innerEdgeWidth: CGFloat = 0.07
+    var innerEdgeAlpha: CGFloat = 0.45
+    var rimWidth: CGFloat = 1.6
+    var rimAlpha: CGFloat = 0.9
+    var shineAlpha: CGFloat = 0.32
+    var specularAlpha: CGFloat = 0.9
+    var stickerSize: CGFloat = 0.42
+    var glowRadius: CGFloat = 0.34
+    var glowOpacity: CGFloat = 0.75
+    var spillOpacity: CGFloat = 0.6
+    var radius: CGFloat = 19.5
+    var eggHeight: CGFloat = 1.1
+    var restMin: CGFloat = 0.45
+    var restMax: CGFloat = 2.0
+
+    init() {
+    }
+
+    init(from decoder: Decoder) throws {
+        // Any field may be left out of the file.
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let d = AstraBubbleTuning()
+        func value(_ key: CodingKeys, _ fallback: CGFloat) -> CGFloat {
+            return (try? container.decodeIfPresent(CGFloat.self, forKey: key)) ?? nil ?? fallback
+        }
+        self.magnification = value(.magnification, d.magnification)
+        self.soapTop = value(.soapTop, d.soapTop)
+        self.soapMiddle = value(.soapMiddle, d.soapMiddle)
+        self.soapBottom = value(.soapBottom, d.soapBottom)
+        self.jellyTop = value(.jellyTop, d.jellyTop)
+        self.jellyMiddle = value(.jellyMiddle, d.jellyMiddle)
+        self.jellyBottom = value(.jellyBottom, d.jellyBottom)
+        self.topWhite = value(.topWhite, d.topWhite)
+        self.saturation = value(.saturation, d.saturation)
+        self.brightness = value(.brightness, d.brightness)
+        self.innerGlowWidth = value(.innerGlowWidth, d.innerGlowWidth)
+        self.innerGlowAlpha = value(.innerGlowAlpha, d.innerGlowAlpha)
+        self.innerEdgeWidth = value(.innerEdgeWidth, d.innerEdgeWidth)
+        self.innerEdgeAlpha = value(.innerEdgeAlpha, d.innerEdgeAlpha)
+        self.rimWidth = value(.rimWidth, d.rimWidth)
+        self.rimAlpha = value(.rimAlpha, d.rimAlpha)
+        self.shineAlpha = value(.shineAlpha, d.shineAlpha)
+        self.specularAlpha = value(.specularAlpha, d.specularAlpha)
+        self.stickerSize = value(.stickerSize, d.stickerSize)
+        self.glowRadius = value(.glowRadius, d.glowRadius)
+        self.glowOpacity = value(.glowOpacity, d.glowOpacity)
+        self.spillOpacity = value(.spillOpacity, d.spillOpacity)
+        self.radius = value(.radius, d.radius)
+        self.eggHeight = value(.eggHeight, d.eggHeight)
+        self.restMin = value(.restMin, d.restMin)
+        self.restMax = value(.restMax, d.restMax)
+    }
+
+    static var current = AstraBubbleTuning()
+    private static var fileDate: Date?
+
+    private static var url: URL? {
+        return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("astra-bubbles.json")
+    }
+
+    /// Rereads the file when it changed; true when the numbers did.
+    static func reload() -> Bool {
+        guard let url = AstraBubbleTuning.url, let date = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date else {
+            return false
+        }
+        if date == AstraBubbleTuning.fileDate {
+            return false
+        }
+        AstraBubbleTuning.fileDate = date
+        guard let data = try? Data(contentsOf: url), let value = try? JSONDecoder().decode(AstraBubbleTuning.self, from: data) else {
+            return false
+        }
+        AstraBubbleTuning.current = value
+        return true
+    }
 }

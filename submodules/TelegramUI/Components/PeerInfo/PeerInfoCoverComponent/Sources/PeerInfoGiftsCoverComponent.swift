@@ -1106,6 +1106,11 @@ extension PeerInfoGiftsCoverComponent.View {
         self.astraBubbles?.setMusicPlaying(playing)
     }
 
+    /// AstraGram: a sideways swipe around the avatar turns the bubbles; `host` (the header's view) gets the gesture.
+    public func astraAttachRotation(to host: UIView) {
+        self.astraBubbles?.attachRotation(to: host)
+    }
+
     /// AstraGram: the bubbles fade away while the photo is expanded.
     public func astraSetBubblesHidden(_ hidden: Bool) {
         guard let bubbles = self.astraBubbles, self.astraBubblesHidden != hidden else {
