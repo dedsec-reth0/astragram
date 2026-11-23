@@ -123,6 +123,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let giftsCover = ComponentView<Empty>()
     /// AstraGram: the colors of the gift bubble touched last, worn by the header until another one is touched.
     private var astraBubbleTint: PeerEmojiStatus?
+    /// AstraGram: the profile's user, as last laid out.
+    private var astraCurrentPeer: EnginePeer?
     /// AstraGram: the color of the profile's surface last given to the screen.
     fileprivate var astraSurface: UIColor?
     private var astraSurfaceReported = false
@@ -725,8 +727,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         } else {
             backgroundCoverSubject = nil
         }
+        // AstraGram: a touched bubble's gift lends the cover its pattern (the profile's colors kept).
+        if let astraBubbleTint = self.astraBubbleTint, !self.isSettings {
+            backgroundCoverSubject = .status(astraBubbleTint)
+            hasBackground = true
+        }
         // AstraGram: the whole profile is one surface in the profile's own color (the cover's edge color), as in the
         // concept; the gifts do not recolor it.
+        self.astraCurrentPeer = peer
         var astraSurface: UIColor?
         if !self.isSettings {
             if let status = peer?.emojiStatus, case let .starGift(_, _, _, _, _, _, outerColor, _, _) = status.content {
@@ -2622,7 +2630,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     self.view.bringSubviewToFront(giftsCoverView)
                 }
                 if !self.isSettings {
-                    giftsCoverView.astraAttachRotation(to: self.view)
+                    // On the whole profile screen: an empty spot of the header passes the touch to the scroll view
+                    // under it, so the header's own view would never see the swipe.
+                    giftsCoverView.astraAttachRotation(to: self.view.superview ?? self.view)
                 }
                 if additive {
                     transition.updateFrameAdditive(view: giftsCoverView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: giftsCoverSize))
@@ -3225,11 +3235,25 @@ extension PeerInfoHeaderNode {
             title = generic.title ?? ""
             modelFileId = generic.file.fileId.id
         }
+        // The profile keeps its own colors; only the pattern is the gift's.
+        func value(_ color: UIColor) -> Int32 {
+            return Int32(bitPattern: color.rgb)
+        }
+        if let peer = self.astraCurrentPeer {
+            if let status = peer.emojiStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, patternColor, textColor) = status.content {
+                colors = (innerColor, outerColor, patternColor, textColor)
+            } else if let profileColor = peer.effectiveProfileColor {
+                let profile = self.context.peerNameColors.getProfile(profileColor, dark: self.presentationData?.theme.overallDarkAppearance ?? true)
+                let outer = profile.secondary ?? profile.main
+                colors = (value(profile.main), value(outer), value(outer.withMultipliedBrightnessBy(0.6)), value(.white))
+            }
+        }
+        if patternFileId == 0 {
+            // A plain gift has no pattern of its own: its picture makes one.
+            patternFileId = modelFileId
+        }
         if colors == nil {
             let (inner, outer) = astraGiftBubbleColors(gift: gift)
-            func value(_ color: UIColor) -> Int32 {
-                return Int32(bitPattern: color.rgb)
-            }
             colors = (value(inner), value(outer), value(outer.withMultipliedBrightnessBy(0.7)), value(.white))
         }
         guard let colors else {

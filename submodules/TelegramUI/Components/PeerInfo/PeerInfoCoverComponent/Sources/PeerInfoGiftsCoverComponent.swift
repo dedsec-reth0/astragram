@@ -1041,6 +1041,9 @@ extension PeerInfoGiftsCoverComponent.View {
             self.addSubview(bubbles)
             self.astraBubbles = bubbles
         }
+        bubbles.touched = { [weak self] gift in
+            self?.componentValue?.astraBubbleTouched?(gift)
+        }
         bubbles.opened = { [weak self] gift in
             self?.componentValue?.action(gift)
         }
