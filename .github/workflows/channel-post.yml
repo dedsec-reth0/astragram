@@ -4,6 +4,7 @@ name: Channel post
 # the channel with "post messages" rights). A post is a folder posts/<version>/ with
 #   cover.jpg   - the picture (1280x720)
 #   caption.txt - the text, plain, up to 1024 characters (longer text goes out as a separate message after the photo)
+#   video.txt   - optional: path of an mp4 in this branch (e.g. videos/x.mp4); then the video is sent instead of the photo
 # Adding a new caption.txt to this branch posts it once. Re-post by hand with "Run workflow" and the folder name.
 
 on:
@@ -64,7 +65,11 @@ jobs:
             [ -f "$d/caption.txt" ] || { echo "::error::$d/caption.txt not found"; exit 1; }
             len=$(python3 -c "import sys;print(len(open(sys.argv[1],encoding='utf-8').read().strip()))" "$d/caption.txt")
             echo "$d: caption $len characters"
-            if [ -f "$d/cover.jpg" ] && [ "$len" -le 1024 ]; then
+            vid=""; [ -f "$d/video.txt" ] && vid=$(head -1 "$d/video.txt" | tr -d '\r')
+            if [ -n "$vid" ] && [ -f "$vid" ] && [ "$len" -le 1024 ]; then
+              res=$(curl -sS -X POST "$api/sendVideo" --form-string "chat_id=$CHANNEL" -F "video=@$vid" --form-string "supports_streaming=true" \
+                --form-string "width=1080" --form-string "height=1920" --form-string "caption=$(cat "$d/caption.txt")")
+            elif [ -f "$d/cover.jpg" ] && [ "$len" -le 1024 ]; then
               res=$(curl -sS -X POST "$api/sendPhoto" --form-string "chat_id=$CHANNEL" -F "photo=@$d/cover.jpg" --form-string "caption=$(cat "$d/caption.txt")")
             elif [ -f "$d/cover.jpg" ]; then
               res=$(curl -sS -X POST "$api/sendPhoto" --form-string "chat_id=$CHANNEL" -F "photo=@$d/cover.jpg")
