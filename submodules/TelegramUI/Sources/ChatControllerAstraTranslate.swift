@@ -123,6 +123,8 @@ extension ChatControllerImpl {
         let changed = ValuePromise<Int>(0, ignoreRepeated: false)
         let changes = Atomic<Int>(value: 0)
         var dismissImpl: (() -> Void)?
+        // The settings are this chat's own: its name stands under the title.
+        let chatTitle = self.presentationInterfaceState.renderedPeer?.chatMainPeer.flatMap { EnginePeer($0).compactDisplayTitle } ?? ""
 
         let arguments = AstraTranslateArguments(selectMode: { value in
             let _ = modeValue.swap(value)
@@ -152,7 +154,7 @@ extension ChatControllerImpl {
             let current = currentMode == .mine ? mine : theirs
 
             var entries: [AstraTranslateEntry] = []
-            entries.append(.modeHeader(russian ? "ЧТО ПЕРЕВОДИТЬ" : "TRANSLATE"))
+            entries.append(.modeHeader(russian ? "ЧТО ПЕРЕВОДИТЬ В ЭТОМ ЧАТЕ" : "TRANSLATE IN THIS CHAT"))
             entries.append(.mode(.mine, russian ? "Мои сообщения" : "My Messages", name(mine), currentMode == .mine))
             entries.append(.mode(.theirs, russian ? "Сообщения собеседника" : "Their Messages", name(theirs), currentMode == .theirs))
             entries.append(.modeFooter(currentMode == .mine
@@ -169,7 +171,7 @@ extension ChatControllerImpl {
             let close = ItemListNavigationButton(content: .icon(.close), style: .regular, enabled: true, action: {
                 dismissImpl?()
             })
-            let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(russian ? "Перевод" : "Translation"), leftNavigationButton: close, rightNavigationButton: nil, backNavigationButton: nil)
+            let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: chatTitle.isEmpty ? .text(russian ? "Перевод" : "Translation") : .textWithSubtitle(russian ? "Перевод" : "Translation", (russian ? "только для чата «" : "this chat only: «") + chatTitle + "»"), leftNavigationButton: close, rightNavigationButton: nil, backNavigationButton: nil)
             let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: false)
             return (controllerState, (listState, arguments))
         }
