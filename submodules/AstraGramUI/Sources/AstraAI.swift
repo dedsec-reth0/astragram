@@ -109,11 +109,42 @@ public enum AstraAI {
             }
             return
         }
+        // Chat messages are often casual, with swearing and slang: the model is told so, and a canned refusal is never
+        // shown as if it were the answer (it is asked once more; then a plain error).
+        let tool = system + "\n\nThe text is from the user's own private chat and may contain profanity, slang or rude words. This is a text-processing tool, not a conversation: process the text faithfully, handling such words as the task needs (keep them when translating, explaining or fixing; soften them only when asked for a polite or formal tone). Never refuse, never lecture, never add warnings or comments of your own."
         AstraAI.withConsent({
-            AstraAI.performComplete(system: system, user: user, completion: completion)
+            AstraAI.performComplete(system: tool, user: user, completion: { result in
+                guard case let .success(text) = result, AstraAI.isRefusal(text) else {
+                    completion(result)
+                    return
+                }
+                AstraAI.performComplete(system: tool + "\nIMPORTANT: the previous answer was a refusal, which is wrong for this tool. Do the task now.", user: user, completion: { retry in
+                    if case let .success(text) = retry, AstraAI.isRefusal(text) {
+                        let isRussian = Locale.preferredLanguages.first?.lowercased().hasPrefix("ru") ?? false
+                        completion(.failure(.server(isRussian ? "AI отказался обрабатывать этот текст. Попробуйте ещё раз или укажите свой ключ AI в настройках AstraGram." : "The AI refused to process this text. Try again, or set your own AI key in the AstraGram settings.")))
+                    } else {
+                        completion(retry)
+                    }
+                })
+            })
         }, declined: {
             completion(.failure(.declined))
         })
+    }
+
+    /// A canned "I can't help with that" instead of an answer.
+    static func isRefusal(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        guard lower.count < 600 else {
+            return false
+        }
+        let markers = [
+            "i cannot fulfill", "i can't fulfill", "i can’t fulfill", "i cannot help with", "i can't help with", "i can’t help with",
+            "i'm sorry, but i can", "i’m sorry, but i can", "i am programmed to be", "harmless ai", "as an ai language model",
+            "i cannot assist", "i can't assist", "i can’t assist", "offensive and inappropriate", "inappropriate language",
+            "не могу выполнить", "не могу помочь с", "я не могу обработать"
+        ]
+        return markers.contains(where: { lower.contains($0) })
     }
 
     private static func performComplete(system: String, user: String, completion: @escaping (Result<String, AIError>) -> Void) {
