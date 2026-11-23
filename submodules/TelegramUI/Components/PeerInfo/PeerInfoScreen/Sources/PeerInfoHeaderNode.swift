@@ -3371,16 +3371,15 @@ extension PeerInfoHeaderNode {
                 pulse.timingFunctions = [CAMediaTimingFunction(name: .easeOut), CAMediaTimingFunction(name: .easeInEaseOut)]
                 pulse.isAdditive = false
                 layer.add(pulse, forKey: "astraBeat")
-                // The white ring jumps out with the beat and settles back.
+                // The white ring sits on the avatar's edge and beats with it: it thickens and glows, no gap opens.
                 let ring = self.astraAvatarRing
-                let jump = CAKeyframeAnimation(keyPath: "transform.scale")
-                jump.values = [1.0, 1.0 + 0.08 + 0.08 * strength, 1.0]
-                jump.keyTimes = [0.0, 0.22, 1.0]
-                jump.duration = 0.34
-                jump.timingFunctions = [CAMediaTimingFunction(name: .easeOut), CAMediaTimingFunction(name: .easeInEaseOut)]
-                ring.add(jump, forKey: "astraBeat")
+                let glow = CAKeyframeAnimation(keyPath: "shadowRadius")
+                glow.values = [6.0, 10.0 + 6.0 * strength, 6.0]
+                glow.keyTimes = [0.0, 0.22, 1.0]
+                glow.duration = 0.34
+                ring.add(glow, forKey: "astraBeat")
                 let width = CAKeyframeAnimation(keyPath: "lineWidth")
-                width.values = [3.0, 3.0 + 2.5 * strength, 3.0]
+                width.values = [3.0, 5.0 + 3.0 * strength, 3.0]
                 width.keyTimes = [0.0, 0.22, 1.0]
                 width.duration = 0.34
                 ring.add(width, forKey: "astraBeatWidth")
@@ -3408,7 +3407,7 @@ extension PeerInfoHeaderNode {
         if ring.bounds.size != bounds.size || ring.path == nil {
             ring.bounds = CGRect(origin: .zero, size: bounds.size)
             ring.position = CGPoint(x: bounds.midX, y: bounds.midY)
-            ring.path = UIBezierPath(ovalIn: CGRect(origin: .zero, size: bounds.size).insetBy(dx: -5.0, dy: -5.0)).cgPath
+            ring.path = UIBezierPath(ovalIn: CGRect(origin: .zero, size: bounds.size)).cgPath
         }
         ring.opacity = self.isAvatarExpanded ? 0.0 : Float(amount)
         CATransaction.commit()
