@@ -52,6 +52,9 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         let speed: CGFloat = CGFloat.random(in: 0.6 ..< 1.1)
         /// A hair off the beat, so they do not move as one.
         var placed = false
+        /// The beat's shockwave reaches it a moment later: the push it gets then, and when.
+        var pendingKick: CGFloat = 0.0
+        var pendingKickAt: CGFloat = .greatestFiniteMagnitude
 
         init(id: AnyHashable, gift: ProfileGiftsContext.State.StarGift, view: AstraGiftBubbleView, baseRadius: CGFloat) {
             self.id = id
@@ -105,6 +108,15 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
     private var soap = true
     private var dragged: Bubble?
     private let avatarMask = CAShapeLayer()
+    /// AstraGram's own touch: on a strong beat a ripple runs out from the avatar in the carousel's tilted plane and
+    /// knocks the bubbles one after another as it reaches them.
+    private let shockContainer = CALayer()
+    private let shockInner = CALayer()
+    private let shockMask = CAShapeLayer()
+    private let shockFade = CAGradientLayer()
+    private var shockPool: [CAShapeLayer] = []
+    private var shockIndex = 0
+    private var lastShock: CGFloat = -10.0
     /// Bubbles behind the avatar (its circle cut out of them) and in front of it.
     private let backContainer = UIView()
     private let frontContainer = UIView()
@@ -145,6 +157,26 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         self.ringContainer.addSublayer(self.ringGradient)
         self.ringContainer.opacity = 0.0
         self.layer.addSublayer(self.ringContainer)
+        for _ in 0 ..< 3 {
+            let ring = CAShapeLayer()
+            ring.fillColor = UIColor.clear.cgColor
+            ring.strokeColor = UIColor.white.cgColor
+            ring.lineWidth = 1.5
+            ring.shadowColor = UIColor.white.cgColor
+            ring.shadowOffset = .zero
+            ring.shadowRadius = 5.0
+            ring.shadowOpacity = 0.8
+            ring.opacity = 0.0
+            self.shockInner.addSublayer(ring)
+            self.shockPool.append(ring)
+        }
+        // The avatar cut out of the ripple, and the ripple fading out softly above the name.
+        self.shockMask.fillRule = .evenOdd
+        self.shockInner.mask = self.shockMask
+        self.shockFade.colors = [UIColor.white.cgColor, UIColor.white.cgColor, UIColor.white.withAlphaComponent(0.0).cgColor]
+        self.shockContainer.addSublayer(self.shockInner)
+        self.shockContainer.mask = self.shockFade
+        self.layer.addSublayer(self.shockContainer)
         self.backContainer.isUserInteractionEnabled = false
         self.frontContainer.isUserInteractionEnabled = false
         self.addSubview(self.backContainer)
@@ -260,6 +292,7 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
         self.backContainer.frame = self.bounds
         self.frontContainer.frame = self.bounds
         self.updateAvatarMask()
+        self.updateShockLayers()
         self.updateRing()
         self.updateDisplayLink()
         self.layoutBubbles()
@@ -312,6 +345,7 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
             self.captureLens()
             if AstraBubbleTuning.reload() {
                 self.updateOrbits()
+                self.updateShockLayers()
                 for bubble in self.bubbles {
                     if bubble !== self.dragged {
                         bubble.targetRadius = bubble.baseRadius
@@ -332,9 +366,78 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
     func beat(strength: CGFloat) {
         self.beatKick = max(self.beatKick, 0.55 + 0.45 * strength)
         self.spin += (self.spin >= 0.0 ? 1.0 : -1.0) * (0.35 + 0.5 * strength)
+        let shock = strength > 0.3 && self.time - self.lastShock > 0.55 && self.beatEnergy > 0.2 && !self.shockPool.isEmpty && self.avatarRadius > 10.0 && self.avatarRadius < 80.0
+        // With a shockwave most of the push comes when the wave reaches each bubble.
+        let now: CGFloat = shock ? (1.0 + 1.5 * strength) : (2.0 + 3.0 * strength)
         for bubble in self.bubbles where bubble !== self.dragged {
-            bubble.radiusVelocity += bubble.baseRadius * (2.0 + 3.0 * strength)
+            bubble.radiusVelocity += bubble.baseRadius * now
         }
+        if shock {
+            self.lastShock = self.time
+            self.launchShock(strength: strength)
+        }
+    }
+
+    private static let shockMaxScale: CGFloat = 2.6
+    private static let shockDuration: CGFloat = 0.8
+
+    private func launchShock(strength: CGFloat) {
+        let ring = self.shockPool[self.shockIndex % self.shockPool.count]
+        self.shockIndex += 1
+        let base = self.lastTint ?? UIColor.white
+        let color = (self.soap ? base.withMultipliedBrightnessBy(1.2) : base.mixedWith(.white, alpha: 0.6)).cgColor
+        let maxScale = AstraGiftBubblesView.shockMaxScale * AstraBubbleTuning.current.orbitScale
+        let duration = AstraGiftBubblesView.shockDuration
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        ring.strokeColor = color
+        ring.shadowColor = color
+        CATransaction.commit()
+        let scale = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue = 1.0
+        scale.toValue = maxScale
+        let opacity = CAKeyframeAnimation(keyPath: "opacity")
+        opacity.values = [0.0, Float(min(1.0, 0.5 + 0.4 * strength) * self.beatEnergy), 0.0]
+        opacity.keyTimes = [0.0, 0.1, 1.0]
+        let width = CABasicAnimation(keyPath: "lineWidth")
+        width.fromValue = 2.5 + 2.0 * strength
+        width.toValue = 0.4
+        let group = CAAnimationGroup()
+        group.animations = [scale, opacity, width]
+        group.duration = Double(duration)
+        group.timingFunction = CAMediaTimingFunction(controlPoints: 0.15, 0.6, 0.35, 1.0)
+        ring.add(group, forKey: "shock")
+        // The wave reaches a bubble when its scaled radius passes the bubble's orbit (on the curve above, roughly).
+        for bubble in self.bubbles where bubble !== self.dragged {
+            let reach = max(0.0, min(1.0, (bubble.orbitRadius - self.avatarRadius) / (self.avatarRadius * (maxScale - 1.0))))
+            bubble.pendingKickAt = self.time + duration * pow(reach, 1.6)
+            bubble.pendingKick = bubble.baseRadius * (1.5 + 2.5 * strength)
+        }
+    }
+
+    /// The ripple's rings sit on the avatar in the carousel's tilted plane; they show outside the avatar and above
+    /// the name.
+    private func updateShockLayers() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        self.shockContainer.frame = self.bounds
+        self.shockInner.frame = self.bounds
+        self.shockMask.frame = self.bounds
+        self.shockFade.frame = self.bounds
+        let r = self.avatarRadius
+        let height = max(1.0, self.bounds.height)
+        self.shockFade.locations = [0.0, NSNumber(value: Double(min(0.98, (self.avatarCenter.y + r * 0.45) / height))), NSNumber(value: Double(min(1.0, (self.avatarCenter.y + r * 1.2) / height)))]
+        let path = UIBezierPath(rect: self.bounds.insetBy(dx: -400.0, dy: -400.0))
+        path.append(UIBezierPath(ovalIn: CGRect(x: self.avatarCenter.x - r, y: self.avatarCenter.y - r, width: r * 2.0, height: r * 2.0)))
+        self.shockMask.path = path.cgPath
+        let tilt = AstraBubbleTuning.current.orbitTilt
+        let oval = UIBezierPath(ovalIn: CGRect(x: -r, y: -r * tilt, width: r * 2.0, height: r * 2.0 * tilt)).cgPath
+        for ring in self.shockPool {
+            ring.bounds = CGRect(x: -r, y: -r * tilt, width: r * 2.0, height: r * 2.0 * tilt)
+            ring.position = self.avatarCenter
+            ring.path = oval
+        }
+        CATransaction.commit()
     }
 
     /// The pulse after a beat, fading out until the next one.
@@ -403,6 +506,15 @@ final class AstraGiftBubblesView: UIView, UIGestureRecognizerDelegate {
                 force.x += (self.dragPoint.x - bubble.position.x) * 260.0 - bubble.velocity.x * 22.0
                 force.y += (self.dragPoint.y - lift - bubble.position.y) * 260.0 - bubble.velocity.y * 22.0
             } else {
+                if self.time >= bubble.pendingKickAt {
+                    // The shockwave reaches it: it swells and is thrown a little outwards.
+                    bubble.radiusVelocity += bubble.pendingKick
+                    let dx = bubble.position.x - self.avatarCenter.x, dy = bubble.position.y - self.avatarCenter.y
+                    let length = max(1.0, sqrt(dx * dx + dy * dy))
+                    bubble.velocity.x += dx / length * 60.0
+                    bubble.velocity.y += dy / length * 60.0
+                    bubble.pendingKickAt = .greatestFiniteMagnitude
+                }
                 // Round the tilted ring, all together (quicker with music).
                 bubble.orbitAngle = self.ringAngle + bubble.orbitSlot
                 bubble.depth = sin(bubble.orbitAngle)

@@ -144,6 +144,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     fileprivate var astraNowPlaying: (title: String?, performer: String?)?
     /// AstraGram: the white ring around the avatar while the profile's music plays.
     fileprivate let astraAvatarRing = CAShapeLayer()
+    /// AstraGram's own touch: the song's last two seconds of loudness as hairlines round the avatar, like a record's
+    /// grooves; the newest at the top, older ones turning clockwise and fading.
+    fileprivate let astraGrooveLayer = CAShapeLayer()
+    fileprivate let astraGrooveMask = CAGradientLayer()
+    fileprivate var astraGrooveSamples = [CGFloat](repeating: 0.0, count: 72)
+    fileprivate var astraGrooveHead = 0
     /// AstraGram: recolors the header's background (its luminance and pattern kept) with the profile's flowing color.
     private let astraFlowOverlay = UIView()
     /// AstraGram: the rest of the profile takes on the flowing color too (nil: back to the theme).
@@ -3331,6 +3337,8 @@ extension PeerInfoHeaderNode {
             }))
         } else {
             self.astraMusicLevelDisposable.set(nil)
+            // The groove settles flat while it fades.
+            self.astraGrooveSamples = [CGFloat](repeating: 0.0, count: self.astraGrooveSamples.count)
         }
         if playing && self.astraMusicMoodAmount <= 0.0 {
             self.astraMusicMoodTime = 0.0
@@ -3355,6 +3363,12 @@ extension PeerInfoHeaderNode {
         self.astraLevelAverage = self.astraLevelAverage * 0.97 + level * 0.03
         let now = CACurrentMediaTime()
         let average = max(0.04, self.astraLevelAverage)
+        // Into the groove: loudness against the song's own average, smoothed so it is not a jagged comb.
+        let relative = min(1.0, max(0.0, (level / average - 0.6) / 1.2))
+        let count = self.astraGrooveSamples.count
+        let last = self.astraGrooveSamples[(self.astraGrooveHead - 1 + count) % count]
+        self.astraGrooveSamples[self.astraGrooveHead] = last * 0.4 + relative * 0.6
+        self.astraGrooveHead = (self.astraGrooveHead + 1) % count
         if level > average * 1.3 && level > previous * 1.08 && now - self.astraLastBeat > 0.22 {
             self.astraLastBeat = now
             let strength = min(1.0, max(0.0, (level / average - 1.3) / 0.9))
@@ -3383,6 +3397,16 @@ extension PeerInfoHeaderNode {
                 width.keyTimes = [0.0, 0.22, 1.0]
                 width.duration = 0.34
                 ring.add(width, forKey: "astraBeatWidth")
+                // A bright spike is born in the groove at the top and travels round with the song.
+                for back in 1 ... 3 {
+                    let index = (self.astraGrooveHead - back + count) % count
+                    self.astraGrooveSamples[index] = max(self.astraGrooveSamples[index], 0.8 + 0.2 * strength)
+                }
+                let grooveGlow = CAKeyframeAnimation(keyPath: "shadowRadius")
+                grooveGlow.values = [3.0, 6.0 + 4.0 * strength, 3.0]
+                grooveGlow.keyTimes = [0.0, 0.25, 1.0]
+                grooveGlow.duration = 0.3
+                self.astraGrooveLayer.add(grooveGlow, forKey: "astraBeat")
             }
         }
     }
@@ -3410,6 +3434,55 @@ extension PeerInfoHeaderNode {
             ring.path = UIBezierPath(ovalIn: CGRect(origin: .zero, size: bounds.size)).cgPath
         }
         ring.opacity = self.isAvatarExpanded ? 0.0 : Float(amount)
+        CATransaction.commit()
+    }
+
+    fileprivate func astraUpdateGroove(amount: CGFloat) {
+        let host = self.avatarListNode.avatarContainerNode.containerNode.layer
+        let groove = self.astraGrooveLayer
+        if groove.superlayer !== host {
+            groove.fillColor = nil
+            groove.strokeColor = UIColor.white.withAlphaComponent(0.85).cgColor
+            groove.lineWidth = 1.5
+            groove.lineCap = .round
+            groove.shadowColor = UIColor.white.cgColor
+            groove.shadowOffset = .zero
+            groove.shadowRadius = 3.0
+            groove.shadowOpacity = 0.5
+            // Older grooves fade going clockwise from the top.
+            self.astraGrooveMask.type = .conic
+            self.astraGrooveMask.startPoint = CGPoint(x: 0.5, y: 0.5)
+            self.astraGrooveMask.endPoint = CGPoint(x: 0.5, y: 0.0)
+            self.astraGrooveMask.colors = [UIColor.white.cgColor, UIColor.white.withAlphaComponent(0.12).cgColor]
+            groove.mask = self.astraGrooveMask
+            host.insertSublayer(groove, below: self.astraAvatarRing)
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let bounds = host.bounds
+        let reach: CGFloat = 26.0
+        let frame = bounds.insetBy(dx: -reach, dy: -reach)
+        groove.frame = frame
+        self.astraGrooveMask.frame = CGRect(origin: .zero, size: frame.size)
+        let opacity: Float = self.isAvatarExpanded || bounds.width < 10.0 ? 0.0 : Float(amount)
+        groove.opacity = opacity
+        if opacity > 0.0 {
+            let count = self.astraGrooveSamples.count
+            let center = CGPoint(x: frame.width / 2.0, y: frame.height / 2.0)
+            let radius = bounds.width / 2.0 + 6.0
+            let path = CGMutablePath()
+            for i in 0 ..< count {
+                let age = (self.astraGrooveHead - 1 - i + count * 2) % count
+                let value = self.astraGrooveSamples[age]
+                let angle = -CGFloat.pi / 2.0 + CGFloat(i) / CGFloat(count) * 2.0 * CGFloat.pi
+                // Short at the bottom, clear of the name.
+                let damp = 1.0 - 0.7 * max(0.0, sin(angle))
+                let length = (1.5 + 10.0 * value) * damp
+                path.move(to: CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius))
+                path.addLine(to: CGPoint(x: center.x + cos(angle) * (radius + length), y: center.y + sin(angle) * (radius + length)))
+            }
+            groove.path = path
+        }
         CATransaction.commit()
     }
 
@@ -3460,6 +3533,7 @@ extension PeerInfoHeaderNode {
         let flicker = 0.8 + 0.2 * self.astraBeatKick + 0.025 * sin(t * 23.0) + 0.015 * sin(t * 41.0 + 1.0)
         self.astraMusicVignetteUpdated?(self.astraMusicMoodAmount * flicker)
         self.astraUpdateAvatarRing(amount: self.astraMusicMoodAmount)
+        self.astraUpdateGroove(amount: self.astraMusicMoodAmount)
         self.astraFlowOverlay.isHidden = moodAmount <= 0.0
         if self.astraMusicMoodAmount <= 0.0 && !self.astraMusicMoodPlaying {
             self.astraMusicMoodLink?.invalidate()
