@@ -123,8 +123,17 @@ private final class PeerInfoScreenActionItemNode: PeerInfoScreenItemNode {
             textColorValue = presentationData.theme.list.itemDestructiveColor
         }
         
+        // Folio: an accent row with an icon keeps the volt glyph and sets its label in ink, so a card of such rows
+        // reads calm; rows without an icon and destructive rows keep their colour.
+        let labelColorValue: UIColor
+        if AstraLook.design2027, case .accent = item.color, item.icon != nil {
+            labelColorValue = presentationData.theme.list.itemPrimaryTextColor
+        } else {
+            labelColorValue = textColorValue
+        }
+        
         self.textNode.maximumNumberOfLines = 1
-        self.textNode.attributedText = NSAttributedString(string: item.text, font: titleFont, textColor: textColorValue)
+        self.textNode.attributedText = NSAttributedString(string: item.text, font: titleFont, textColor: labelColorValue)
         self.activateArea.accessibilityLabel = item.text
         self.activateArea.applyPeerInfoRowAction(item.action)
         

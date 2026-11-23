@@ -38,9 +38,11 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
     /// AstraGram: the card's color while the profile flows through its gifts' colors (nil: the theme's).
     var astraTint: UIColor? {
         didSet {
-            if let astraTint {
+            if let astraTint, !AstraLook.design2027 {
                 self.backgroundNode.backgroundColor = astraTint
             } else if let themeColor = self.themeBackgroundColor {
+                // Folio keeps one card material everywhere: the see-through tint (white @0.09 over the profile's
+                // surface, which read lighter than the settings cards) gives way to the theme's card fill.
                 self.backgroundNode.backgroundColor = themeColor
             }
             if (oldValue == nil) != (astraTint == nil) {
@@ -86,7 +88,12 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
     
     func update(context: AccountContext, width: CGFloat, safeInsets: UIEdgeInsets, hasCorners: Bool, presentationData: PresentationData, items: [PeerInfoScreenItem], transition: ContainedViewLayoutTransition) -> CGFloat {
         self.themeBackgroundColor = presentationData.theme.list.itemBlocksBackgroundColor
-        self.backgroundNode.backgroundColor = self.astraTint ?? presentationData.theme.list.itemBlocksBackgroundColor
+        if AstraLook.design2027 {
+            // Folio: the same card material as the settings cards, whatever the profile's flow tint.
+            self.backgroundNode.backgroundColor = presentationData.theme.list.itemBlocksBackgroundColor
+        } else {
+            self.backgroundNode.backgroundColor = self.astraTint ?? presentationData.theme.list.itemBlocksBackgroundColor
+        }
         self.topSeparatorNode.backgroundColor = presentationData.theme.list.itemBlocksSeparatorColor
         self.bottomSeparatorNode.backgroundColor = presentationData.theme.list.itemBlocksSeparatorColor
         

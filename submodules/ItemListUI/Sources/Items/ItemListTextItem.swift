@@ -164,16 +164,24 @@ public class ItemListTextItemNode: ListViewItemNode, ItemListItemNode {
             let folio = AstraLook.design2027
             let leftInset: CGFloat = folio ? 20.0 : 15.0
             let lineSpacing: CGFloat = folio ? 0.25 : 0.12
-            var topInset: CGFloat = 7.0
+            // Folio footers sit 6pt under their card, at 13/17 of the list body size in ink2 (freeTextColor), never
+            // in the fainter ink3 tone.
+            var topInset: CGFloat = folio ? 6.0 : 7.0
             var bottomInset: CGFloat = 7.0
             
-            var titleFont = Font.regular(item.presentationData.fontSize.itemListBaseHeaderFontSize)
+            let footerFontSize: CGFloat
+            if folio {
+                footerFontSize = floor(item.presentationData.fontSize.itemListBaseFontSize * 13.0 / 17.0)
+            } else {
+                footerFontSize = item.presentationData.fontSize.itemListBaseHeaderFontSize
+            }
+            var titleFont = Font.regular(footerFontSize)
             var textColor: UIColor = item.presentationData.theme.list.freeTextColor
             if case .larger = item.textSize {
                 titleFont = Font.regular(floor(item.presentationData.fontSize.itemListBaseFontSize / 17.0 * 15.0))
                 textColor = item.presentationData.theme.list.itemSecondaryTextColor
             }
-            let titleBoldFont = Font.semibold(item.presentationData.fontSize.itemListBaseHeaderFontSize)
+            let titleBoldFont = Font.semibold(footerFontSize)
                         
             var themeUpdated = false
             var chevronImage = currentChevronImage

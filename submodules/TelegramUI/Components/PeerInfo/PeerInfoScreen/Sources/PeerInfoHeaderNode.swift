@@ -1437,8 +1437,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     subtitle = "\(subtitle) • @\(mainUsername)"
                 }
                 subtitleStringText = subtitle
-                subtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(17.0), color: .white)
-                smallSubtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(16.0), color: .white, shadowColor: titleShadowColor)
+                if AstraLook.design2027 {
+                    // Folio sets the phone line in tabular figures, so the number reads as a set of even columns.
+                    subtitleAttributes = MultiScaleTextState.Attributes(font: Font.with(size: 16.0, traits: [.monospacedNumbers]), color: .white)
+                    smallSubtitleAttributes = MultiScaleTextState.Attributes(font: Font.with(size: 16.0, traits: [.monospacedNumbers]), color: .white, shadowColor: titleShadowColor)
+                } else {
+                    subtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(17.0), color: .white)
+                    smallSubtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(16.0), color: .white, shadowColor: titleShadowColor)
+                }
                 
                 usernameString = ("", MultiScaleTextState.Attributes(font: Font.regular(16.0), color: .white))
             } else if self.isMyProfile {
@@ -2557,11 +2563,14 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
         }
         
-        // Folio's editorial rule: a 1pt line in ink (white on a coloured cover, like the name) under the name and
-        // status block, inset 16 inside the Duo strips. It is created only while Folio is on and removed otherwise.
-        // The music capsule stands in the same gap under the status, so a profile showing the capsule keeps the
-        // capsule there and the rule only hides.
-        if AstraLook.design2027 && !self.isAvatarExpanded && !state.isEditing && !isSearching && !displayStandardTitle && !astraMusicCapsule && !titleSize.height.isZero {
+        // Folio's signature mark: a short 28x2 bar in volt (white @0.6 on a coloured cover or profile colour), centred
+        // under the name and status block, 14pt below the status. It is created only while Folio is on and removed
+        // otherwise. With the music capsule under the status, the mark is placed 12pt under the capsule instead, once
+        // the capsule's frame is known (below); `astraFolioMarkLowestY` carries the lowest origin the buttons allow.
+        let astraFolioMarkSize = CGSize(width: 28.0, height: 2.0)
+        var astraFolioMarkLowestY: CGFloat?
+        var astraFolioMarkAlpha: CGFloat = 0.0
+        if AstraLook.design2027 && !self.isAvatarExpanded && !state.isEditing && !isSearching && !displayStandardTitle && !titleSize.height.isZero {
             let ruleLayer: CALayer
             var ruleWasAdded = false
             if let current = self.astraFolioRuleLayer {
@@ -2569,34 +2578,39 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             } else {
                 ruleLayer = CALayer()
                 ruleLayer.isOpaque = false
+                ruleLayer.cornerRadius = 1.0
                 self.astraFolioRuleLayer = ruleLayer
                 self.regularContentNode.layer.addSublayer(ruleLayer)
                 ruleWasAdded = true
             }
-            ruleLayer.backgroundColor = regularNavigationContentsPrimaryColor.cgColor
+            ruleLayer.cornerRadius = 1.0
+            ruleLayer.backgroundColor = ((hasCoverColor || hasBackground) ? UIColor(white: 1.0, alpha: 0.6) : presentationData.theme.list.itemAccentColor).cgColor
             
             var blockBottom = max(subtitleFrame.maxY, usernameFrame.maxY)
             if currentWalletBalance != nil && !self.isSettings {
-                // The balance pill sits 8pt under the status and is 20pt high: the rule goes under it instead.
+                // The balance pill sits 8pt under the status and is 20pt high: the mark goes under it instead.
                 blockBottom += 8.0 + 20.0
             }
-            var ruleY = blockBottom + titleOffset + 12.0
+            var ruleY = blockBottom + titleOffset + 14.0
+            var lowestY: CGFloat = .greatestFiniteMagnitude
             if !buttonKeys.isEmpty {
                 // Never closer than 6pt to the buttons row, whatever the title block's height.
-                ruleY = min(ruleY, buttonRightOrigin.y - 6.0 - 1.0)
+                lowestY = min(lowestY, buttonRightOrigin.y - 6.0 - astraFolioMarkSize.height)
             }
             if !actionButtonKeys.isEmpty {
-                // The wide action buttons (join, message) stand above the regular row, so they bound the rule too.
-                ruleY = min(ruleY, actionButtonRightOrigin.y - 6.0 - 1.0)
+                // The wide action buttons (join, message) stand above the regular row, so they bound the mark too.
+                lowestY = min(lowestY, actionButtonRightOrigin.y - 6.0 - astraFolioMarkSize.height)
             }
-            let ruleInset: CGFloat = 16.0
-            let ruleFrame = CGRect(x: stripLeft + ruleInset, y: ruleY, width: max(0.0, width - stripLeft - stripRight - ruleInset * 2.0), height: 1.0)
+            ruleY = min(ruleY, lowestY)
+            astraFolioMarkLowestY = lowestY
+            let ruleFrame = CGRect(origin: CGPoint(x: stripLeft + floorToScreenPixels((width - stripLeft - stripRight - astraFolioMarkSize.width) / 2.0), y: ruleY), size: astraFolioMarkSize)
             // It fades out as the header collapses, together with the subtitle.
             let ruleAlpha = max(0.0, min(subtitleAlpha, 1.0 - titleCollapseFraction))
+            astraFolioMarkAlpha = ruleAlpha
             if ruleWasAdded {
                 ruleLayer.frame = ruleFrame
-                ruleLayer.opacity = Float(ruleAlpha)
-            } else {
+                ruleLayer.opacity = Float(astraMusicCapsule ? 0.0 : ruleAlpha)
+            } else if !astraMusicCapsule {
                 if additive {
                     transition.updateFrameAdditive(layer: ruleLayer, frame: ruleFrame)
                 } else {
@@ -2606,11 +2620,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
         } else if let ruleLayer = self.astraFolioRuleLayer {
             if AstraLook.design2027 {
-                // Over an expanded photo, while editing or searching, or beside the music capsule, the rule only
-                // hides, to come back in place.
+                // Over an expanded photo, while editing or searching, the mark only hides, to come back in place.
                 transition.updateAlpha(layer: ruleLayer, alpha: 0.0)
             } else {
-                // Folio was turned off: the rule is removed, so the header is stock again.
+                // Folio was turned off: the mark is removed, so the header is stock again.
                 self.astraFolioRuleLayer = nil
                 ruleLayer.removeFromSuperlayer()
             }
@@ -3017,6 +3030,21 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     // begin a little above their frame, so the middle is higher with them.
                     let astraRoundButtonsOffset: CGFloat = AstraGramSettings.current.roundProfileButtons ? 11.0 : 9.0
                     musicFrame.origin.y = (apparentBackgroundHeight - backgroundHeight) + buttonRightOrigin.y - floor((bottomInset + 16.0 + musicSize.height) / 2.0) - astraRoundButtonsOffset
+                }
+                if AstraLook.design2027, astraMusicCapsule, let ruleLayer = self.astraFolioRuleLayer, let lowestY = astraFolioMarkLowestY {
+                    // Folio: the mark stands 12pt under the capsule's pill (26pt high, centred in the music view),
+                    // still above the buttons; with less than 8pt of room it hides.
+                    let capsuleBottom = musicFrame.minY + floor((musicSize.height - 26.0) / 2.0) + 26.0
+                    let apparentLowestY = lowestY == .greatestFiniteMagnitude ? lowestY : lowestY + (apparentBackgroundHeight - backgroundHeight)
+                    let markY = min(capsuleBottom + 12.0, apparentLowestY)
+                    let markFrame = CGRect(origin: CGPoint(x: stripLeft + floorToScreenPixels((width - stripLeft - stripRight - astraFolioMarkSize.width) / 2.0), y: markY), size: astraFolioMarkSize)
+                    let markAlpha: CGFloat = markY - capsuleBottom < 8.0 ? 0.0 : astraFolioMarkAlpha
+                    if ruleLayer.opacity == 0.0 {
+                        ContainedViewLayoutTransition.immediate.updateFrame(layer: ruleLayer, frame: markFrame)
+                    } else {
+                        transition.updateFrame(layer: ruleLayer, frame: markFrame)
+                    }
+                    transition.updateAlpha(layer: ruleLayer, alpha: markAlpha)
                 }
                 if let musicView = music.view {
                     // The mood, beat and groove follow the profile's music whether it is drawn as the capsule or

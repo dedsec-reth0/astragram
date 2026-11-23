@@ -586,7 +586,17 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         self.expandNode.attributedText = NSAttributedString(string: presentationData.strings.PeerInfo_BioExpand, font: Font.regular(17.0), textColor: presentationData.theme.list.itemAccentColor)
         let expandSize = self.expandNode.updateLayout(CGSize(width: width, height: 100.0))
         
-        self.labelNode.attributedText = NSAttributedString(string: item.label, font: Font.regular(14.0), textColor: presentationData.theme.list.itemPrimaryTextColor)
+        if AstraLook.design2027 && presentationData.listsFontSize.itemListBaseFontSize <= 23.0 {
+            // Folio sets the field's label as a small tracked caption over the value; at accessibility sizes the
+            // stock label stays, where a 12pt caption would not read.
+            self.labelNode.attributedText = NSAttributedString(string: item.label.uppercased(with: .current), attributes: [
+                .font: Font.semibold(12.0),
+                .foregroundColor: presentationData.theme.list.itemSecondaryTextColor,
+                .kern: 0.9 as NSNumber
+            ])
+        } else {
+            self.labelNode.attributedText = NSAttributedString(string: item.label, font: Font.regular(14.0), textColor: presentationData.theme.list.itemPrimaryTextColor)
+        }
         
         self.rightLabelNode.attributedText = NSAttributedString(string: item.rightLabel ?? "", font: Font.regular(14.0), textColor: presentationData.theme.list.itemSecondaryTextColor)
         

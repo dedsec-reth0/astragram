@@ -601,6 +601,7 @@ public class ChatListItem: ListViewItem {
             }
             node.insets = ChatListItemNode.insets(first: first, last: last, firstWithHeader: firstWithHeader)
             let nextSideListHighlightKey = neighbors.next?.base(ChatListNeighborFacet.self)?.sideListHighlightKey
+            let astraPreviousIsPinned = ChatListItem.astraPreviousIsPinned(firstWithHeader: firstWithHeader, neighbors: neighbors)
             
             let (nodeLayout, apply) = node.asyncLayout()(self, params, first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls)
             
@@ -611,6 +612,7 @@ public class ChatListItem: ListViewItem {
                 completion(node, {
                     return (nil, { _ in
                         node.nextSideListHighlightKey = nextSideListHighlightKey
+                        node.astraPreviousIsPinned = astraPreviousIsPinned
                         node.setupItem(item: self, synchronousLoads: synchronousLoads)
                         apply(synchronousLoads, false)
                         node.updateIsHighlighted(transition: .immediate)
@@ -642,10 +644,12 @@ public class ChatListItem: ListViewItem {
                     }
                     
                     let nextSideListHighlightKey = neighbors.next?.base(ChatListNeighborFacet.self)?.sideListHighlightKey
+                    let astraPreviousIsPinned = ChatListItem.astraPreviousIsPinned(firstWithHeader: firstWithHeader, neighbors: neighbors)
                     let (nodeLayout, apply) = layout(self, params, first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls)
                     Queue.mainQueue().async {
                         completion(nodeLayout, { _ in
                             nodeValue.nextSideListHighlightKey = nextSideListHighlightKey
+                            nodeValue.astraPreviousIsPinned = astraPreviousIsPinned
                             apply(false, animated)
                         })
                     }
@@ -717,6 +721,15 @@ public class ChatListItem: ListViewItem {
             last = true
         }
         return (first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls)
+    }
+    
+    /// Folio: whether the row above is a pinned row of the same header run, so this row's pinned plate continues the
+    /// stack (a small top radius) instead of opening it.
+    static func astraPreviousIsPinned(firstWithHeader: Bool, neighbors: ListViewItemNeighbors) -> Bool {
+        if firstWithHeader {
+            return false
+        }
+        return neighbors.previous?.base(ChatListNeighborFacet.self)?.isPinned ?? false
     }
 }
 
@@ -1469,7 +1482,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     private let highlightedBackgroundNode: ASDisplayNode
     /// The Folio pinned-row slab. It is the bottom subnode of `contextContainer`, so it slides with the swipe, and it
     /// exists only while Folio is on and the row is pinned.
-    private var astraPinnedPlateNode: ASDisplayNode?
+    private var astraPinnedPlateNode: ASImageNode?
+    /// The colour and corner radii `astraPinnedPlateNode`'s image was drawn with, so it is redrawn only when they change.
+    private var astraPinnedPlateImageKey: (color: UIColor, top: CGFloat, bottom: CGFloat)?
     
     let contextContainer: ContextControllerSourceNode
     let mainContentContainerNode: ASDisplayNode
@@ -2282,6 +2297,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     override public func layoutForParams(_ params: ListViewItemLayoutParams, item: ListViewItem, neighbors: ListViewItemNeighbors) {
         let layout = self.asyncLayout()
         let (first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls) = ChatListItem.mergeType(item: item as! ChatListItem, neighbors: neighbors)
+        self.astraPreviousIsPinned = ChatListItem.astraPreviousIsPinned(firstWithHeader: firstWithHeader, neighbors: neighbors)
         let (nodeLayout, apply) = layout(item as! ChatListItem, params, first, last, firstWithHeader, nextIsPinned, nextHasActiveRevealControls)
         apply(false, false)
         self.contentSize = nodeLayout.contentSize
@@ -2330,6 +2346,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     }
     
     var nextSideListHighlightKey: ChatListSideListHighlightKey?
+    /// Folio: set from the neighbours before each layout is applied, like `nextSideListHighlightKey`.
+    var astraPreviousIsPinned = false
     private var separatorBaseIsHidden = false
     
     /// In the chat side list the separators above and below the highlighted plate are hidden; this row's separator is
@@ -3749,7 +3767,18 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     }
                     mentionBadgeContent = .mention
                 } else if item.isPinned, promoInfo == nil, currentBadgeBackgroundImage == nil {
-                    currentPinnedIconImage = PresentationResourcesChatList.badgeBackgroundPinned(item.presentationData.theme, diameter: badgeDiameter)
+                    // Folio: a pinned row already reads as pinned from its plate, so the right column keeps only the
+                    // date and the unread badge. The side list has no plates and keeps the glyph.
+                    // A selected row (iPad split) draws no plate, so it keeps the glyph as well.
+                    var astraHidesPinnedIcon = astraFolio && !item.interaction.isSideListMode && !item.selected
+                    if case let .groupReference(groupReferenceData) = item.content, groupReferenceData.hiddenByDefault, !groupReferenceData.appearsPinned {
+                        astraHidesPinnedIcon = false
+                    }
+                    if astraHidesPinnedIcon {
+                        currentPinnedIconImage = nil
+                    } else {
+                        currentPinnedIconImage = PresentationResourcesChatList.badgeBackgroundPinned(item.presentationData.theme, diameter: badgeDiameter)
+                    }
                 }
             }
             
@@ -4339,7 +4368,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             
             // Folio gives the regular rows 4pt more air, split evenly above and below the text, so the bold title
             // does not crowd the row. The side list keeps its own fitted rows.
-            let astraRowExtraHeight: CGFloat = (astraFolio && !(item.isSideListCompactPeerRow || (item.interaction.isSideListMode && item.interaction.isInlineMode))) ? 4.0 : 0.0
+            let astraRowExtraHeight: CGFloat = (astraFolio && !(item.isSideListCompactPeerRow || (item.interaction.isSideListMode && item.interaction.isInlineMode))) ? floor(4.0 * item.presentationData.fontSize.itemListBaseFontSize / 17.0) : 0.0
             itemHeight += astraRowExtraHeight
                         
             // A side-list row centers its title and preview between the paddings.
@@ -5710,6 +5739,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         // The side list ends without a closing separator.
                         strongSelf.separatorNode.isHidden = true
                     }
+                    if astraFolio && isPinned && nextIsPinned && !item.interaction.isSideListMode {
+                        // Folio: the pinned stack is a column of plates parted by a gap, so it has no hairlines inside.
+                        strongSelf.separatorNode.isHidden = true
+                    }
                     strongSelf.separatorBaseIsHidden = strongSelf.separatorNode.isHidden
                     strongSelf.updateSideListSeparatorVisibility()
                     
@@ -5749,28 +5782,36 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         astraPinnedPlateColor = backgroundColor
                         backgroundColor = .clear
                     }
+                    // Folio: the pinned rows form one stack of plates, rounded wide on its outer ends and tight where two
+                    // plates meet: the first 20/6, a middle one 6/6, the last 6/20 and a single plate 20 all round.
+                    let astraStackRadius: CGFloat = 20.0
+                    let astraJoinRadius: CGFloat = 6.0
+                    let astraPlateTopRadius: CGFloat = strongSelf.astraPreviousIsPinned ? astraJoinRadius : astraStackRadius
+                    let astraPlateBottomRadius: CGFloat = nextIsPinned ? astraJoinRadius : astraStackRadius
                     if let astraPinnedPlateColor {
-                        let plateFrame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: layout.contentSize.width - params.leftInset - params.rightInset, height: itemHeight)).insetBy(dx: 8.0, dy: 2.0)
-                        if let plateNode = strongSelf.astraPinnedPlateNode {
+                        let plateFrame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: layout.contentSize.width - params.leftInset - params.rightInset, height: itemHeight)).insetBy(dx: 8.0, dy: 3.0)
+                        let plateNode: ASImageNode
+                        if let current = strongSelf.astraPinnedPlateNode {
+                            plateNode = current
                             transition.updateFrame(node: plateNode, frame: plateFrame)
-                            if animated {
-                                transition.updateBackgroundColor(node: plateNode, color: astraPinnedPlateColor)
-                            } else {
-                                plateNode.backgroundColor = astraPinnedPlateColor
-                            }
                         } else {
-                            let plateNode = ASDisplayNode()
+                            plateNode = ASImageNode()
                             plateNode.isLayerBacked = true
+                            plateNode.displaysAsynchronously = false
+                            plateNode.displayWithoutProcessing = true
                             plateNode.isUserInteractionEnabled = false
-                            plateNode.cornerRadius = AstraLook.Folio.rowPlateRadius
-                            plateNode.layer.cornerCurve = .continuous
-                            plateNode.backgroundColor = astraPinnedPlateColor
                             plateNode.frame = plateFrame
                             strongSelf.astraPinnedPlateNode = plateNode
                             strongSelf.contextContainer.insertSubnode(plateNode, at: 0)
                         }
+                        if let key = strongSelf.astraPinnedPlateImageKey, key.color.isEqual(astraPinnedPlateColor), key.top == astraPlateTopRadius, key.bottom == astraPlateBottomRadius {
+                        } else {
+                            strongSelf.astraPinnedPlateImageKey = (astraPinnedPlateColor, astraPlateTopRadius, astraPlateBottomRadius)
+                            plateNode.image = astraFolioPlateImage(color: astraPinnedPlateColor, topRadius: astraPlateTopRadius, bottomRadius: astraPlateBottomRadius)
+                        }
                     } else if let plateNode = strongSelf.astraPinnedPlateNode {
                         strongSelf.astraPinnedPlateNode = nil
+                        strongSelf.astraPinnedPlateImageKey = nil
                         plateNode.removeFromSupernode()
                     }
                     
@@ -5809,8 +5850,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     } else if astraFolio {
                         // Folio: the pressed row is an inset slab of the same shape as the pinned plate, so a press
                         // on a pinned row lights the plate it already has.
-                        highlightedBackgroundFrame = CGRect(origin: CGPoint(x: params.leftInset, y: layoutOffset), size: CGSize(width: layout.contentSize.width - params.leftInset - params.rightInset, height: itemHeight)).insetBy(dx: 8.0, dy: 2.0)
-                        strongSelf.revealOptionsHighlightedBackgroundRestingCornerRadius = AstraLook.Folio.rowPlateRadius
+                        highlightedBackgroundFrame = CGRect(origin: CGPoint(x: params.leftInset, y: layoutOffset), size: CGSize(width: layout.contentSize.width - params.leftInset - params.rightInset, height: itemHeight)).insetBy(dx: 8.0, dy: astraAppearsPinned ? 3.0 : 2.0)
+                        // A pinned row's plate has mixed radii, so the press plate rests at the smaller one and a
+                        // mask carves the larger.
+                        strongSelf.revealOptionsHighlightedBackgroundRestingCornerRadius = astraAppearsPinned ? astraJoinRadius : AstraLook.Folio.rowPlateRadius
                     } else if AstraLook.springPresses {
                         // AstraGram look: the pressed row is a rounded plate here too.
                         highlightedBackgroundFrame = highlightedBackgroundFrame.insetBy(dx: 8.0, dy: 0.0)
@@ -5819,6 +5862,22 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         strongSelf.revealOptionsHighlightedBackgroundRestingCornerRadius = 0.0
                     }
                     strongSelf.updateRevealOptionsHighlightedBackgroundFrame(strongSelf.highlightedBackgroundNode, frame: highlightedBackgroundFrame, aboveNodes: [strongSelf.separatorNode, strongSelf.backgroundNode])
+                    if astraFolio && astraAppearsPinned && !item.interaction.isSideListMode {
+                        // The mask is only drawn while the press plate is in the tree, that is while the row is pressed.
+                        let maskLayer: CAShapeLayer
+                        if let current = strongSelf.highlightedBackgroundNode.layer.mask as? CAShapeLayer {
+                            maskLayer = current
+                        } else {
+                            maskLayer = CAShapeLayer()
+                            maskLayer.fillColor = UIColor.white.cgColor
+                            strongSelf.highlightedBackgroundNode.layer.mask = maskLayer
+                        }
+                        let maskBounds = CGRect(origin: CGPoint(), size: highlightedBackgroundFrame.size)
+                        maskLayer.frame = maskBounds
+                        maskLayer.path = astraFolioPlatePath(rect: maskBounds, topRadius: astraPlateTopRadius, bottomRadius: astraPlateBottomRadius)
+                    } else {
+                        strongSelf.highlightedBackgroundNode.layer.mask = nil
+                    }
                     
                     if let peerPresence = peerPresence {
                         strongSelf.peerPresenceManager?.reset(presence: EnginePeer.Presence(status: peerPresence.status, lastActivity: 0), isOnline: online)
@@ -6375,4 +6434,32 @@ private class StarView: UIView {
         self.outline.frame = self.bounds
         self.foreground.frame = self.bounds
     }
+}
+
+/// Folio: a rounded rectangle whose top corners and bottom corners have their own radii.
+private func astraFolioPlatePath(rect: CGRect, topRadius: CGFloat, bottomRadius: CGFloat) -> CGPath {
+    // The two ends share the height, so a tall top radius leaves the bottom what remains.
+    let top = max(0.0, min(topRadius, rect.width * 0.5, rect.height))
+    let bottom = max(0.0, min(bottomRadius, rect.width * 0.5, rect.height - top))
+    let path = CGMutablePath()
+    path.move(to: CGPoint(x: rect.minX, y: rect.minY + top))
+    path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.minY), tangent2End: CGPoint(x: rect.minX + top, y: rect.minY), radius: top)
+    path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.minY), tangent2End: CGPoint(x: rect.maxX, y: rect.minY + top), radius: top)
+    path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.maxY), tangent2End: CGPoint(x: rect.maxX - bottom, y: rect.maxY), radius: bottom)
+    path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.maxY), tangent2End: CGPoint(x: rect.minX, y: rect.maxY - bottom), radius: bottom)
+    path.closeSubpath()
+    return path
+}
+
+/// Folio: a stretchable plate image with mixed top and bottom radii. It is drawn once per colour and shape, and the
+/// plate then scrolls as a plain image, with no mask or offscreen pass.
+private func astraFolioPlateImage(color: UIColor, topRadius: CGFloat, bottomRadius: CGFloat) -> UIImage? {
+    let sideRadius = max(topRadius, bottomRadius)
+    let size = CGSize(width: sideRadius * 2.0 + 1.0, height: topRadius + bottomRadius + 1.0)
+    return generateImage(size, rotatedContext: { size, context in
+        context.clear(CGRect(origin: CGPoint(), size: size))
+        context.setFillColor(color.cgColor)
+        context.addPath(astraFolioPlatePath(rect: CGRect(origin: CGPoint(), size: size), topRadius: topRadius, bottomRadius: bottomRadius))
+        context.fillPath()
+    })?.stretchableImage(withLeftCapWidth: Int(sideRadius), topCapHeight: Int(topRadius))
 }

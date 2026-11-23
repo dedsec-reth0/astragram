@@ -332,6 +332,10 @@ final class StatusView: UIView {
             if Int(terminatedState.duration) == 0 {
                 textString = " "
             } else {
+                if AstraLook.design2027 {
+                    // Folio: the final duration keeps the tabular digits of the live timer.
+                    monospacedDigits = true
+                }
                 textString = stringForDuration(Int(terminatedState.duration))
             }
         }

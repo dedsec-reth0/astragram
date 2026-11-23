@@ -3,22 +3,61 @@ import UIKit
 import Display
 import AppBundle
 import TelegramCore
+import SwiftSignalKit
 
 /// AstraGram Monochrome: the settings icons are drawn once, so they follow the switch after the app restarts.
 private let astraMonochromeSettingsIcons: Bool = AstraGramSettings.current.monochrome
 
-/// AstraGram Folio: the settings icons become flat ink tiles with white glyphs. Like Monochrome they are drawn once
-/// per process, so they follow the switch only after a restart (the settings screen offers one). Folio wins when both
+/// AstraGram Folio: the settings icons become flat tiles with one glyph colour. The switch is read at call time, so
+/// toggling Folio takes effect the next time a settings list is built, without a restart. Folio wins when both
 /// switches are somehow stored on.
-private let astraFolioSettingsIcons: Bool = AstraGramSettings.current.design2027
+private func astraFolioSettingsIcons() -> Bool {
+    return AstraLook.design2027
+}
 
-/// The Folio tile fills: ink for every tile, and Klein Volt for the AstraGram row, the one place the accent marks.
-private let astraFolioTileInk = UIColor(rgb: 0x0B0B0C)
-private let astraFolioTileVolt = UIColor(rgb: 0x3D2BFF)
+/// Which Folio tile: ink for every tile, and Klein Volt for the AstraGram row, the one place the accent marks.
+private enum AstraFolioTileKind {
+    case ink
+    case volt
+}
 
-/// AstraGram Folio: a flat 30x30 tile with continuous 9pt corners, the glyph in white, and a 0.5pt white hairline
-/// just inside the edge, so that the ink tile still reads on the dark cards.
-private func astraFolioSettingsTile(name: String, scaleFactor: CGFloat = 1.0, fill: UIColor) -> UIImage? {
+/// The Folio tiles drawn so far, keyed by glyph, scale, kind and appearance, so each tile is drawn at most once per
+/// appearance.
+private let astraFolioTileCache = Atomic<[String: UIImage]>(value: [:])
+
+/// AstraGram Folio: the tile for the appearance the Folio presentation is in now, drawn once and then cached.
+private func astraFolioCachedSettingsTile(name: String, scaleFactor: CGFloat = 1.0, kind: AstraFolioTileKind) -> UIImage? {
+    let dark = astraFolioCurrentAppearanceIsDark()
+    let key = "\(name)|\(scaleFactor)|\(kind == .volt ? "v" : "i")|\(dark ? "d" : "l")"
+    if let cached = astraFolioTileCache.with({ $0[key] }) {
+        return cached
+    }
+    guard let image = astraFolioSettingsTile(name: name, scaleFactor: scaleFactor, kind: kind, dark: dark) else {
+        return nil
+    }
+    let _ = astraFolioTileCache.modify { cache in
+        var cache = cache
+        cache[key] = image
+        return cache
+    }
+    return image
+}
+
+/// AstraGram Folio: a flat 30x30 tile with continuous 9pt corners and a 0.5pt white hairline just inside the edge.
+/// Light: an ink tile with a white glyph. Dark: a graphite tile with a paper glyph and a fainter rim, so the tile sits
+/// on the dark cards instead of punching a hole in them. The AstraGram tile is volt (the dark volt with an ink glyph).
+private func astraFolioSettingsTile(name: String, scaleFactor: CGFloat = 1.0, kind: AstraFolioTileKind, dark: Bool) -> UIImage? {
+    let fill: UIColor
+    let glyph: UIColor
+    switch kind {
+    case .ink:
+        fill = dark ? UIColor(rgb: 0x2A2A2E) : UIColor(rgb: 0x0B0B0C)
+        glyph = dark ? UIColor(rgb: 0xF4F3EE, alpha: 0.92) : UIColor.white
+    case .volt:
+        fill = dark ? UIColor(rgb: 0x8B7DFF) : UIColor(rgb: 0x3D2BFF)
+        glyph = dark ? UIColor(rgb: 0x0B0B0C) : UIColor.white
+    }
+    let rimAlpha: CGFloat = dark ? 0.06 : 0.14
     return generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)
         context.clear(bounds)
@@ -37,7 +76,7 @@ private func astraFolioSettingsTile(name: String, scaleFactor: CGFloat = 1.0, fi
             
             context.saveGState()
             context.clip(to: imageRect, mask: maskImage)
-            context.setFillColor(UIColor.white.cgColor)
+            context.setFillColor(glyph.cgColor)
             context.fill(imageRect)
             context.restoreGState()
         }
@@ -48,16 +87,24 @@ private func astraFolioSettingsTile(name: String, scaleFactor: CGFloat = 1.0, fi
         context.saveGState()
         context.addPath(strokePath.cgPath)
         context.setLineWidth(strokeWidth)
-        context.setStrokeColor(UIColor.white.withAlphaComponent(0.14).cgColor)
+        context.setStrokeColor(UIColor.white.withAlphaComponent(rimAlpha).cgColor)
         context.strokePath()
         context.restoreGState()
     })
 }
 
+/// AstraGram Folio: the Folio tile while Folio is on, otherwise the stock icon (drawn once, as before).
+private func astraFolioSettingsIcon(name: String, kind: AstraFolioTileKind = .ink, stock: () -> UIImage?) -> UIImage? {
+    if astraFolioSettingsIcons(), let tile = astraFolioCachedSettingsTile(name: name, kind: kind) {
+        return tile
+    }
+    return stock()
+}
+
 /// AstraGram Monochrome: an icon drawn in color, with its colors taken away.
 private func astraMonochromeSettingsIcon(_ image: UIImage?) -> UIImage? {
     // Folio takes precedence over Monochrome, so its own icons are never desaturated on top.
-    guard astraMonochromeSettingsIcons, !astraFolioSettingsIcons, let image, let cgImage = image.cgImage else {
+    guard astraMonochromeSettingsIcons, !astraFolioSettingsIcons(), let image, let cgImage = image.cgImage else {
         return image
     }
     let result = generateImage(image.size, contextGenerator: { size, context in
@@ -77,10 +124,15 @@ private func astraMonochromeSettingsIcon(_ image: UIImage?) -> UIImage? {
 private let gradientImage = UIImage(bundleImageName: "Item List/Icons/Gradient")
 private let backdropImage = UIImage(bundleImageName: "Item List/Icons/Backdrop")
 public func renderSettingsIcon(name: String, scaleFactor: CGFloat = 1.0, backgroundColors rawBackgroundColors: [UIColor]? = nil) -> UIImage? {
-    if astraFolioSettingsIcons, rawBackgroundColors != nil {
+    if astraFolioSettingsIcons(), rawBackgroundColors != nil {
         // Under Folio every coloured tile is the same flat ink tile; only the glyph tells the rows apart.
-        return astraFolioSettingsTile(name: name, scaleFactor: scaleFactor, fill: astraFolioTileInk)
+        return astraFolioCachedSettingsTile(name: name, scaleFactor: scaleFactor, kind: .ink)
     }
+    return renderStockSettingsIcon(name: name, scaleFactor: scaleFactor, backgroundColors: rawBackgroundColors)
+}
+
+/// The stock settings icon, never the Folio tile, so a stock icon cached in a `static let` stays stock.
+private func renderStockSettingsIcon(name: String, scaleFactor: CGFloat = 1.0, backgroundColors rawBackgroundColors: [UIColor]? = nil) -> UIImage? {
     var backgroundColors = rawBackgroundColors
     if astraMonochromeSettingsIcons, let rawBackgroundColors {
         backgroundColors = rawBackgroundColors.map { _ in UIColor(rgb: 0x2e2e2e) }
@@ -173,7 +225,7 @@ public func renderAttachAppIcon(iconImage: UIImage?) -> UIImage? {
         // These icons are whole pictures with no separate glyph, so Folio keeps the picture and only matches the
         // 9pt corner of its tiles.
         let outerPath = UIBezierPath(rect: CGRect(origin: .zero, size: size))
-        let innerPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: astraFolioSettingsIcons ? AstraLook.Folio.settingsIconRadius : 8.0)
+        let innerPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: astraFolioSettingsIcons() ? AstraLook.Folio.settingsIconRadius : 8.0)
         outerPath.append(innerPath)
 
         context.saveGState()
@@ -198,65 +250,67 @@ let colorGray = UIColor(rgb: 0x8E8E93)
 let colorViolet = UIColor(rgb: 0x5E5CE6)
 
 public struct PresentationResourcesSettings {
-    public static let proxy = renderSettingsIcon(name: "Item List/Icons/Proxy", backgroundColors: [colorGreen])
-    public static let savedMessages = renderSettingsIcon(name: "Item List/Icons/SavedMessages", backgroundColors: [colorBlue])
-    public static let recentCalls = renderSettingsIcon(name: "Item List/Icons/Phone", backgroundColors: [colorGreen])
-    public static let contacts = renderSettingsIcon(name: "Item List/Icons/Members", backgroundColors: [colorViolet])
-    public static let devices = renderSettingsIcon(name: "Item List/Icons/Devices", backgroundColors: [colorOrange])
-    public static let chatFolders = renderSettingsIcon(name: "Item List/Icons/Folder", backgroundColors: [colorLightBlue])
-    public static let stickers = renderSettingsIcon(name: "Item List/Icons/Sticker", backgroundColors: [colorOrange])
-    public static let notifications = renderSettingsIcon(name: "Item List/Icons/Notifications", backgroundColors: [colorRed])
-    public static let security = renderSettingsIcon(name: "Item List/Icons/Privacy", backgroundColors: [colorGray])
-    public static let dataAndStorage = renderSettingsIcon(name: "Item List/Icons/Data", backgroundColors: [colorGreen])
-    public static let appearance = renderSettingsIcon(name: "Item List/Icons/Appearance", backgroundColors: [colorLightBlue])
-    public static let language = renderSettingsIcon(name: "Item List/Icons/Language", backgroundColors: [colorPurple])
-    public static let powerSaving = renderSettingsIcon(name: "Item List/Icons/PowerSaving", backgroundColors: [colorOrange])
-    public static let business = renderSettingsIcon(name: "Item List/Icons/Business", backgroundColors: [UIColor(rgb: 0xA95CE3), UIColor(rgb: 0xF16B80)])
-    public static let myProfile = renderSettingsIcon(name: "Item List/Icons/Profile", backgroundColors: [colorRed])
+    public static var proxy: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Proxy", stock: { stockProxy }) }
+    public static var savedMessages: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/SavedMessages", stock: { stockSavedMessages }) }
+    public static var recentCalls: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Phone", stock: { stockRecentCalls }) }
+    public static var contacts: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Members", stock: { stockContacts }) }
+    public static var devices: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Devices", stock: { stockDevices }) }
+    public static var chatFolders: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Folder", stock: { stockChatFolders }) }
+    public static var stickers: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Sticker", stock: { stockStickers }) }
+    public static var notifications: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Notifications", stock: { stockNotifications }) }
+    public static var security: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Privacy", stock: { stockSecurity }) }
+    public static var dataAndStorage: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Data", stock: { stockDataAndStorage }) }
+    public static var appearance: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Appearance", stock: { stockAppearance }) }
+    public static var language: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Language", stock: { stockLanguage }) }
+    public static var powerSaving: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/PowerSaving", stock: { stockPowerSaving }) }
+    public static var business: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Business", stock: { stockBusiness }) }
+    public static var myProfile: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Profile", stock: { stockMyProfile }) }
     
-    public static let birthday = renderSettingsIcon(name: "Item List/Icons/Cake", backgroundColors: [colorBlue])
-    public static let aiTools = renderSettingsIcon(name: "Item List/Icons/AITools", backgroundColors: [colorPurple])
-    public static let yourColor = renderSettingsIcon(name: "Item List/Icons/Brush", backgroundColors: [colorLightBlue])
+    public static var birthday: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Cake", stock: { stockBirthday }) }
+    public static var aiTools: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/AITools", stock: { stockAiTools }) }
+    public static var yourColor: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Brush", stock: { stockYourColor }) }
     
-    public static let storageUsage = renderSettingsIcon(name: "Item List/Icons/Pie", backgroundColors: [colorOrange])
-    public static let dataUsage = renderSettingsIcon(name: "Item List/Icons/Stats", backgroundColors: [colorPurple])
+    public static var storageUsage: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Pie", stock: { stockStorageUsage }) }
+    public static var dataUsage: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Stats", stock: { stockDataUsage }) }
     
-    public static let cellular = renderSettingsIcon(name: "Item List/Icons/Cellular", backgroundColors: [colorGreen])
-    public static let wifi = renderSettingsIcon(name: "Item List/Icons/Wifi", backgroundColors: [colorBlue])
+    public static var cellular: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Cellular", stock: { stockCellular }) }
+    public static var wifi: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Wifi", stock: { stockWifi }) }
     
-    public static let privateChats = renderSettingsIcon(name: "Item List/Icons/Member", backgroundColors: [colorBlue])
-    public static let groups = renderSettingsIcon(name: "Item List/Icons/Group", backgroundColors: [colorGreen])
-    public static let channels = renderSettingsIcon(name: "Item List/Icons/Channel", backgroundColors: [colorOrange])
-    public static let stories = renderSettingsIcon(name: "Item List/Icons/Stories", backgroundColors: [colorViolet])
-    public static let reactions = renderSettingsIcon(name: "Item List/Icons/Reactions", backgroundColors: [UIColor(rgb: 0xFF2D55)])
+    public static var privateChats: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Member", stock: { stockPrivateChats }) }
+    public static var groups: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Group", stock: { stockGroups }) }
+    public static var channels: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Channel", stock: { stockChannels }) }
+    public static var stories: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Stories", stock: { stockStories }) }
+    public static var reactions: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Reactions", stock: { stockReactions }) }
     
-    public static let photos = renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorOrange])
-    public static let videos = renderSettingsIcon(name: "Item List/Icons/Video", backgroundColors: [colorRed])
-    public static let files = renderSettingsIcon(name: "Item List/Icons/File", backgroundColors: [colorBlue])
-    public static let gifs = renderSettingsIcon(name: "Item List/Icons/Gif", backgroundColors: [colorOrange])
-    public static let stickersGreen = renderSettingsIcon(name: "Item List/Icons/Sticker", backgroundColors: [colorGreen])
-    public static let emoji = renderSettingsIcon(name: "Item List/Icons/Emoji", backgroundColors: [colorLightBlue])
-    public static let emojiTeal = renderSettingsIcon(name: "Item List/Icons/Emoji", backgroundColors: [colorTeal])
-    public static let archivedSticker = renderSettingsIcon(name: "Item List/Icons/ArchivedSticker", backgroundColors: [colorGreen])
-    public static let trendingSticker = renderSettingsIcon(name: "Item List/Icons/TrendingSticker", backgroundColors: [colorOrange])
-    public static let effects = renderSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorLightBlue])
+    public static var photos: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Photo", stock: { stockPhotos }) }
+    public static var videos: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Video", stock: { stockVideos }) }
+    public static var files: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/File", stock: { stockFiles }) }
+    public static var gifs: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Gif", stock: { stockGifs }) }
+    public static var stickersGreen: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Sticker", stock: { stockStickersGreen }) }
+    public static var emoji: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Emoji", stock: { stockEmoji }) }
+    public static var emojiTeal: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Emoji", stock: { stockEmojiTeal }) }
+    public static var archivedSticker: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/ArchivedSticker", stock: { stockArchivedSticker }) }
+    public static var trendingSticker: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/TrendingSticker", stock: { stockTrendingSticker }) }
+    public static var effects: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Effect", stock: { stockEffects }) }
     // The AstraGram row is the one Folio tile in Klein Volt.
-    public static let astraGram = astraFolioSettingsIcons ? astraFolioSettingsTile(name: "Item List/Icons/Effect", fill: astraFolioTileVolt) : renderSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorViolet])
-    public static let photosBlue = renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorBlue])
-    public static let clock = renderSettingsIcon(name: "Item List/Icons/Clock", backgroundColors: [colorPurple])
-    public static let photosLightBlue = renderSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorLightBlue])
-    public static let videosBlue = renderSettingsIcon(name: "Item List/Icons/Video", backgroundColors: [colorBlue])
+    public static var astraGram: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Effect", kind: .volt, stock: { stockAstraGram }) }
+    private static let stockAstraGram = renderStockSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorViolet])
+    public static var photosBlue: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Photo", stock: { stockPhotosBlue }) }
+    public static var clock: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Clock", stock: { stockClock }) }
+    public static var photosLightBlue: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Photo", stock: { stockPhotosLightBlue }) }
+    public static var videosBlue: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Video", stock: { stockVideosBlue }) }
     
-    public static let block = renderSettingsIcon(name: "Item List/Icons/Block", backgroundColors: [colorRed])
-    public static let activeSessions = renderSettingsIcon(name: "Item List/Icons/Language", backgroundColors: [colorBlue])
-    public static let faceId = renderSettingsIcon(name: "Item List/Icons/FaceId", backgroundColors: [colorGreen])
-    public static let lockOrange = renderSettingsIcon(name: "Item List/Icons/Privacy", backgroundColors: [colorOrange])
-    public static let passkeys = renderSettingsIcon(name: "Item List/Icons/Key", backgroundColors: [colorViolet])
-    public static let timer = renderSettingsIcon(name: "Item List/Icons/Timer", backgroundColors: [colorPurple])
-    public static let email = renderSettingsIcon(name: "Item List/Icons/Email", backgroundColors: [colorViolet])
+    public static var block: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Block", stock: { stockBlock }) }
+    public static var activeSessions: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Language", stock: { stockActiveSessions }) }
+    public static var faceId: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/FaceId", stock: { stockFaceId }) }
+    public static var lockOrange: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Privacy", stock: { stockLockOrange }) }
+    public static var passkeys: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Key", stock: { stockPasskeys }) }
+    public static var timer: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Timer", stock: { stockTimer }) }
+    public static var email: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Email", stock: { stockEmail }) }
         
     // Folio draws this gradient tile as an ink tile too, with the same glyph at its own size.
-    public static let premium = astraFolioSettingsIcons ? astraFolioSettingsTile(name: "Item List/Icons/Premium", fill: astraFolioTileInk) : astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
+    public static var premium: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Premium", stock: { stockPremium }) }
+    private static let stockPremium = astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)
         context.clear(bounds)
                 
@@ -301,13 +355,14 @@ public struct PresentationResourcesSettings {
         context.restoreGState()
     }))
     
-    public static let ton = renderSettingsIcon(name: "Item List/Icons/Gram", backgroundColors: [colorBlue])
-    public static let gramEarnings = renderSettingsIcon(name: "Item List/Icons/Earnings", backgroundColors: [colorBlue])
+    public static var ton: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Gram", stock: { stockTon }) }
+    public static var gramEarnings: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Earnings", stock: { stockGramEarnings }) }
     
     public static let money = UIImage(bundleImageName: "Settings/Gram")
  
     // Folio draws this gradient tile as an ink tile too, with the same glyph at its own size.
-    public static let stars = astraFolioSettingsIcons ? astraFolioSettingsTile(name: "Item List/Icons/Stars", fill: astraFolioTileInk) : astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
+    public static var stars: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Stars", stock: { stockStars }) }
+    private static let stockStars = astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)
         context.clear(bounds)
         
@@ -351,7 +406,8 @@ public struct PresentationResourcesSettings {
     }))
     
     // Folio draws this gradient tile as an ink tile too, with the same glyph at its own size.
-    public static let premiumGift = astraFolioSettingsIcons ? astraFolioSettingsTile(name: "Item List/Icons/Gift", fill: astraFolioTileInk) : astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
+    public static var premiumGift: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Gift", stock: { stockPremiumGift }) }
+    private static let stockPremiumGift = astraMonochromeSettingsIcon(generateImage(CGSize(width: 30.0, height: 30.0), contextGenerator: { size, context in
         let bounds = CGRect(origin: CGPoint(), size: size)
         context.clear(bounds)
         
@@ -396,51 +452,141 @@ public struct PresentationResourcesSettings {
         context.restoreGState()
     }))
     
-    public static let bot = renderSettingsIcon(name: "Item List/Icons/Bot", backgroundColors: [colorBlue])
+    public static var bot: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Bot", stock: { stockBot }) }
 
     public static let passport = renderAttachAppIcon(iconImage: UIImage(bundleImageName: "Settings/Menu/Passport"))
     public static let watch = renderAttachAppIcon(iconImage: UIImage(bundleImageName: "Settings/Menu/Watch"))
     
-    public static let support = renderSettingsIcon(name: "Item List/Icons/Support", backgroundColors: [colorOrange])
-    public static let faq = renderSettingsIcon(name: "Item List/Icons/Faq", backgroundColors: [colorLightBlue])
-    public static let tips = renderSettingsIcon(name: "Item List/Icons/Tips", backgroundColors: [UIColor(rgb: 0xffcc02)])
+    public static var support: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Support", stock: { stockSupport }) }
+    public static var faq: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Faq", stock: { stockFaq }) }
+    public static var tips: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Tips", stock: { stockTips }) }
         
-    public static let changePhoneNumber = renderSettingsIcon(name: "Item List/Icons/ChangePhone", backgroundColors: [colorPurple])
-    public static let deleteAddAccount = renderSettingsIcon(name: "Item List/Icons/Member", backgroundColors: [colorBlue])
-    public static let deleteSetTwoStepAuth = renderSettingsIcon(name: "Item List/Icons/Key", backgroundColors: [colorViolet])
-    public static let deleteChats = renderSettingsIcon(name: "Item List/Icons/Delete", backgroundColors: [colorRed])
-    public static let clearSynced = renderSettingsIcon(name: "Item List/Icons/Group", backgroundColors: [colorOrange])
+    public static var changePhoneNumber: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/ChangePhone", stock: { stockChangePhoneNumber }) }
+    public static var deleteAddAccount: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Member", stock: { stockDeleteAddAccount }) }
+    public static var deleteSetTwoStepAuth: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Key", stock: { stockDeleteSetTwoStepAuth }) }
+    public static var deleteChats: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Delete", stock: { stockDeleteChats }) }
+    public static var clearSynced: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Group", stock: { stockClearSynced }) }
     
-    public static let groupType = renderSettingsIcon(name: "Item List/Icons/Members", backgroundColors: [colorBlue])
-    public static let channelType = renderSettingsIcon(name: "Item List/Icons/Channel", backgroundColors: [colorBlue])
-    public static let chatHistory = renderSettingsIcon(name: "Item List/Icons/Chat", backgroundColors: [colorGreen])
-    public static let topics = renderSettingsIcon(name: "Item List/Icons/Topics", backgroundColors: [colorLightBlue])
-    public static let links = renderSettingsIcon(name: "Item List/Icons/Link", backgroundColors: [colorOrange])
-    public static let chatAppearance = renderSettingsIcon(name: "Item List/Icons/Brush", backgroundColors: [colorOrange])
-    public static let admins = renderSettingsIcon(name: "Item List/Icons/Admin", backgroundColors: [colorGreen])
-    public static let subscribers = renderSettingsIcon(name: "Item List/Icons/Group", backgroundColors: [colorBlue])
-    public static let stats = renderSettingsIcon(name: "Item List/Icons/Stats", backgroundColors: [colorViolet])
-    public static let balance = renderSettingsIcon(name: "Item List/Icons/Balance", backgroundColors: [colorGreen])
-    public static let affiliateProgram = renderSettingsIcon(name: "Item List/Icons/Affiliate", backgroundColors: [colorViolet])
-    public static let earnStars = renderSettingsIcon(name: "Item List/Icons/Earn", backgroundColors: [colorGreen])
-    public static let channelMessages = renderSettingsIcon(name: "Item List/Icons/Messages", backgroundColors: [colorViolet])
-    public static let settings = renderSettingsIcon(name: "Item List/Icons/Settings", backgroundColors: [colorOrange])
-    public static let antiSpam = renderSettingsIcon(name: "Item List/Icons/AntiSpam", backgroundColors: [colorGreen])
-    public static let recentActions = renderSettingsIcon(name: "Item List/Icons/View", backgroundColors: [colorOrange])
-    public static let permissions = renderSettingsIcon(name: "Item List/Icons/Key", backgroundColors: [colorGray])
-    public static let autoTranslate = renderSettingsIcon(name: "Item List/Icons/Translation", backgroundColors: [colorPurple])
-    public static let emojiStatus = renderSettingsIcon(name: "Item List/Icons/Status", backgroundColors: [colorBlue])
-    public static let location = renderSettingsIcon(name: "Item List/Icons/Location", backgroundColors: [colorLightBlue])
+    public static var groupType: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Members", stock: { stockGroupType }) }
+    public static var channelType: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Channel", stock: { stockChannelType }) }
+    public static var chatHistory: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Chat", stock: { stockChatHistory }) }
+    public static var topics: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Topics", stock: { stockTopics }) }
+    public static var links: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Link", stock: { stockLinks }) }
+    public static var chatAppearance: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Brush", stock: { stockChatAppearance }) }
+    public static var admins: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Admin", stock: { stockAdmins }) }
+    public static var subscribers: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Group", stock: { stockSubscribers }) }
+    public static var stats: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Stats", stock: { stockStats }) }
+    public static var balance: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Balance", stock: { stockBalance }) }
+    public static var affiliateProgram: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Affiliate", stock: { stockAffiliateProgram }) }
+    public static var earnStars: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Earn", stock: { stockEarnStars }) }
+    public static var channelMessages: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Messages", stock: { stockChannelMessages }) }
+    public static var settings: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Settings", stock: { stockSettings }) }
+    public static var antiSpam: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/AntiSpam", stock: { stockAntiSpam }) }
+    public static var recentActions: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/View", stock: { stockRecentActions }) }
+    public static var permissions: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Key", stock: { stockPermissions }) }
+    public static var autoTranslate: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Translation", stock: { stockAutoTranslate }) }
+    public static var emojiStatus: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Status", stock: { stockEmojiStatus }) }
+    public static var location: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Location", stock: { stockLocation }) }
     public static let groupRequests = renderAttachAppIcon(iconImage: UIImage(bundleImageName: "Chat/Info/GroupRequestsIcon"))
     
-    public static let calls = renderSettingsIcon(name: "Item List/Icons/Phone", backgroundColors: [colorOrange])
-    public static let messages = renderSettingsIcon(name: "Item List/Icons/Chat", backgroundColors: [colorViolet])
-    public static let filesGreen = renderSettingsIcon(name: "Item List/Icons/File", backgroundColors: [colorGreen])
-    public static let stickersYellow = renderSettingsIcon(name: "Item List/Icons/Sticker", backgroundColors: [colorOrange])
-    public static let music = renderSettingsIcon(name: "Item List/Icons/Play", backgroundColors: [colorRed])
-    public static let voices = renderSettingsIcon(name: "Item List/Icons/Microphone", backgroundColors: [colorPurple])
-    public static let upload = renderSettingsIcon(name: "Item List/Icons/Upload", backgroundColors: [colorBlue])
-    public static let download = renderSettingsIcon(name: "Item List/Icons/Download", backgroundColors: [colorGreen])
+    public static var calls: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Phone", stock: { stockCalls }) }
+    public static var messages: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Chat", stock: { stockMessages }) }
+    public static var filesGreen: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/File", stock: { stockFilesGreen }) }
+    public static var stickersYellow: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Sticker", stock: { stockStickersYellow }) }
+    public static var music: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Play", stock: { stockMusic }) }
+    public static var voices: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Microphone", stock: { stockVoices }) }
+    public static var upload: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Upload", stock: { stockUpload }) }
+    public static var download: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Download", stock: { stockDownload }) }
     
-    public static let welcome = renderSettingsIcon(name: "Item List/Icons/Hand", backgroundColors: [colorViolet])
+    public static var welcome: UIImage? { return astraFolioSettingsIcon(name: "Item List/Icons/Hand", stock: { stockWelcome }) }
+
+    // The stock icons, drawn once on first use while Folio is off.
+    private static let stockProxy = renderStockSettingsIcon(name: "Item List/Icons/Proxy", backgroundColors: [colorGreen])
+    private static let stockSavedMessages = renderStockSettingsIcon(name: "Item List/Icons/SavedMessages", backgroundColors: [colorBlue])
+    private static let stockRecentCalls = renderStockSettingsIcon(name: "Item List/Icons/Phone", backgroundColors: [colorGreen])
+    private static let stockContacts = renderStockSettingsIcon(name: "Item List/Icons/Members", backgroundColors: [colorViolet])
+    private static let stockDevices = renderStockSettingsIcon(name: "Item List/Icons/Devices", backgroundColors: [colorOrange])
+    private static let stockChatFolders = renderStockSettingsIcon(name: "Item List/Icons/Folder", backgroundColors: [colorLightBlue])
+    private static let stockStickers = renderStockSettingsIcon(name: "Item List/Icons/Sticker", backgroundColors: [colorOrange])
+    private static let stockNotifications = renderStockSettingsIcon(name: "Item List/Icons/Notifications", backgroundColors: [colorRed])
+    private static let stockSecurity = renderStockSettingsIcon(name: "Item List/Icons/Privacy", backgroundColors: [colorGray])
+    private static let stockDataAndStorage = renderStockSettingsIcon(name: "Item List/Icons/Data", backgroundColors: [colorGreen])
+    private static let stockAppearance = renderStockSettingsIcon(name: "Item List/Icons/Appearance", backgroundColors: [colorLightBlue])
+    private static let stockLanguage = renderStockSettingsIcon(name: "Item List/Icons/Language", backgroundColors: [colorPurple])
+    private static let stockPowerSaving = renderStockSettingsIcon(name: "Item List/Icons/PowerSaving", backgroundColors: [colorOrange])
+    private static let stockBusiness = renderStockSettingsIcon(name: "Item List/Icons/Business", backgroundColors: [UIColor(rgb: 0xA95CE3), UIColor(rgb: 0xF16B80)])
+    private static let stockMyProfile = renderStockSettingsIcon(name: "Item List/Icons/Profile", backgroundColors: [colorRed])
+    private static let stockBirthday = renderStockSettingsIcon(name: "Item List/Icons/Cake", backgroundColors: [colorBlue])
+    private static let stockAiTools = renderStockSettingsIcon(name: "Item List/Icons/AITools", backgroundColors: [colorPurple])
+    private static let stockYourColor = renderStockSettingsIcon(name: "Item List/Icons/Brush", backgroundColors: [colorLightBlue])
+    private static let stockStorageUsage = renderStockSettingsIcon(name: "Item List/Icons/Pie", backgroundColors: [colorOrange])
+    private static let stockDataUsage = renderStockSettingsIcon(name: "Item List/Icons/Stats", backgroundColors: [colorPurple])
+    private static let stockCellular = renderStockSettingsIcon(name: "Item List/Icons/Cellular", backgroundColors: [colorGreen])
+    private static let stockWifi = renderStockSettingsIcon(name: "Item List/Icons/Wifi", backgroundColors: [colorBlue])
+    private static let stockPrivateChats = renderStockSettingsIcon(name: "Item List/Icons/Member", backgroundColors: [colorBlue])
+    private static let stockGroups = renderStockSettingsIcon(name: "Item List/Icons/Group", backgroundColors: [colorGreen])
+    private static let stockChannels = renderStockSettingsIcon(name: "Item List/Icons/Channel", backgroundColors: [colorOrange])
+    private static let stockStories = renderStockSettingsIcon(name: "Item List/Icons/Stories", backgroundColors: [colorViolet])
+    private static let stockReactions = renderStockSettingsIcon(name: "Item List/Icons/Reactions", backgroundColors: [UIColor(rgb: 0xFF2D55)])
+    private static let stockPhotos = renderStockSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorOrange])
+    private static let stockVideos = renderStockSettingsIcon(name: "Item List/Icons/Video", backgroundColors: [colorRed])
+    private static let stockFiles = renderStockSettingsIcon(name: "Item List/Icons/File", backgroundColors: [colorBlue])
+    private static let stockGifs = renderStockSettingsIcon(name: "Item List/Icons/Gif", backgroundColors: [colorOrange])
+    private static let stockStickersGreen = renderStockSettingsIcon(name: "Item List/Icons/Sticker", backgroundColors: [colorGreen])
+    private static let stockEmoji = renderStockSettingsIcon(name: "Item List/Icons/Emoji", backgroundColors: [colorLightBlue])
+    private static let stockEmojiTeal = renderStockSettingsIcon(name: "Item List/Icons/Emoji", backgroundColors: [colorTeal])
+    private static let stockArchivedSticker = renderStockSettingsIcon(name: "Item List/Icons/ArchivedSticker", backgroundColors: [colorGreen])
+    private static let stockTrendingSticker = renderStockSettingsIcon(name: "Item List/Icons/TrendingSticker", backgroundColors: [colorOrange])
+    private static let stockEffects = renderStockSettingsIcon(name: "Item List/Icons/Effect", backgroundColors: [colorLightBlue])
+    private static let stockPhotosBlue = renderStockSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorBlue])
+    private static let stockClock = renderStockSettingsIcon(name: "Item List/Icons/Clock", backgroundColors: [colorPurple])
+    private static let stockPhotosLightBlue = renderStockSettingsIcon(name: "Item List/Icons/Photo", backgroundColors: [colorLightBlue])
+    private static let stockVideosBlue = renderStockSettingsIcon(name: "Item List/Icons/Video", backgroundColors: [colorBlue])
+    private static let stockBlock = renderStockSettingsIcon(name: "Item List/Icons/Block", backgroundColors: [colorRed])
+    private static let stockActiveSessions = renderStockSettingsIcon(name: "Item List/Icons/Language", backgroundColors: [colorBlue])
+    private static let stockFaceId = renderStockSettingsIcon(name: "Item List/Icons/FaceId", backgroundColors: [colorGreen])
+    private static let stockLockOrange = renderStockSettingsIcon(name: "Item List/Icons/Privacy", backgroundColors: [colorOrange])
+    private static let stockPasskeys = renderStockSettingsIcon(name: "Item List/Icons/Key", backgroundColors: [colorViolet])
+    private static let stockTimer = renderStockSettingsIcon(name: "Item List/Icons/Timer", backgroundColors: [colorPurple])
+    private static let stockEmail = renderStockSettingsIcon(name: "Item List/Icons/Email", backgroundColors: [colorViolet])
+    private static let stockTon = renderStockSettingsIcon(name: "Item List/Icons/Gram", backgroundColors: [colorBlue])
+    private static let stockGramEarnings = renderStockSettingsIcon(name: "Item List/Icons/Earnings", backgroundColors: [colorBlue])
+    private static let stockBot = renderStockSettingsIcon(name: "Item List/Icons/Bot", backgroundColors: [colorBlue])
+    private static let stockSupport = renderStockSettingsIcon(name: "Item List/Icons/Support", backgroundColors: [colorOrange])
+    private static let stockFaq = renderStockSettingsIcon(name: "Item List/Icons/Faq", backgroundColors: [colorLightBlue])
+    private static let stockTips = renderStockSettingsIcon(name: "Item List/Icons/Tips", backgroundColors: [UIColor(rgb: 0xffcc02)])
+    private static let stockChangePhoneNumber = renderStockSettingsIcon(name: "Item List/Icons/ChangePhone", backgroundColors: [colorPurple])
+    private static let stockDeleteAddAccount = renderStockSettingsIcon(name: "Item List/Icons/Member", backgroundColors: [colorBlue])
+    private static let stockDeleteSetTwoStepAuth = renderStockSettingsIcon(name: "Item List/Icons/Key", backgroundColors: [colorViolet])
+    private static let stockDeleteChats = renderStockSettingsIcon(name: "Item List/Icons/Delete", backgroundColors: [colorRed])
+    private static let stockClearSynced = renderStockSettingsIcon(name: "Item List/Icons/Group", backgroundColors: [colorOrange])
+    private static let stockGroupType = renderStockSettingsIcon(name: "Item List/Icons/Members", backgroundColors: [colorBlue])
+    private static let stockChannelType = renderStockSettingsIcon(name: "Item List/Icons/Channel", backgroundColors: [colorBlue])
+    private static let stockChatHistory = renderStockSettingsIcon(name: "Item List/Icons/Chat", backgroundColors: [colorGreen])
+    private static let stockTopics = renderStockSettingsIcon(name: "Item List/Icons/Topics", backgroundColors: [colorLightBlue])
+    private static let stockLinks = renderStockSettingsIcon(name: "Item List/Icons/Link", backgroundColors: [colorOrange])
+    private static let stockChatAppearance = renderStockSettingsIcon(name: "Item List/Icons/Brush", backgroundColors: [colorOrange])
+    private static let stockAdmins = renderStockSettingsIcon(name: "Item List/Icons/Admin", backgroundColors: [colorGreen])
+    private static let stockSubscribers = renderStockSettingsIcon(name: "Item List/Icons/Group", backgroundColors: [colorBlue])
+    private static let stockStats = renderStockSettingsIcon(name: "Item List/Icons/Stats", backgroundColors: [colorViolet])
+    private static let stockBalance = renderStockSettingsIcon(name: "Item List/Icons/Balance", backgroundColors: [colorGreen])
+    private static let stockAffiliateProgram = renderStockSettingsIcon(name: "Item List/Icons/Affiliate", backgroundColors: [colorViolet])
+    private static let stockEarnStars = renderStockSettingsIcon(name: "Item List/Icons/Earn", backgroundColors: [colorGreen])
+    private static let stockChannelMessages = renderStockSettingsIcon(name: "Item List/Icons/Messages", backgroundColors: [colorViolet])
+    private static let stockSettings = renderStockSettingsIcon(name: "Item List/Icons/Settings", backgroundColors: [colorOrange])
+    private static let stockAntiSpam = renderStockSettingsIcon(name: "Item List/Icons/AntiSpam", backgroundColors: [colorGreen])
+    private static let stockRecentActions = renderStockSettingsIcon(name: "Item List/Icons/View", backgroundColors: [colorOrange])
+    private static let stockPermissions = renderStockSettingsIcon(name: "Item List/Icons/Key", backgroundColors: [colorGray])
+    private static let stockAutoTranslate = renderStockSettingsIcon(name: "Item List/Icons/Translation", backgroundColors: [colorPurple])
+    private static let stockEmojiStatus = renderStockSettingsIcon(name: "Item List/Icons/Status", backgroundColors: [colorBlue])
+    private static let stockLocation = renderStockSettingsIcon(name: "Item List/Icons/Location", backgroundColors: [colorLightBlue])
+    private static let stockCalls = renderStockSettingsIcon(name: "Item List/Icons/Phone", backgroundColors: [colorOrange])
+    private static let stockMessages = renderStockSettingsIcon(name: "Item List/Icons/Chat", backgroundColors: [colorViolet])
+    private static let stockFilesGreen = renderStockSettingsIcon(name: "Item List/Icons/File", backgroundColors: [colorGreen])
+    private static let stockStickersYellow = renderStockSettingsIcon(name: "Item List/Icons/Sticker", backgroundColors: [colorOrange])
+    private static let stockMusic = renderStockSettingsIcon(name: "Item List/Icons/Play", backgroundColors: [colorRed])
+    private static let stockVoices = renderStockSettingsIcon(name: "Item List/Icons/Microphone", backgroundColors: [colorPurple])
+    private static let stockUpload = renderStockSettingsIcon(name: "Item List/Icons/Upload", backgroundColors: [colorBlue])
+    private static let stockDownload = renderStockSettingsIcon(name: "Item List/Icons/Download", backgroundColors: [colorGreen])
+    private static let stockWelcome = renderStockSettingsIcon(name: "Item List/Icons/Hand", backgroundColors: [colorViolet])
 }

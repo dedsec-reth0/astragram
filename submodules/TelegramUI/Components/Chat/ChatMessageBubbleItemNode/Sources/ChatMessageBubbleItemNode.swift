@@ -4515,7 +4515,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
             strongSelf.backgroundNode.astraOutlineColor = UIColor(rgb: 0xFF3B30)
         } else if AstraLook.design2027 && incoming && !astraIsRoundVideo && item.presentationData.chatBubbleCorners.bubbleMode {
             // A round video is skipped for the same reason as above: the bubble behind it is not its shape.
-            let astraFolioRimColor: UIColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor(white: 1.0, alpha: 0.08) : UIColor(rgb: 0x0B0B0C, alpha: 0.08)
+            let astraFolioRimColor: UIColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor(white: 1.0, alpha: 0.10) : UIColor(rgb: 0x0B0B0C, alpha: 0.12)
             strongSelf.backgroundNode.astraOutlineLineWidth = 0.75
             strongSelf.backgroundNode.astraOutlineColor = astraFolioRimColor
         } else {

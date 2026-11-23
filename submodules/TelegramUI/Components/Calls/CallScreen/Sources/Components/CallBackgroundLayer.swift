@@ -104,26 +104,51 @@ final class CallBackgroundLayer: MetalEngineSubjectLayer, MetalEngineSubject {
         self.blurredLayer = MetalEngineSubjectLayer()
         self.externalBlurredLayer = MetalEngineSubjectLayer()
         
-        self.colorSets = [
-            ColorSet(colors: [
-                hexToFloat(0x568FD6),
-                hexToFloat(0x626ED5),
-                hexToFloat(0xA667D5),
-                hexToFloat(0x7664DA)
-            ]),
-            ColorSet(colors: [
-                hexToFloat(0xACBD65),
-                hexToFloat(0x459F8D),
-                hexToFloat(0x53A4D1),
-                hexToFloat(0x3E917A)
-            ]),
-            ColorSet(colors: [
-                hexToFloat(0xC0508D),
-                hexToFloat(0xF09536),
-                hexToFloat(0xCE5081),
-                hexToFloat(0xFC7C4C)
-            ])
-        ]
+        if AstraLook.design2027 {
+            // «Дизайн 2027 Folio»: ringing/connecting is ink only, the live call is ink lit by volt; the weak-signal set
+            // (index 2) stays stock, so a warning still reads as one.
+            self.colorSets = [
+                ColorSet(colors: [
+                    hexToFloat(0x0B0B0C),
+                    hexToFloat(0x161618),
+                    hexToFloat(0x1E1E21),
+                    hexToFloat(0x2A2A2E)
+                ]),
+                ColorSet(colors: [
+                    hexToFloat(0x0B0B0C),
+                    hexToFloat(0x161618),
+                    hexToFloat(0x221E45),
+                    hexToFloat(0x3D2BFF)
+                ]),
+                ColorSet(colors: [
+                    hexToFloat(0xC0508D),
+                    hexToFloat(0xF09536),
+                    hexToFloat(0xCE5081),
+                    hexToFloat(0xFC7C4C)
+                ])
+            ]
+        } else {
+            self.colorSets = [
+                ColorSet(colors: [
+                    hexToFloat(0x568FD6),
+                    hexToFloat(0x626ED5),
+                    hexToFloat(0xA667D5),
+                    hexToFloat(0x7664DA)
+                ]),
+                ColorSet(colors: [
+                    hexToFloat(0xACBD65),
+                    hexToFloat(0x459F8D),
+                    hexToFloat(0x53A4D1),
+                    hexToFloat(0x3E917A)
+                ]),
+                ColorSet(colors: [
+                    hexToFloat(0xC0508D),
+                    hexToFloat(0xF09536),
+                    hexToFloat(0xCE5081),
+                    hexToFloat(0xFC7C4C)
+                ])
+            ]
+        }
         self.colorTransition = AnimatedProperty<ColorSet>(colorSets[0])
         
         super.init()

@@ -793,11 +793,15 @@ public func updatedPresentationData(accountManager: AccountManager<TelegramAccou
             return applicationInForeground
             |> mapToSignal { inForeground -> Signal<PresentationData, NoError> in
                 if inForeground {
-                    return automaticThemeShouldSwitch(themeSettings.automaticThemeSwitchSetting, systemUserInterfaceStyle: systemUserInterfaceStyle)
-                    |> distinctUntilChanged
-                    |> map { autoNightModeTriggered in
+                    // Folio also follows Increase Contrast live: the theme is rebuilt when the system switch changes.
+                    return combineLatest(
+                        automaticThemeShouldSwitch(themeSettings.automaticThemeSwitchSetting, systemUserInterfaceStyle: systemUserInterfaceStyle)
+                        |> distinctUntilChanged,
+                        astraFolioDarkerSystemColors()
+                    )
+                    |> map { autoNightModeTriggered, highContrast in
                         let localizationSettings = sharedData.entries[SharedDataKeys.localizationSettings]?.get(LocalizationSettings.self)
-                        return astraFolioPresentationData(mediaBox: accountManager.mediaBox, themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered, localizationSettings: localizationSettings, nameDisplayOrder: contactSettings.nameDisplayOrder)
+                        return astraFolioPresentationData(mediaBox: accountManager.mediaBox, themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered, localizationSettings: localizationSettings, nameDisplayOrder: contactSettings.nameDisplayOrder, highContrast: highContrast)
                     }
                 } else {
                     return .complete()
@@ -1001,13 +1005,27 @@ private func astraMonochromePresentationData(mediaBox: MediaBox, themeSettings: 
     return PresentationData(strings: stringsValue, theme: theme, autoNightModeTriggered: autoNightModeTriggered, chatWallpaper: chatWallpaper, chatFontSize: chatFontSize, chatBubbleCorners: chatBubbleCorners, listsFontSize: listsFontSize, dateTimeFormat: dateTimeFormat, nameDisplayOrder: nameDisplayOrder, nameSortOrder: nameSortOrder, reduceMotion: themeSettings.reduceMotion, largeEmoji: themeSettings.largeEmoji)
 }
 
+// AstraGram "Folio": the system Increase Contrast switch, now and on every change (deduplicated).
+private func astraFolioDarkerSystemColors() -> Signal<Bool, NoError> {
+    return Signal<Bool, NoError> { subscriber in
+        subscriber.putNext(UIAccessibility.isDarkerSystemColorsEnabled)
+        let observer = NotificationCenter.default.addObserver(forName: UIAccessibility.darkerSystemColorsStatusDidChangeNotification, object: nil, queue: OperationQueue.main, using: { _ in
+            subscriber.putNext(UIAccessibility.isDarkerSystemColorsEnabled)
+        })
+        return ActionDisposable {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    |> distinctUntilChanged
+}
+
 // AstraGram "Folio": the presentation data with the Folio theme, whatever theme is chosen. Bubbles are tailless on
 // both sides with 16/4 corners; strings, formats and font sizes as usual.
-private func astraFolioPresentationData(mediaBox: MediaBox, themeSettings: PresentationThemeSettings, autoNightModeTriggered: Bool, localizationSettings: LocalizationSettings?, nameDisplayOrder: PresentationPersonNameOrder) -> PresentationData {
+private func astraFolioPresentationData(mediaBox: MediaBox, themeSettings: PresentationThemeSettings, autoNightModeTriggered: Bool, localizationSettings: LocalizationSettings?, nameDisplayOrder: PresentationPersonNameOrder, highContrast: Bool = UIAccessibility.isDarkerSystemColorsEnabled) -> PresentationData {
     let dark = astraMonochromeIsDark(themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered)
     let bubbleMode = themeSettings.chatBubbleSettings.bubbleMode
     let livingWallpaper = AstraGramSettings.current.design2027LivingWallpaper
-    let theme = makeAstraFolioPresentationTheme(dark: dark, bubbleMode: bubbleMode, livingWallpaper: livingWallpaper)
+    let theme = makeAstraFolioPresentationTheme(dark: dark, bubbleMode: bubbleMode, livingWallpaper: livingWallpaper, highContrast: highContrast)
     
     let dateTimeFormat = currentDateTimeFormat()
     let stringsValue: PresentationStrings

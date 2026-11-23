@@ -211,11 +211,15 @@ public class ItemListSectionHeaderItemNode: ListViewItemNode, ItemListItemNode {
             
             let titleString: NSAttributedString
             if folio {
-                // The header is uppercased in the current locale and tracked by 0.9pt, like a magazine running head.
-                titleString = NSAttributedString(string: item.text.uppercased(with: Locale.current), attributes: [
+                // The header is uppercased in the current locale and tracked by 6% of its point size, like a magazine
+                // running head. At the large accessibility sizes the caps and tracking are dropped for legibility.
+                let isLargeText = item.presentationData.fontSize.itemListBaseFontSize > 23.0
+                let headerText = isLargeText ? item.text : item.text.uppercased(with: Locale.current)
+                let headerKern: CGFloat = isLargeText ? 0.0 : 0.06 * titleFont.pointSize
+                titleString = NSAttributedString(string: headerText, attributes: [
                     .font: titleFont,
                     .foregroundColor: item.presentationData.theme.list.sectionHeaderTextColor,
-                    .kern: 0.9 as NSNumber
+                    .kern: headerKern as NSNumber
                 ])
             } else {
                 titleString = NSAttributedString(string: item.text, font: titleFont, textColor: item.presentationData.theme.list.sectionHeaderTextColor)
@@ -239,14 +243,26 @@ public class ItemListSectionHeaderItemNode: ListViewItemNode, ItemListItemNode {
             let contentSize: CGSize
             var insets = UIEdgeInsets()
             
-            contentSize = CGSize(width: params.width, height: titleLayout.size.height + 13.0)
-            switch neighbors.top {
-                case .none:
-                    insets.top += 24.0
-                case .otherSection:
-                    insets.top += 28.0
-                default:
-                    break
+            if folio {
+                // Folio rhythm: 28pt of air above the header text (21pt inset + the 7pt text offset) and 10pt between
+                // the text and the card below it.
+                contentSize = CGSize(width: params.width, height: titleLayout.size.height + 7.0 + 10.0)
+                switch neighbors.top {
+                    case .none, .otherSection:
+                        insets.top += 21.0
+                    default:
+                        break
+                }
+            } else {
+                contentSize = CGSize(width: params.width, height: titleLayout.size.height + 13.0)
+                switch neighbors.top {
+                    case .none:
+                        insets.top += 24.0
+                    case .otherSection:
+                        insets.top += 28.0
+                    default:
+                        break
+                }
             }
             
             let layout = ListViewItemNodeLayout(contentSize: contentSize, insets: insets)

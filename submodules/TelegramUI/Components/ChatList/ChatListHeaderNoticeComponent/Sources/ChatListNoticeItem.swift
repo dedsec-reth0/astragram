@@ -228,6 +228,14 @@ final class ChatListNoticeItemNode: ItemListRevealOptionsItemNode {
             
             let themeUpdated = item.theme !== previousItem?.theme
             
+            // Folio: the notice reads as a list card, a bold ink title over secondary text, with the accent kept for
+            // the one tappable phrase.
+            let astraFolio = AstraLook.design2027
+            let noticeTitleFont = astraFolio ? Font.bold(15.0) : titleFont
+            let noticePrimaryTextColor: UIColor = astraFolio ? item.theme.list.itemPrimaryTextColor : item.theme.rootController.navigationBar.primaryTextColor
+            let noticeSecondaryTextColor: UIColor = astraFolio ? item.theme.list.itemSecondaryTextColor : item.theme.rootController.navigationBar.secondaryTextColor
+            let noticeAccentTextColor: UIColor = astraFolio ? item.theme.list.itemAccentColor : item.theme.rootController.navigationBar.accentTextColor
+            
             let titleString: NSAttributedString
             let textString: NSAttributedString
             var avatarPeer: EnginePeer?
@@ -243,56 +251,56 @@ final class ChatListNoticeItemNode: ItemListRevealOptionsItemNode {
             case let .clearStorage(sizeFraction):
                 let sizeString = dataSizeString(Int64(sizeFraction), formatting: DataSizeStringFormatting(strings: item.strings, decimalSeparator: "."))
                 let rawTitleString = item.strings.ChatList_StorageHintTitle(sizeString)
-                let titleStringValue = NSMutableAttributedString(attributedString: NSAttributedString(string: rawTitleString.string, font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor))
+                let titleStringValue = NSMutableAttributedString(attributedString: NSAttributedString(string: rawTitleString.string, font: noticeTitleFont, textColor: noticePrimaryTextColor))
                 if let range = rawTitleString.ranges.first {
-                    titleStringValue.addAttribute(.foregroundColor, value: item.theme.rootController.navigationBar.accentTextColor, range: range.range)
+                    titleStringValue.addAttribute(.foregroundColor, value: noticeAccentTextColor, range: range.range)
                 }
                 titleString = titleStringValue
                 
-                textString = NSAttributedString(string: item.strings.ChatList_StorageHintText, font: textFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                textString = NSAttributedString(string: item.strings.ChatList_StorageHintText, font: textFont, textColor: noticeSecondaryTextColor)
             case .setupPassword:
-                titleString = NSAttributedString(string: item.strings.Settings_SuggestSetupPasswordTitle, font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor)
-                textString = NSAttributedString(string: item.strings.Settings_SuggestSetupPasswordText, font: textFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                titleString = NSAttributedString(string: item.strings.Settings_SuggestSetupPasswordTitle, font: noticeTitleFont, textColor: noticePrimaryTextColor)
+                textString = NSAttributedString(string: item.strings.Settings_SuggestSetupPasswordText, font: textFont, textColor: noticeSecondaryTextColor)
             case let .premiumUpgrade(discount):
                 let discountString = "\(discount)%"
                 let rawTitleString = item.strings.ChatList_PremiumAnnualUpgradeTitle(discountString)
-                let titleStringValue = NSMutableAttributedString(attributedString: NSAttributedString(string: rawTitleString.string, font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor))
+                let titleStringValue = NSMutableAttributedString(attributedString: NSAttributedString(string: rawTitleString.string, font: noticeTitleFont, textColor: noticePrimaryTextColor))
                 if let range = rawTitleString.ranges.first {
-                    titleStringValue.addAttribute(.foregroundColor, value: item.theme.rootController.navigationBar.accentTextColor, range: range.range)
+                    titleStringValue.addAttribute(.foregroundColor, value: noticeAccentTextColor, range: range.range)
                 }
                 titleString = titleStringValue
                 
-                textString = NSAttributedString(string: item.strings.ChatList_PremiumAnnualUpgradeText, font: textFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                textString = NSAttributedString(string: item.strings.ChatList_PremiumAnnualUpgradeText, font: textFont, textColor: noticeSecondaryTextColor)
             case let .premiumAnnualDiscount(discount):
                 let discountString = "\(discount)%"
                 let rawTitleString = item.strings.ChatList_PremiumAnnualDiscountTitle(discountString)
-                let titleStringValue = NSMutableAttributedString(attributedString: NSAttributedString(string: rawTitleString.string, font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor))
+                let titleStringValue = NSMutableAttributedString(attributedString: NSAttributedString(string: rawTitleString.string, font: noticeTitleFont, textColor: noticePrimaryTextColor))
                 if let range = rawTitleString.ranges.first {
-                    titleStringValue.addAttribute(.foregroundColor, value: item.theme.rootController.navigationBar.accentTextColor, range: range.range)
+                    titleStringValue.addAttribute(.foregroundColor, value: noticeAccentTextColor, range: range.range)
                 }
                 titleString = titleStringValue
                 
-                textString = NSAttributedString(string: item.strings.ChatList_PremiumAnnualDiscountText, font: textFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                textString = NSAttributedString(string: item.strings.ChatList_PremiumAnnualDiscountText, font: textFont, textColor: noticeSecondaryTextColor)
                 titleRightInset = sideInset
             case let .premiumRestore(discount):
                 let discountString = "\(discount)%"
                 let rawTitleString = item.strings.ChatList_PremiumRestoreDiscountTitle(discountString)
-                let titleStringValue = NSMutableAttributedString(attributedString: NSAttributedString(string: rawTitleString.string, font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor))
+                let titleStringValue = NSMutableAttributedString(attributedString: NSAttributedString(string: rawTitleString.string, font: noticeTitleFont, textColor: noticePrimaryTextColor))
                 if let range = rawTitleString.ranges.first {
-                    titleStringValue.addAttribute(.foregroundColor, value: item.theme.rootController.navigationBar.accentTextColor, range: range.range)
+                    titleStringValue.addAttribute(.foregroundColor, value: noticeAccentTextColor, range: range.range)
                 }
                 titleString = titleStringValue
                 
-                textString = NSAttributedString(string: item.strings.ChatList_PremiumRestoreDiscountText, font: textFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                textString = NSAttributedString(string: item.strings.ChatList_PremiumRestoreDiscountText, font: textFont, textColor: noticeSecondaryTextColor)
             case .xmasPremiumGift:
-                titleString = parseMarkdownIntoAttributedString(item.strings.ChatList_PremiumXmasGiftTitle, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor), bold: MarkdownAttributeSet(font: titleFont, textColor: item.theme.rootController.navigationBar.accentTextColor), link: MarkdownAttributeSet(font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor), linkAttribute: { _ in return nil }))
-                textString = NSAttributedString(string: item.strings.ChatList_PremiumXmasGiftText, font: textFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                titleString = parseMarkdownIntoAttributedString(item.strings.ChatList_PremiumXmasGiftTitle, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: noticeTitleFont, textColor: noticePrimaryTextColor), bold: MarkdownAttributeSet(font: noticeTitleFont, textColor: noticeAccentTextColor), link: MarkdownAttributeSet(font: noticeTitleFont, textColor: noticePrimaryTextColor), linkAttribute: { _ in return nil }))
+                textString = NSAttributedString(string: item.strings.ChatList_PremiumXmasGiftText, font: textFont, textColor: noticeSecondaryTextColor)
             case .premiumGrace:
-                titleString = parseMarkdownIntoAttributedString(item.strings.ChatList_PremiumGraceTitle, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor), bold: MarkdownAttributeSet(font: titleFont, textColor: item.theme.rootController.navigationBar.accentTextColor), link: MarkdownAttributeSet(font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor), linkAttribute: { _ in return nil }))
-                textString = NSAttributedString(string: item.strings.ChatList_PremiumGraceText, font: textFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                titleString = parseMarkdownIntoAttributedString(item.strings.ChatList_PremiumGraceTitle, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: noticeTitleFont, textColor: noticePrimaryTextColor), bold: MarkdownAttributeSet(font: noticeTitleFont, textColor: noticeAccentTextColor), link: MarkdownAttributeSet(font: noticeTitleFont, textColor: noticePrimaryTextColor), linkAttribute: { _ in return nil }))
+                textString = NSAttributedString(string: item.strings.ChatList_PremiumGraceText, font: textFont, textColor: noticeSecondaryTextColor)
             case .setupBirthday:
-                titleString = NSAttributedString(string: item.strings.ChatList_AddBirthdayTitle, font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor)
-                textString = NSAttributedString(string: item.strings.ChatList_AddBirthdayText, font: textFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                titleString = NSAttributedString(string: item.strings.ChatList_AddBirthdayTitle, font: noticeTitleFont, textColor: noticePrimaryTextColor)
+                textString = NSAttributedString(string: item.strings.ChatList_AddBirthdayText, font: textFont, textColor: noticeSecondaryTextColor)
             case let .birthdayPremiumGift(peers, _):
                 let title: String
                 let text: String
@@ -307,8 +315,8 @@ final class ChatListNoticeItemNode: ItemListRevealOptionsItemNode {
                     title = item.strings.ChatList_BirthdayMultipleTitle(Int32(peers.count))
                     text = item.strings.ChatList_BirthdayMultipleText
                 }
-                titleString = parseMarkdownIntoAttributedString(title, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor), bold: MarkdownAttributeSet(font: titleFont, textColor: item.theme.rootController.navigationBar.accentTextColor), link: MarkdownAttributeSet(font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor), linkAttribute: { _ in return nil }))
-                textString = NSAttributedString(string: text, font: textFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                titleString = parseMarkdownIntoAttributedString(title, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: noticeTitleFont, textColor: noticePrimaryTextColor), bold: MarkdownAttributeSet(font: noticeTitleFont, textColor: noticeAccentTextColor), link: MarkdownAttributeSet(font: noticeTitleFont, textColor: noticePrimaryTextColor), linkAttribute: { _ in return nil }))
+                textString = NSAttributedString(string: text, font: textFont, textColor: noticeSecondaryTextColor)
                 avatarPeers = Array(peers.prefix(3))
             case let .reviewLogin(newSessionReview, totalCount):
                 spacing = 2.0
@@ -318,10 +326,10 @@ final class ChatListNoticeItemNode: ItemListRevealOptionsItemNode {
                 if totalCount > 1 {
                     rawTitleString = "1/\(totalCount) \(rawTitleString)"
                 }
-                let titleStringValue = NSMutableAttributedString(attributedString: NSAttributedString(string: rawTitleString, font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor))
+                let titleStringValue = NSMutableAttributedString(attributedString: NSAttributedString(string: rawTitleString, font: noticeTitleFont, textColor: noticePrimaryTextColor))
                 titleString = titleStringValue
                 
-                textString = NSAttributedString(string: item.strings.ChatList_SessionReview_PanelText(newSessionReview.device, newSessionReview.location).string, font: textFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                textString = NSAttributedString(string: item.strings.ChatList_SessionReview_PanelText(newSessionReview.device, newSessionReview.location).string, font: textFont, textColor: noticeSecondaryTextColor)
                 
                 okButtonLayout = makeOkButtonTextLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: item.strings.ChatList_SessionReview_PanelConfirm, font: titleFont, textColor: item.theme.list.itemAccentColor), maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: params.width - sideInset - rightInset, height: 100.0)))
                 cancelButtonLayout = makeCancelButtonTextLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: item.strings.ChatList_SessionReview_PanelReject, font: titleFont, textColor: item.theme.list.itemDestructiveColor), maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: params.width - sideInset - rightInset, height: 100.0)))
@@ -333,14 +341,14 @@ final class ChatListNoticeItemNode: ItemListRevealOptionsItemNode {
                 if totalCount > 1 {
                     rawTitleString = "1/\(totalCount) \(rawTitleString)"
                 }
-                titleString = NSAttributedString(string: rawTitleString, font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor)
+                titleString = NSAttributedString(string: rawTitleString, font: noticeTitleFont, textColor: noticePrimaryTextColor)
                 
                 let formattedBotUsername = botUsername.isEmpty ? "" : "[@\(botUsername)](peer)"
                 let rawText = item.strings.ChatList_BotConnectionReview_PanelText(formattedBotUsername, newBotConnectionReview.device ?? "", newBotConnectionReview.location ?? "").string
                 textString = parseMarkdownIntoAttributedString(rawText, attributes: MarkdownAttributes(
-                    body: MarkdownAttributeSet(font: textFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor),
-                    bold: MarkdownAttributeSet(font: textBoldFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor),
-                    link: MarkdownAttributeSet(font: textFont, textColor: item.theme.rootController.navigationBar.accentTextColor),
+                    body: MarkdownAttributeSet(font: textFont, textColor: noticeSecondaryTextColor),
+                    bold: MarkdownAttributeSet(font: textBoldFont, textColor: noticeSecondaryTextColor),
+                    link: MarkdownAttributeSet(font: textFont, textColor: noticeAccentTextColor),
                     linkAttribute: { _ in
                         return (TelegramTextAttributes.URL, "peer")
                     }
@@ -384,22 +392,22 @@ final class ChatListNoticeItemNode: ItemListRevealOptionsItemNode {
                     title = item.strings.ChatList_SubscriptionsLowBalance_Multiple_Title(starsValue).string
                     text = item.strings.ChatList_SubscriptionsLowBalance_Multiple_Text
                 }
-                let attributedTitle = NSMutableAttributedString(string: "⭐️\(title)", font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor)
+                let attributedTitle = NSMutableAttributedString(string: "⭐️\(title)", font: noticeTitleFont, textColor: noticePrimaryTextColor)
                 if let range = attributedTitle.string.range(of: "⭐️") {
                     attributedTitle.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: 0, file: nil, custom: .stars(tinted: false)), range: NSRange(range, in: attributedTitle.string))
                     attributedTitle.addAttribute(.baselineOffset, value: 2.0, range: NSRange(range, in: attributedTitle.string))
                 }
                 titleString = attributedTitle
-                textString = NSAttributedString(string: text, font: smallTextFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                textString = NSAttributedString(string: text, font: smallTextFont, textColor: noticeSecondaryTextColor)
             case let .setupPhoto(accountPeer):
-                titleString = NSAttributedString(string: item.strings.ChatList_AddPhoto_Title, font: titleFont, textColor: item.theme.rootController.navigationBar.primaryTextColor)
-                textString = NSAttributedString(string: item.strings.ChatList_AddPhoto_Text, font: smallTextFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                titleString = NSAttributedString(string: item.strings.ChatList_AddPhoto_Title, font: noticeTitleFont, textColor: noticePrimaryTextColor)
+                textString = NSAttributedString(string: item.strings.ChatList_AddPhoto_Text, font: smallTextFont, textColor: noticeSecondaryTextColor)
                 avatarPeer = accountPeer
             case .accountFreeze:
-                titleString = NSAttributedString(string: item.strings.ChatList_FrozenAccount_Title, font: titleFont, textColor: item.theme.list.itemDestructiveColor)
-                textString = NSAttributedString(string: item.strings.ChatList_FrozenAccount_Text, font: smallTextFont, textColor: item.theme.rootController.navigationBar.secondaryTextColor)
+                titleString = NSAttributedString(string: item.strings.ChatList_FrozenAccount_Title, font: noticeTitleFont, textColor: item.theme.list.itemDestructiveColor)
+                textString = NSAttributedString(string: item.strings.ChatList_FrozenAccount_Text, font: smallTextFont, textColor: noticeSecondaryTextColor)
             case let .link(_, _, title, subtitle):
-                titleString = stringWithAppliedEntities(title.string, entities: title.entities, baseColor: item.theme.list.itemPrimaryTextColor, linkColor: item.theme.list.itemAccentColor, baseFont: titleFont, linkFont: titleFont, boldFont: titleBoldFont, italicFont: titleItalicFont, boldItalicFont: titleBoldItalicFont, fixedFont: titleFont, blockQuoteFont: titleFont, message: nil)
+                titleString = stringWithAppliedEntities(title.string, entities: title.entities, baseColor: item.theme.list.itemPrimaryTextColor, linkColor: item.theme.list.itemAccentColor, baseFont: noticeTitleFont, linkFont: noticeTitleFont, boldFont: titleBoldFont, italicFont: titleItalicFont, boldItalicFont: titleBoldItalicFont, fixedFont: titleFont, blockQuoteFont: titleFont, message: nil)
                 textString = stringWithAppliedEntities(subtitle.string, entities: subtitle.entities, baseColor: item.theme.list.itemPrimaryTextColor, linkColor: item.theme.list.itemAccentColor, baseFont: textFont, linkFont: textFont, boldFont: textBoldFont, italicFont: textItalicFont, boldItalicFont: textBoldItalicFont, fixedFont: textFont, blockQuoteFont: textFont, message: nil)
             }
             
@@ -586,7 +594,12 @@ final class ChatListNoticeItemNode: ItemListRevealOptionsItemNode {
                             }
                             
                             if themeUpdated || closeButton.image(for: .normal) == nil {
-                                closeButton.setImage(PresentationResourcesItemList.itemListCloseIconImage(item.theme), for: .normal)
+                                if astraFolio {
+                                    // Folio: the close glyph is quiet, so the accent phrase stays the only tappable colour.
+                                    closeButton.setImage(generateTintedImage(image: PresentationResourcesItemList.itemListCloseIconImage(item.theme), color: item.theme.list.itemSecondaryTextColor.withMultipliedAlpha(0.7)), for: .normal)
+                                } else {
+                                    closeButton.setImage(PresentationResourcesItemList.itemListCloseIconImage(item.theme), for: .normal)
+                                }
                             }
                             
                             let closeButtonSize = closeButton.measure(CGSize(width: 100.0, height: 100.0))

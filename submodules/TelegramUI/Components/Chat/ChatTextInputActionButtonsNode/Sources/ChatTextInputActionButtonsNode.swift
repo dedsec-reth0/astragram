@@ -161,6 +161,9 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         return container.convert(container.bounds, to: self.view)
     }
     private var sendButtonGlassIconCache: (source: UIImage, color: UIColor, image: UIImage)?
+    /// Folio only: while send is disabled the glyph is swapped for a copy tinted in the panel's disabled colour; the
+    /// original is kept so it comes back when send is enabled again. Built once per state change, never per frame.
+    private var astraDisabledSendGlyph: (source: UIImage, color: UIColor, tinted: UIImage)?
     private var sendButtonBackgroundImageDiameter: CGFloat?
     private var sendButtonBackgroundEffectLayer: StarsParticleEffectLayer?
     public let sendButton: HighlightTrackingButtonNode
@@ -556,7 +559,10 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
         }
         transition.updateTransformScale(layer: self.sendButtonBackgroundView.layer, scale: sendButtonBackgroundScale)
         
-        if self.isSendDisabled {
+        if self.isSendDisabled && interfaceState.theme.isAstraFolio {
+            // Folio: a disabled send is a quiet hairline disc rather than a dimmed volt one.
+            transition.updateTintColor(view: self.sendButtonBackgroundView, color: interfaceState.theme.chat.inputPanel.panelSeparatorColor)
+        } else if self.isSendDisabled {
             transition.updateTintColor(view: self.sendButtonBackgroundView, color: interfaceState.theme.chat.inputPanel.panelControlAccentColor.withMultiplied(hue: 1.0, saturation: 0.0, brightness: 0.5).withMultipliedAlpha(0.25))
         } else if interfaceState.theme.isAstraFolio {
             // Folio's send button is a solid circle in the action fill (volt), with no gradient or glow. A paid send
@@ -591,7 +597,10 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
             glassContainer.update(size: glassFrame.size, isDark: interfaceState.theme.overallDarkAppearance, transition: glassTransition)
             glassTransition.setFrame(view: glassView, frame: CGRect(origin: CGPoint(), size: glassFrame.size))
             let glassTintColor: GlassBackgroundView.TintColor
-            if self.isSendDisabled {
+            if self.isSendDisabled && interfaceState.theme.isAstraFolio {
+                glassTintColor = .init(kind: .custom(style: .default, color: interfaceState.theme.chat.inputPanel.panelSeparatorColor))
+                self.sendButtonGlassTintColor = nil
+            } else if self.isSendDisabled {
                 glassTintColor = defaultGlassTintColor
                 self.sendButtonGlassTintColor = nil
             } else if interfaceState.theme.isAstraFolio {
@@ -616,8 +625,34 @@ public final class ChatTextInputActionButtonsNode: ASDisplayNode, ChatSendMessag
             transition.updateAlpha(layer: self.sendButtonBackgroundView.layer, alpha: 1.0)
         }
         
+        if interfaceState.theme.isAstraFolio && self.isSendDisabled && starsAmount == nil {
+            let disabledColor = interfaceState.theme.chat.inputPanel.panelControlDisabledColor
+            if let current = self.sendButton.image(for: []) {
+                let isCurrentTinted = self.astraDisabledSendGlyph.flatMap { $0.tinted === current } ?? false
+                let isUpToDate = isCurrentTinted && (self.astraDisabledSendGlyph?.color.isEqual(disabledColor) ?? false)
+                if !isUpToDate, let cached = self.astraDisabledSendGlyph, cached.source === current, cached.color.isEqual(disabledColor) {
+                    // The panel re-set the same source glyph: reuse the tinted copy instead of tinting again.
+                    self.sendButton.setImage(cached.tinted, for: [])
+                } else if !isUpToDate {
+                    let source: UIImage = isCurrentTinted ? (self.astraDisabledSendGlyph?.source ?? current) : current
+                    if let tinted = generateTintedImage(image: source, color: disabledColor) {
+                        self.astraDisabledSendGlyph = (source, disabledColor, tinted)
+                        self.sendButton.setImage(tinted, for: [])
+                    }
+                }
+            }
+        } else if let stored = self.astraDisabledSendGlyph {
+            self.astraDisabledSendGlyph = nil
+            if self.sendButton.image(for: []) === stored.tinted {
+                self.sendButton.setImage(stored.source, for: [])
+            }
+        }
+        
         if starsAmount == nil {
-            if self.isSendDisabled {
+            if self.isSendDisabled && interfaceState.theme.isAstraFolio {
+                // The disabled colour is already in the glyph; dimming it again would lose it.
+                transition.updateAlpha(layer: self.sendButton.imageNode.layer, alpha: 1.0)
+            } else if self.isSendDisabled {
                 transition.updateAlpha(layer: self.sendButton.imageNode.layer, alpha: 0.4)
             } else {
                 transition.updateAlpha(layer: self.sendButton.imageNode.layer, alpha: 1.0)

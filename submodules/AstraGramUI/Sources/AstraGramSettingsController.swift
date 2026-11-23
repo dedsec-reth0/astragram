@@ -118,6 +118,10 @@ private enum AstraGramSettingsSection: Int32 {
     case securityInput
     case securityTelegram
     case backup
+    // The Folio look page, in groups (appended so that the raw values of the sections above stay the same).
+    case lookDesign
+    case lookProfileTabs
+    case lookRestart
 
     /// The page of the AstraGram settings this section is on.
     var page: AstraGramSettingsPage {
@@ -130,7 +134,7 @@ private enum AstraGramSettingsSection: Int32 {
             return .privacy
         case .security, .securityLock, .securityInput, .securityTelegram:
             return .security
-        case .appearance, .view, .look, .extra:
+        case .appearance, .view, .look, .extra, .lookDesign, .lookProfileTabs, .lookRestart:
             return .appearance
         case .chats, .filters, .media:
             return .chats
@@ -358,7 +362,10 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
             60, 61, 62, 63, 64, 65, 73, 74, 75, 76, 77, 78, 66, 67, 68, 69, 100, 101, 102, 103, 104, 70, 71, 72,
             80, 81, 82, 85, 105, 106, 90, 91, 92,
             130, 139, 134, 133, 131, 132, 135, 136, 137, 138, 140, 141,
-            110, 125, 126, 127, 111, 121, 112, 113, 114, 115, 119, 120, 122, 123, 124, 116, 117, 118, 199, 200
+            // 145...149 are the Folio look page's own rows (its headers and the moved rows), placed so that both the
+            // stock and the Folio orders are subsequences of this one.
+            110, 145, 125, 126, 127, 111, 121, 147, 148, 146, 112, 113, 114, 115, 119, 120, 122, 123, 124, 116, 149,
+            117, 118, 199, 200
         ]
         var order: [Int32: Int] = [:]
         for (index, id) in ids.enumerated() {
@@ -739,32 +746,59 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.flag(id: 138, section: .securityInput, title: strings.clipboardLocalOnly, value: settings.clipboardLocalOnly, enabled: true, keyPath: \.clipboardLocalOnly))
     entries.append(.button(id: 140, section: .securityTelegram, title: strings.telegramPrivacy, label: "", kind: .telegramPrivacy))
     entries.append(.footer(id: 141, section: .securityTelegram, text: strings.securityFooter))
-    entries.append(.header(id: 110, section: .look, text: strings.lookHeader))
-    entries.append(.flag(id: 125, section: .look, title: strings.design2027, value: settings.design2027, enabled: true, keyPath: \.design2027))
+    // Folio splits the look rows into «Дизайн» and «Профиль и вкладки», with the restart row on its own.
     if settings.design2027 {
-        entries.append(.flag(id: 126, section: .look, title: strings.design2027LivingWallpaper, value: settings.design2027LivingWallpaper, enabled: true, keyPath: \.design2027LivingWallpaper))
+        entries.append(.header(id: 145, section: .lookDesign, text: strings.lookDesignHeader))
+        entries.append(.flag(id: 125, section: .lookDesign, title: strings.design2027, value: settings.design2027, enabled: true, keyPath: \.design2027))
+        entries.append(.flag(id: 126, section: .lookDesign, title: strings.design2027LivingWallpaper, value: settings.design2027LivingWallpaper, enabled: true, keyPath: \.design2027LivingWallpaper))
+        entries.append(.flag(id: 111, section: .lookDesign, title: strings.monochrome, value: settings.monochrome, enabled: true, keyPath: \.monochrome))
+        if settings.monochrome {
+            entries.append(.flag(id: 121, section: .lookDesign, title: strings.monochromePlainBackground, value: settings.monochromePlainBackground, enabled: true, keyPath: \.monochromePlainBackground))
+        }
+        entries.append(.button(id: 147, section: .lookDesign, title: strings.glassMaterial, label: strings.glassMaterialFolio, kind: .glassMaterial))
+        entries.append(.flag(id: 148, section: .lookDesign, title: strings.springPresses, value: settings.springPresses, enabled: true, keyPath: \.springPresses))
+        entries.append(.header(id: 146, section: .lookProfileTabs, text: strings.lookProfileTabsHeader))
+        entries.append(.flag(id: 112, section: .lookProfileTabs, title: strings.roundProfileButtons, value: settings.roundProfileButtons, enabled: true, keyPath: \.roundProfileButtons))
+        entries.append(.flag(id: 113, section: .lookProfileTabs, title: strings.profileMusicCapsule, value: settings.musicCapsule, enabled: true, keyPath: \.musicCapsule))
+        entries.append(.flag(id: 114, section: .lookProfileTabs, title: strings.contactsTab, value: settings.contactsTab, enabled: true, keyPath: \.contactsTab))
+        entries.append(.flag(id: 115, section: .lookProfileTabs, title: strings.callsTab, value: settings.callsTab, enabled: true, keyPath: \.callsTab))
+        entries.append(.flag(id: 122, section: .lookProfileTabs, title: strings.astraBadge, value: settings.astraBadge, enabled: true, keyPath: \.astraBadge))
+        entries.append(.button(id: 123, section: .lookProfileTabs, title: strings.astraBadgeClear, label: "", kind: .clearBadge))
+        entries.append(.button(id: 124, section: .lookProfileTabs, title: strings.streaks, label: "", kind: .streaks))
+        entries.append(.footer(id: 116, section: .lookProfileTabs, text: strings.lookFooter + " " + strings.design2027Footer))
+        // The settings icons are drawn once per launch, so a restart is offered while the switch differs from the
+        // value the app launched with.
+        if settings.design2027 != AstraLook.design2027AtLaunch {
+            entries.append(.button(id: 149, section: .lookRestart, title: strings.restartApp, label: "", kind: .restartApp))
+        }
+    } else {
+        entries.append(.header(id: 110, section: .look, text: strings.lookHeader))
+        entries.append(.flag(id: 125, section: .look, title: strings.design2027, value: settings.design2027, enabled: true, keyPath: \.design2027))
+        if settings.design2027 {
+            entries.append(.flag(id: 126, section: .look, title: strings.design2027LivingWallpaper, value: settings.design2027LivingWallpaper, enabled: true, keyPath: \.design2027LivingWallpaper))
+        }
+        // The settings icons are drawn once per launch, so a restart is offered whenever the switch differs from the value
+        // the app launched with, in either direction.
+        if settings.design2027 != AstraLook.design2027AtLaunch {
+            entries.append(.button(id: 127, section: .look, title: strings.restartApp, label: "", kind: .restartApp))
+        }
+        entries.append(.flag(id: 111, section: .look, title: strings.monochrome, value: settings.monochrome, enabled: true, keyPath: \.monochrome))
+        if settings.monochrome {
+            entries.append(.flag(id: 121, section: .look, title: strings.monochromePlainBackground, value: settings.monochromePlainBackground, enabled: true, keyPath: \.monochromePlainBackground))
+        }
+        entries.append(.flag(id: 112, section: .look, title: strings.roundProfileButtons, value: settings.roundProfileButtons, enabled: true, keyPath: \.roundProfileButtons))
+        entries.append(.flag(id: 113, section: .look, title: strings.profileMusicCapsule, value: settings.musicCapsule, enabled: true, keyPath: \.musicCapsule))
+        entries.append(.flag(id: 114, section: .look, title: strings.contactsTab, value: settings.contactsTab, enabled: true, keyPath: \.contactsTab))
+        entries.append(.flag(id: 115, section: .look, title: strings.callsTab, value: settings.callsTab, enabled: true, keyPath: \.callsTab))
+        // Folio sets its own glass tint, so while it is on the material row only names it and does not cycle.
+        let glassMaterialLabel = settings.design2027 ? strings.glassMaterialFolio : [strings.glassMaterialStandard, strings.glassMaterialClear, strings.glassMaterialMatte][max(0, min(2, settings.glassMaterial))]
+        entries.append(.button(id: 119, section: .look, title: strings.glassMaterial, label: glassMaterialLabel, kind: .glassMaterial))
+        entries.append(.flag(id: 120, section: .look, title: strings.springPresses, value: settings.springPresses, enabled: true, keyPath: \.springPresses))
+        entries.append(.flag(id: 122, section: .look, title: strings.astraBadge, value: settings.astraBadge, enabled: true, keyPath: \.astraBadge))
+        entries.append(.button(id: 123, section: .look, title: strings.astraBadgeClear, label: "", kind: .clearBadge))
+        entries.append(.button(id: 124, section: .look, title: strings.streaks, label: "", kind: .streaks))
+        entries.append(.footer(id: 116, section: .look, text: settings.design2027 ? strings.lookFooter + " " + strings.design2027Footer : strings.lookFooter))
     }
-    // The settings icons are drawn once per launch, so a restart is offered whenever the switch differs from the value
-    // the app launched with, in either direction.
-    if settings.design2027 != AstraLook.design2027AtLaunch {
-        entries.append(.button(id: 127, section: .look, title: strings.restartApp, label: "", kind: .restartApp))
-    }
-    entries.append(.flag(id: 111, section: .look, title: strings.monochrome, value: settings.monochrome, enabled: true, keyPath: \.monochrome))
-    if settings.monochrome {
-        entries.append(.flag(id: 121, section: .look, title: strings.monochromePlainBackground, value: settings.monochromePlainBackground, enabled: true, keyPath: \.monochromePlainBackground))
-    }
-    entries.append(.flag(id: 112, section: .look, title: strings.roundProfileButtons, value: settings.roundProfileButtons, enabled: true, keyPath: \.roundProfileButtons))
-    entries.append(.flag(id: 113, section: .look, title: strings.profileMusicCapsule, value: settings.musicCapsule, enabled: true, keyPath: \.musicCapsule))
-    entries.append(.flag(id: 114, section: .look, title: strings.contactsTab, value: settings.contactsTab, enabled: true, keyPath: \.contactsTab))
-    entries.append(.flag(id: 115, section: .look, title: strings.callsTab, value: settings.callsTab, enabled: true, keyPath: \.callsTab))
-    // Folio sets its own glass tint, so while it is on the material row only names it and does not cycle.
-    let glassMaterialLabel = settings.design2027 ? strings.glassMaterialFolio : [strings.glassMaterialStandard, strings.glassMaterialClear, strings.glassMaterialMatte][max(0, min(2, settings.glassMaterial))]
-    entries.append(.button(id: 119, section: .look, title: strings.glassMaterial, label: glassMaterialLabel, kind: .glassMaterial))
-    entries.append(.flag(id: 120, section: .look, title: strings.springPresses, value: settings.springPresses, enabled: true, keyPath: \.springPresses))
-    entries.append(.flag(id: 122, section: .look, title: strings.astraBadge, value: settings.astraBadge, enabled: true, keyPath: \.astraBadge))
-    entries.append(.button(id: 123, section: .look, title: strings.astraBadgeClear, label: "", kind: .clearBadge))
-    entries.append(.button(id: 124, section: .look, title: strings.streaks, label: "", kind: .streaks))
-    entries.append(.footer(id: 116, section: .look, text: settings.design2027 ? strings.lookFooter + " " + strings.design2027Footer : strings.lookFooter))
     entries.append(.button(id: 117, section: .onlineExceptions, title: strings.restartApp, label: "", kind: .restartApp))
     entries.append(.footer(id: 118, section: .onlineExceptions, text: strings.restartFooter))
     entries.append(.reset(strings.resetSettings))

@@ -163,6 +163,12 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
     
     private var isArrowInverted: Bool = false
     
+    /// «Дизайн 2027 Folio»: the plain tooltip styles are a solid inverse slab (ink in a light UI, paper in a dark one).
+    private let astraFolio: Bool
+    private let astraFolioPaper: Bool
+    /// The Folio Z2 shadow sits on its own node below the background, which is masked and would cut a shadow off.
+    private var astraShadowNode: ASDisplayNode?
+    
     private let fontSize: CGFloat
     private let inset: CGFloat
     
@@ -286,11 +292,46 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
             hasArrow = false
         }
         
+        var astraFolio = false
+        if AstraLook.design2027 {
+            switch style {
+            case .default, .light, .wide:
+                // Text that brings its own attributes keeps its own colours, so it stays on the stock glass.
+                if case .attributedString = text {
+                    astraFolio = false
+                } else {
+                    astraFolio = true
+                }
+            case .customBlur, .gradient:
+                astraFolio = false
+            }
+        }
+        // The paper slab (dark UI) only where nothing white is drawn on it: the icons, the close glyph and the shimmer are white.
+        var astraIconIsNeutral = true
+        if let icon {
+            if case .peer = icon {
+                astraIconIsNeutral = true
+            } else {
+                astraIconIsNeutral = false
+            }
+        }
+        var astraHasCloseButton = false
+        if case .manual = displayDuration {
+            astraHasCloseButton = true
+        }
+        let astraFolioPaper = astraFolio && theme.overallDarkAppearance && astraIconIsNeutral && !astraHasCloseButton && !isShimmering
+        self.astraFolio = astraFolio
+        self.astraFolioPaper = astraFolioPaper
+        let astraFolioFill = astraFolioPaper ? UIColor(rgb: 0xF4F3EE).withAlphaComponent(0.94) : UIColor(rgb: 0x0B0B0C).withAlphaComponent(0.92)
+        
         let fontSize: CGFloat
         if !hasArrow {
             let backgroundColor: UIColor
             var enableSaturation = true
-            if case let .customBlur(color, _) = style {
+            if astraFolio {
+                backgroundColor = astraFolioFill
+                enableSaturation = false
+            } else if case let .customBlur(color, _) = style {
                 backgroundColor = color
                 enableSaturation = false
             } else {
@@ -300,11 +341,17 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
                     backgroundColor = UIColor(rgb: 0x000000, alpha: 0.6)
                 }
             }
-            self.effectNode = NavigationBackgroundNode(color: backgroundColor, enableSaturation: enableSaturation)
+            if astraFolio {
+                self.effectNode = NavigationBackgroundNode(color: backgroundColor, enableBlur: false, enableSaturation: false)
+            } else {
+                self.effectNode = NavigationBackgroundNode(color: backgroundColor, enableSaturation: enableSaturation)
+            }
             self.backgroundMaskNode.addSubnode(self.backgroundClipNode)
             self.backgroundClipNode.clipsToBounds = true
             if let cornerRadius {
                 self.backgroundClipNode.cornerRadius = cornerRadius
+            } else if astraFolio {
+                self.backgroundClipNode.cornerRadius = AstraLook.Folio.toastRadius
             } else if case .bottom = location {
                 self.backgroundClipNode.cornerRadius = 8.5
             } else {
@@ -313,7 +360,11 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
             if #available(iOS 13.0, *) {
                 self.backgroundClipNode.layer.cornerCurve = .continuous
             }
-            fontSize = 14.0
+            if astraFolio {
+                fontSize = 15.0
+            } else {
+                fontSize = 14.0
+            }
         } else if case let .gradient(leftColor, rightColor, _) = style {
             self.gradientNode = ASDisplayNode()
             self.gradientNode?.setLayerBlock({
@@ -358,7 +409,10 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
         } else {
             var enableSaturation = true
             let backgroundColor: UIColor
-            if case let .customBlur(color, _) = style {
+            if astraFolio {
+                backgroundColor = astraFolioFill
+                enableSaturation = false
+            } else if case let .customBlur(color, _) = style {
                 backgroundColor = color
                 enableSaturation = false
             } else if case .light = style {
@@ -370,11 +424,17 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
                     backgroundColor = UIColor(rgb: 0x000000, alpha: 0.6)
                 }
             }
-            self.effectNode = NavigationBackgroundNode(color: backgroundColor, enableBlur: true, enableSaturation: enableSaturation)
+            if astraFolio {
+                self.effectNode = NavigationBackgroundNode(color: backgroundColor, enableBlur: false, enableSaturation: false)
+            } else {
+                self.effectNode = NavigationBackgroundNode(color: backgroundColor, enableBlur: true, enableSaturation: enableSaturation)
+            }
             
             self.backgroundMaskNode.addSubnode(self.backgroundClipNode)
             self.backgroundClipNode.clipsToBounds = true
-            if case let .point(_, arrowPosition) = location, case .right = arrowPosition {
+            if astraFolio {
+                self.backgroundClipNode.cornerRadius = cornerRadius ?? AstraLook.Folio.toastRadius
+            } else if case let .point(_, arrowPosition) = location, case .right = arrowPosition {
                 self.backgroundClipNode.cornerRadius = 8.5
             } else {
                 self.backgroundClipNode.cornerRadius = cornerRadius ?? 12.5
@@ -384,7 +444,11 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
             }
             self.backgroundMaskNode.addSubnode(self.arrowContainer)
             
-            fontSize = 14.0
+            if astraFolio {
+                fontSize = 15.0
+            } else {
+                fontSize = 14.0
+            }
             
             let maskLayer = CAShapeLayer()
             let arrowScale: CGFloat
@@ -443,6 +507,12 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
         
         super.init()
         
+        if astraFolio {
+            let astraShadowNode = ASDisplayNode()
+            AstraLook.Folio.z2Shadow(astraShadowNode.layer, dark: theme.overallDarkAppearance)
+            self.containerNode.addSubnode(astraShadowNode)
+            self.astraShadowNode = astraShadowNode
+        }
         self.containerNode.addSubnode(self.backgroundContainerNode)
         if let gradientNode = self.gradientNode {
             self.backgroundContainerNode.addSubnode(gradientNode)
@@ -469,10 +539,15 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
         self.addSubnode(self.scrollingContainer)
         
         if let action {
-            let actionColor = theme.list.itemAccentColor.withMultiplied(hue: 1.0, saturation: 0.64, brightness: 1.08)
+            let actionColor: UIColor
+            if astraFolio {
+                actionColor = astraFolioPaper ? UIColor(rgb: 0x3D2BFF) : UIColor(rgb: 0x8B7DFF)
+            } else {
+                actionColor = theme.list.itemAccentColor.withMultiplied(hue: 1.0, saturation: 0.64, brightness: 1.08)
+            }
             let actionButtonNode = HighlightableButtonNode()
             actionButtonNode.hitTestSlop = UIEdgeInsets(top: -16.0, left: -16.0, bottom: -16.0, right: -16.0)
-            actionButtonNode.setAttributedTitle(NSAttributedString(string: action.title, font: Font.regular(17.0), textColor: actionColor), for: .normal)
+            actionButtonNode.setAttributedTitle(NSAttributedString(string: action.title, font: astraFolio ? Font.semibold(15.0) : Font.regular(17.0), textColor: actionColor), for: .normal)
             self.containerNode.addSubnode(actionButtonNode)
             self.actionButtonNode = actionButtonNode
         }
@@ -562,21 +637,28 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
             buttonInset += 24.0
         }
         
-        let baseFont = Font.regular(self.fontSize)
-        let boldFont = Font.semibold(14.0)
+        let baseFont = self.astraFolio ? Font.medium(self.fontSize) : Font.regular(self.fontSize)
+        let boldFont = self.astraFolio ? Font.semibold(self.fontSize) : Font.semibold(14.0)
         let italicFont = Font.italic(self.fontSize)
         let boldItalicFont = Font.semiboldItalic(self.fontSize)
         let fixedFont = Font.monospace(self.fontSize)
         
-        let textColor: UIColor = .white
+        let textColor: UIColor
+        // Folio links are volt: light volt on the ink slab, deep volt on the paper slab.
+        let astraLinkColor: UIColor? = self.astraFolio ? (self.astraFolioPaper ? UIColor(rgb: 0x3D2BFF) : UIColor(rgb: 0x8B7DFF)) : nil
+        if self.astraFolio {
+            textColor = self.astraFolioPaper ? UIColor(rgb: 0x0B0B0C) : UIColor(rgb: 0xF7F6F2)
+        } else {
+            textColor = .white
+        }
         let attributedText: NSAttributedString
         switch self.text {
         case let .plain(text):
             attributedText = NSAttributedString(string: text, font: baseFont, textColor: textColor)
         case let .entities(text, entities):
-            attributedText = stringWithAppliedEntities(text, entities: entities, baseColor: textColor, linkColor: textColor, baseFont: baseFont, linkFont: baseFont, boldFont: boldFont, italicFont: italicFont, boldItalicFont: boldItalicFont, fixedFont: fixedFont, blockQuoteFont: baseFont, underlineLinks: true, external: false, message: nil)
+            attributedText = stringWithAppliedEntities(text, entities: entities, baseColor: textColor, linkColor: astraLinkColor ?? textColor, baseFont: baseFont, linkFont: baseFont, boldFont: boldFont, italicFont: italicFont, boldItalicFont: boldItalicFont, fixedFont: fixedFont, blockQuoteFont: baseFont, underlineLinks: true, external: false, message: nil)
         case let .markdown(text):
-            let linkColor = UIColor(rgb: 0x64d2ff)
+            let linkColor = astraLinkColor ?? UIColor(rgb: 0x64d2ff)
             let markdownAttributes = MarkdownAttributes(
                 body: MarkdownAttributeSet(font: baseFont, textColor: textColor),
                 bold: MarkdownAttributeSet(font: boldFont, textColor: textColor),
@@ -590,7 +672,7 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
             attributedText = text
         }
         
-        let highlightColor: UIColor? = UIColor.white.withAlphaComponent(0.5)
+        let highlightColor: UIColor? = self.astraFolioPaper ? UIColor(rgb: 0x0B0B0C).withAlphaComponent(0.12) : UIColor.white.withAlphaComponent(0.5)
         let highlightAction: (([NSAttributedString.Key: Any]) -> NSAttributedString.Key?)? = { attributes in
             let highlightedAttributes = [
                 TelegramTextAttributes.URL,
@@ -811,6 +893,10 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
         
         transition.updateFrame(node: self.containerNode, frame: backgroundFrame)
         transition.updateFrame(node: self.backgroundContainerNode, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
+        if let astraShadowNode = self.astraShadowNode {
+            transition.updateFrame(node: astraShadowNode, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size))
+            astraShadowNode.layer.shadowPath = UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: backgroundFrame.size), cornerRadius: self.backgroundClipNode.cornerRadius).cgPath
+        }
         transition.updateFrame(node: self.backgroundMaskNode, frame: CGRect(origin: CGPoint(), size: backgroundFrame.size).insetBy(dx: -10.0, dy: -10.0))
         transition.updateFrame(node: self.backgroundClipNode, frame: CGRect(origin: CGPoint(x: 10.0, y: 10.0), size: backgroundFrame.size))
 
@@ -908,7 +994,7 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
             let _ = textBadgeBackgroundView.update(
                 transition: .immediate,
                 component: AnyComponent(FilledRoundedRectangleComponent(
-                    color: UIColor(white: 1.0, alpha: 0.1),
+                    color: self.astraFolioPaper ? UIColor(rgb: 0x0B0B0C).withAlphaComponent(0.08) : UIColor(white: 1.0, alpha: 0.1),
                     cornerRadius: .value(5.0),
                     smoothCorners: true
                 )),

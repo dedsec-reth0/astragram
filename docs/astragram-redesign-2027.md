@@ -482,3 +482,34 @@ Also check:
 - Glass material row disabled while Folio is on.
 - Dark outgoing (ink text on `#8B7DFF`) checked by eye by the user for preference.
 - Snapshot and app unit tests (docs/app-unit-tests.md) updated only where layout constants legitimately change under the flag.
+
+---
+
+## 7. Polish round (after the first build, design-lead review)
+
+The first build reads as "Telegram recoloured, plus card rows". Three critiques (surfaces, coverage, contrast/accessibility) were merged into one polish round. All of it stays behind `design2027`, keeps the stock value in the else branch, adds no per-frame work, and respects §5.
+
+**Accepted (by theme):**
+
+1. **Contrast is a feature.** Light `online` 0x007F55 and `destructive` 0xD0102A. `ink3` raised to text strength (light 0x76756F, dark 0x807F7A); the old values become `ink4`, used only for decorative glyphs (pinned glyph, disclosure arrow). `incomingSecondary` collapses to `ink2` (three greys, not four). New `pressed` token (light 0xE2E1DA, dark 0x2A2A2F); pinned highlight is one step past the pinned plate. Off switch track light 0xB5B4AE / dark 0x48484E. Selected rows 0xDCD8FF / 0x2E2860. Dark `voltPressed` brightens (0x9D91FF). Outgoing selection, knobs and link highlight use `onVolt`; inactive outgoing reactions are `onVolt` @0.18.
+2. **One ground.** `list.plainBackgroundColor = page`, so Chats, Contacts, Calls and search share Z0.
+3. **No Telegram blue anywhere.** Emoji/sticker/GIF panel, bot keyboard, keyboard appearance, passcode, intro and charts are mapped to ink, paper, hairline and volt. The call-screen gradient becomes ink with one volt stop; errors stay red.
+4. **Volt discipline.** Profile/settings icon actions are ink text with a volt glyph. Volt text is kept for links, switches, badges, unread and one primary action per screen.
+5. **Tiles that read in the dark.** Dark settings tiles are elevated (0x2A2A2E) with an ink glyph; the AstraGram tile is dark volt 0x8B7DFF. Tiles are cached per appearance, and the launch-time freeze is removed.
+6. **Chat list as a folio insert.** Pinned rows form one grouped stack (outer corners 20, inner 6, 6pt gaps, no separators inside). The pin glyph disappears under Folio because the plate already says "pinned". Light pinned plate 0xEAE9E3. Row extra height scales with text size.
+7. **The profile mark.** The full-width white rule becomes a 28×2 volt mark (white @0.6 on covers), kept when the music capsule is shown. The missing-name bug is investigated first.
+8. **One typographic system for labels.** ItemList and plain-list (ListSectionHeaderNode) headers, profile field labels, profile pane tabs, story chips, EntityKeyboard group titles, tooltips, the attachment counter and call durations share the running head: Semibold 12 uppercase, kern = 0.06·size, tabular digits for numbers. All-caps and tracking turn off at AX sizes (base > 23).
+9. **Notes in the margin.** Tooltips match the undo toast: an inverse ink slab, radius 16, volt action.
+10. **Quieter chips.** Light date/service chips use `ink` @0.86; dark chips are opaque over custom wallpapers; the chip link highlight is the chip text colour @0.25.
+11. **Increase Contrast.** `AstraFolioPalette(highContrast:)` (cache bit 8) strengthens hairlines, ink2, card rims and the incoming-bubble rim.
+
+12. **Settings rhythm.** Section headers get 28pt above and 10pt below; footers are 13pt ink2. The «Оформление» section splits into «Дизайн» and «Профиль и вкладки». «Перезапустить AstraGram» gets its own one-row card, shown only while a restart is pending.
+
+**Rejected or deferred (and why):**
+- *SF Rounded/Expanded display face, global type tokens*: §5 forbids a rounded font or a global font reroute. The identity comes from weight, tracking and tabular digits instead.
+- *Large left-aligned masthead and underline folder tabs*: §5 fixes header heights 46/44, the search animation math and the folder strip geometry.
+- *Volt-dot tab indicator without the pill*: §5 fixes tab-bar geometry. Done instead: ink2 unselected icons (a luminance jump) and a semibold selected title.
+- *New bubble corner scheme and an incoming hairline rim drawn in the image*: §5 keeps the 33pt bubble box and the merge rules. Only the rim alpha is raised (0.12 light / 0.10 dark).
+- *Static date header as hairline divider*: the static/floating fill is shared through `selectDateFillStaticColor`, so there is no clean static-only state to hook into. Deferred to v2; this round softens the chip instead.
+- *Folio preview swatches in settings, media-viewer chrome*: they need new item types or deeper GalleryUI changes. Deferred.
+- A light-mode screenshot pass (chat list, chat, settings, profile, alert, action sheet, toast) is required before release.

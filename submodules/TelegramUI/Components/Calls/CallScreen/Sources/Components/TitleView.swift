@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import ComponentFlow
+import Display
 
 final class TextView: UIView {
     private struct Params: Equatable {
@@ -50,7 +51,10 @@ final class TextView: UIView {
         }
         
         let font: UIFont
-        if monospacedDigits {
+        if AstraLook.design2027 && !monospacedDigits && fontSize == 28.0 && fontWeight == 0.0 {
+            // «Дизайн 2027 Folio»: the call title (the only 28pt regular text of the call screen) is set bold.
+            font = Font.bold(fontSize)
+        } else if monospacedDigits {
             font = UIFont.monospacedDigitSystemFont(ofSize: fontSize, weight: UIFont.Weight(fontWeight))
         } else {
             font = UIFont.systemFont(ofSize: fontSize, weight: UIFont.Weight(fontWeight))

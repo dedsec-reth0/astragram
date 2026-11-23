@@ -18,6 +18,15 @@ private let astraFolioThemes = Atomic<[Int: PresentationTheme]>(value: [:])
 /// their charts alive for the life of the process, so an identity in this set is never reused by another object.
 private let astraFolioMarkers = Atomic<Set<ObjectIdentifier>>(value: Set())
 
+/// The appearance of the Folio theme built last. The settings tiles are static resources without a theme, so they
+/// draw themselves for the appearance the presentation is in now.
+private let astraFolioLastBuiltDark = Atomic<Bool>(value: false)
+
+/// Whether the Folio presentation currently in use is dark (false before any Folio theme was built).
+func astraFolioCurrentAppearanceIsDark() -> Bool {
+    return astraFolioLastBuiltDark.with { $0 }
+}
+
 public extension PresentationTheme {
     /// Whether this theme is (or derives from) the Folio theme. Resources ask this instead of comparing theme names.
     var isAstraFolio: Bool {
@@ -29,15 +38,21 @@ public extension PresentationTheme {
 /// The Folio colour ramp for one appearance (section 2.1).
 private struct AstraFolioPalette {
     let dark: Bool
+    /// Increase Contrast (Settings › Accessibility): stronger hairlines and secondary text.
+    let highContrast: Bool
 
     let page: UIColor
     let card: UIColor
     let elevated: UIColor
     let pinned: UIColor
     let highlight: UIColor
+    /// The pressed state of rows, menu items and sheet items.
+    let pressed: UIColor
     let ink: UIColor
     let ink2: UIColor
     let ink3: UIColor
+    /// The faintest ink, only for glyphs that must recede (the pinned badge, disclosure arrows).
+    let ink4: UIColor
     let hairline: UIColor
     let volt: UIColor
     let voltPressed: UIColor
@@ -49,20 +64,24 @@ private struct AstraFolioPalette {
     let voltRGB: UInt32
     let wallpaperRGB: UInt32
 
-    init(dark: Bool) {
+    init(dark: Bool, highContrast: Bool) {
         self.dark = dark
+        self.highContrast = highContrast
         if dark {
             self.page = UIColor(rgb: 0x0B0B0C)
             self.card = UIColor(rgb: 0x161618)
             self.elevated = UIColor(rgb: 0x1E1E21)
             self.pinned = UIColor(rgb: 0x121214)
             self.highlight = UIColor(rgb: 0x222226)
+            self.pressed = UIColor(rgb: 0x2A2A2F)
             self.ink = UIColor(rgb: 0xF4F3EE)
-            self.ink2 = UIColor(rgb: 0x9C9B96)
-            self.ink3 = UIColor(rgb: 0x6E6D69)
-            self.hairline = UIColor(rgb: 0x26262A)
+            self.ink2 = highContrast ? UIColor(rgb: 0xB8B7B1) : UIColor(rgb: 0x9C9B96)
+            self.ink3 = UIColor(rgb: 0x807F7A)
+            self.ink4 = UIColor(rgb: 0x6E6D69)
+            self.hairline = highContrast ? UIColor(rgb: 0x3A3A3F) : UIColor(rgb: 0x26262A)
             self.volt = UIColor(rgb: 0x8B7DFF)
-            self.voltPressed = UIColor(rgb: 0x7565FF)
+            // Pressed brightens on ink.
+            self.voltPressed = UIColor(rgb: 0x9D91FF)
             self.voltWash = UIColor(rgb: 0x221E45)
             self.onVolt = UIColor(rgb: 0x0B0B0C)
             self.destructive = UIColor(rgb: 0xFF4D5E)
@@ -73,18 +92,20 @@ private struct AstraFolioPalette {
             self.page = UIColor(rgb: 0xF7F6F2)
             self.card = UIColor(rgb: 0xFFFFFF)
             self.elevated = UIColor(rgb: 0xFFFFFF)
-            self.pinned = UIColor(rgb: 0xEFEEE9)
+            self.pinned = UIColor(rgb: 0xEAE9E3)
             self.highlight = UIColor(rgb: 0xE7E6E0)
+            self.pressed = UIColor(rgb: 0xE2E1DA)
             self.ink = UIColor(rgb: 0x0B0B0C)
-            self.ink2 = UIColor(rgb: 0x5C5B57)
-            self.ink3 = UIColor(rgb: 0x8A8984)
-            self.hairline = UIColor(rgb: 0xE3E2DD)
+            self.ink2 = highContrast ? UIColor(rgb: 0x46453F) : UIColor(rgb: 0x5C5B57)
+            self.ink3 = UIColor(rgb: 0x76756F)
+            self.ink4 = UIColor(rgb: 0x8A8984)
+            self.hairline = highContrast ? UIColor(rgb: 0xC9C8C2) : UIColor(rgb: 0xE3E2DD)
             self.volt = UIColor(rgb: 0x3D2BFF)
             self.voltPressed = UIColor(rgb: 0x2C1FD6)
             self.voltWash = UIColor(rgb: 0xECEAFF)
             self.onVolt = UIColor(rgb: 0xFFFFFF)
-            self.destructive = UIColor(rgb: 0xE5162D)
-            self.online = UIColor(rgb: 0x00A86B)
+            self.destructive = UIColor(rgb: 0xD0102A)
+            self.online = UIColor(rgb: 0x007F55)
             self.voltRGB = 0x3D2BFF
             self.wallpaperRGB = 0xEFEEE9
         }
@@ -104,15 +125,20 @@ private func astraFolioWallpaper(dark: Bool, livingWallpaper: Bool, palette: Ast
 /// The inverse-ink date and service chips. Bubble-free mode overwrites the service message colours, so this is applied
 /// once more after it.
 private func astraFolioServiceMessage(_ serviceMessage: PresentationThemeServiceMessage, palette: AstraFolioPalette) -> PresentationThemeServiceMessage {
-    let fill = palette.dark ? UIColor(rgb: 0xF4F3EE, alpha: 0.92) : UIColor(rgb: 0x2A2A2A)
+    // Light: ink at 0.86, so the paper shows through a touch. Dark: a light chip, translucent on the default
+    // background and opaque on a custom wallpaper, where a busy picture would otherwise muddy the chip.
+    let fill = palette.dark ? UIColor(rgb: 0xF4F3EE, alpha: 0.92) : palette.ink.withAlphaComponent(0.86)
+    let customFill = palette.dark ? UIColor(rgb: 0xE1E0DC) : fill
     let floatingFill = fill.withAlphaComponent(fill.alpha * 0.9)
+    let customFloatingFill = customFill.withAlphaComponent(customFill.alpha * 0.9)
     let primaryText = palette.dark ? UIColor(rgb: 0x0B0B0C) : UIColor(rgb: 0xF7F6F2)
-    let linkHighlight = palette.volt.withAlphaComponent(0.3)
+    // The press wash is the chip's own text colour, which reads on the inverse chip where volt would not.
+    let linkHighlight = primaryText.withAlphaComponent(0.25)
     let components = serviceMessage.components
     return serviceMessage.withUpdated(
         components: components.withUpdated(
             withDefaultWallpaper: components.withDefaultWallpaper.withUpdated(fill: fill, primaryText: primaryText, linkHighlight: linkHighlight, dateFillStatic: fill, dateFillFloating: floatingFill),
-            withCustomWallpaper: components.withCustomWallpaper.withUpdated(fill: fill, primaryText: primaryText, linkHighlight: linkHighlight, dateFillStatic: fill, dateFillFloating: floatingFill)
+            withCustomWallpaper: components.withCustomWallpaper.withUpdated(fill: customFill, primaryText: primaryText, linkHighlight: linkHighlight, dateFillStatic: customFill, dateFillFloating: customFloatingFill)
         ),
         dateTextColor: PresentationThemeVariableColor(color: primaryText)
     )
@@ -120,12 +146,13 @@ private func astraFolioServiceMessage(_ serviceMessage: PresentationThemeService
 
 /// The Folio theme for an appearance and a bubble mode. Themes are cached and never mutated: a toggle produces a
 /// different instance, so per-theme resources (corner images, badges, bubble images) are generated anew.
-public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, livingWallpaper: Bool) -> PresentationTheme {
-    let key = (dark ? 1 : 0) | (bubbleMode ? 2 : 0) | (livingWallpaper ? 4 : 0)
+public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, livingWallpaper: Bool, highContrast: Bool = false) -> PresentationTheme {
+    let key = (dark ? 1 : 0) | (bubbleMode ? 2 : 0) | (livingWallpaper ? 4 : 0) | (highContrast ? 8 : 0)
+    let _ = astraFolioLastBuiltDark.swap(dark)
     if let cached = astraFolioThemes.with({ $0[key] }) {
         return cached
     }
-    let p = AstraFolioPalette(dark: dark)
+    let p = AstraFolioPalette(dark: dark, highContrast: highContrast)
     let wallpaper = astraFolioWallpaper(dark: dark, livingWallpaper: livingWallpaper, palette: p)
 
     // 1–2. Telegram's own theme with the volt accent and a single-stop volt bubble (one stop keeps the knockout
@@ -138,7 +165,7 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
         tabBar: base.rootController.tabBar.withUpdated(
             backgroundColor: p.page.withAlphaComponent(0.0),
             separatorColor: UIColor(rgb: 0x000000, alpha: 0.0),
-            iconColor: p.ink,
+            iconColor: p.ink2,
             selectedIconColor: p.volt,
             textColor: p.ink2,
             selectedTextColor: p.volt,
@@ -173,12 +200,13 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
             inputTextColor: p.ink,
             inputPlaceholderTextColor: p.ink3,
             inputIconColor: p.ink2
-        )
+        ),
+        keyboardColor: dark ? .dark : .light
     )
 
     let list = base.list.withUpdated(
         blocksBackgroundColor: p.page,
-        plainBackgroundColor: p.card,
+        plainBackgroundColor: p.page,
         itemPrimaryTextColor: p.ink,
         itemSecondaryTextColor: p.ink2,
         itemDisabledTextColor: p.ink3,
@@ -188,16 +216,16 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
         itemPlaceholderTextColor: p.ink3,
         itemBlocksBackgroundColor: p.card,
         itemModalBlocksBackgroundColor: dark ? p.elevated : p.card,
-        itemHighlightedBackgroundColor: p.highlight,
+        itemHighlightedBackgroundColor: p.pressed,
         itemBlocksSeparatorColor: p.hairline,
         itemPlainSeparatorColor: p.hairline,
-        disclosureArrowColor: p.ink3,
+        disclosureArrowColor: p.ink4,
         sectionHeaderTextColor: p.ink2,
         freeTextColor: p.ink2,
         freeTextErrorColor: p.destructive,
         freeTextSuccessColor: p.online,
         itemSwitchColors: base.list.itemSwitchColors.withUpdated(
-            frameColor: dark ? UIColor(rgb: 0x2A2A2E) : p.hairline,
+            frameColor: dark ? UIColor(rgb: 0x48484E) : UIColor(rgb: 0xB5B4AE),
             handleColor: UIColor(rgb: 0xFFFFFF),
             contentColor: p.volt,
             positiveColor: p.online,
@@ -212,8 +240,8 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
         itemBackgroundColor: p.page,
         pinnedItemBackgroundColor: p.pinned,
         itemHighlightedBackgroundColor: p.highlight,
-        pinnedItemHighlightedBackgroundColor: p.highlight,
-        itemSelectedBackgroundColor: p.voltWash,
+        pinnedItemHighlightedBackgroundColor: dark ? UIColor(rgb: 0x26262B) : UIColor(rgb: 0xE3E2DB),
+        itemSelectedBackgroundColor: dark ? UIColor(rgb: 0x2E2860) : UIColor(rgb: 0xDCD8FF),
         titleColor: p.ink,
         secretTitleColor: p.online,
         dateTextColor: p.ink2,
@@ -231,7 +259,7 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
         unreadBadgeInactiveBackgroundColor: dark ? UIColor(rgb: 0x2A2A2E) : p.hairline,
         unreadBadgeInactiveTextColor: p.ink,
         reactionBadgeActiveBackgroundColor: p.volt,
-        pinnedBadgeColor: p.ink3,
+        pinnedBadgeColor: p.ink4,
         pinnedSearchBarColor: p.card,
         regularSearchBarColor: p.card,
         sectionHeaderFillColor: p.page,
@@ -252,14 +280,14 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
     let incomingBase = base.chat.message.incoming
     let incomingComponents = incomingBase.bubble.withoutWallpaper.withUpdated(
         fill: [dark ? UIColor(rgb: 0x1C1C1F) : UIColor(rgb: 0xFFFFFF)],
-        highlightedFill: p.highlight,
+        highlightedFill: dark ? UIColor(rgb: 0x26262A) : p.highlight,
         stroke: UIColor(rgb: 0x000000, alpha: 0.0),
         reactionInactiveBackground: dark ? UIColor(rgb: 0x26262A) : UIColor(rgb: 0xEFEEE9),
         reactionInactiveForeground: p.ink,
         reactionActiveBackground: p.volt,
         reactionActiveForeground: p.onVolt
     )
-    let incomingSecondary = dark ? UIColor(rgb: 0x9C9B96) : UIColor(rgb: 0x6B6A65)
+    let incomingSecondary = p.ink2
     let incoming = incomingBase.withUpdated(
         bubble: incomingBase.bubble.withUpdated(withWallpaper: incomingComponents, withoutWallpaper: incomingComponents),
         primaryTextColor: p.ink,
@@ -282,7 +310,7 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
         fill: [p.volt],
         highlightedFill: p.voltPressed,
         stroke: UIColor(rgb: 0x000000, alpha: 0.0),
-        reactionInactiveBackground: dark ? UIColor(rgb: 0x7565FF) : UIColor(rgb: 0x2C1FD6),
+        reactionInactiveBackground: p.onVolt.withAlphaComponent(0.18),
         reactionInactiveForeground: p.onVolt,
         reactionActiveBackground: dark ? UIColor(rgb: 0x0B0B0C) : UIColor(rgb: 0xFFFFFF),
         reactionActiveForeground: p.volt
@@ -293,11 +321,14 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
         primaryTextColor: p.onVolt,
         secondaryTextColor: outgoingSecondary,
         linkTextColor: p.onVolt,
+        linkHighlightColor: p.onVolt.withAlphaComponent(0.2),
         accentTextColor: p.onVolt,
         accentControlColor: p.onVolt,
         mediaActiveControlColor: p.onVolt,
         fileTitleColor: p.onVolt,
-        fileDescriptionColor: outgoingSecondary
+        fileDescriptionColor: outgoingSecondary,
+        textSelectionColor: p.onVolt.withAlphaComponent(0.28),
+        textSelectionKnobColor: p.onVolt
     )
 
     let message = base.chat.message.withUpdated(incoming: incoming, outgoing: outgoing, outgoingCheckColor: outgoingSecondary)
@@ -329,11 +360,37 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
         badgeTextColor: p.onVolt
     )
 
+    let inputMediaPanel = base.chat.inputMediaPanel.withUpdated(
+        panelSeparatorColor: p.hairline,
+        panelIconColor: p.ink2,
+        panelHighlightedIconBackgroundColor: p.voltWash,
+        panelHighlightedIconColor: p.ink,
+        panelContentVibrantOverlayColor: p.ink2,
+        stickersBackgroundColor: p.page,
+        stickersSectionTextColor: p.ink2,
+        stickersSearchBackgroundColor: p.card,
+        stickersSearchPlaceholderColor: p.ink3,
+        stickersSearchPrimaryColor: p.ink,
+        stickersSearchControlColor: p.ink3,
+        gifsBackgroundColor: p.page
+    )
+
+    let inputButtonPanel = base.chat.inputButtonPanel.withUpdated(
+        panelSeparatorColor: p.hairline,
+        panelBackgroundColor: p.page,
+        buttonFillColor: p.card,
+        buttonStrokeColor: p.hairline,
+        buttonHighlightedFillColor: p.pressed,
+        buttonTextColor: p.ink
+    )
+
     let chat = base.chat.withUpdated(
         defaultWallpaper: wallpaper,
         message: message,
         serviceMessage: astraFolioServiceMessage(base.chat.serviceMessage, palette: p),
         inputPanel: inputPanel,
+        inputMediaPanel: inputMediaPanel,
+        inputButtonPanel: inputButtonPanel,
         historyNavigation: historyNavigation
     )
 
@@ -343,8 +400,8 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
         backgroundType: dark ? .dark : .light,
         opaqueItemBackgroundColor: p.elevated,
         itemBackgroundColor: p.elevated.withAlphaComponent(0.96),
-        opaqueItemHighlightedBackgroundColor: p.highlight,
-        itemHighlightedBackgroundColor: p.highlight,
+        opaqueItemHighlightedBackgroundColor: p.pressed,
+        itemHighlightedBackgroundColor: p.pressed,
         opaqueItemSeparatorColor: p.hairline,
         standardActionTextColor: p.volt,
         destructiveActionTextColor: p.destructive,
@@ -366,7 +423,7 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
         itemSeparatorColor: p.hairline,
         sectionSeparatorColor: p.page,
         itemBackgroundColor: UIColor(rgb: 0x000000, alpha: 0.0),
-        itemHighlightedBackgroundColor: p.highlight,
+        itemHighlightedBackgroundColor: p.pressed,
         primaryColor: p.ink,
         secondaryColor: p.ink2,
         destructiveColor: p.destructive,
@@ -383,14 +440,29 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
         expandedNotification: base.inAppNotification.expandedNotification.withUpdated(backgroundType: dark ? .dark : .light)
     )
 
+    // Passcode: flat paper (no gradient) with card keys. The lock and digits have no slots of their own.
+    let passcode = base.passcode.withUpdated(
+        backgroundColors: PresentationThemeGradientColors(topColor: p.page, bottomColor: p.page),
+        buttonColor: p.card
+    )
+
+    // Intro: ink text and a volt start button. The button title has no slot; the splash draws it in white itself.
+    let intro = base.intro.withUpdated(
+        primaryTextColor: p.ink,
+        accentTextColor: p.volt,
+        disabledTextColor: p.ink3,
+        startButtonColor: p.volt,
+        dotColor: p.ink3
+    )
+
     // 4. The whole theme, rebuilt.
     var theme = PresentationTheme(
         name: base.name,
         index: base.index,
         referenceTheme: base.referenceTheme,
         overallDarkAppearance: dark,
-        intro: base.intro,
-        passcode: base.passcode,
+        intro: intro,
+        passcode: passcode,
         rootController: rootController,
         list: list,
         chatList: chatList,
@@ -409,7 +481,17 @@ public func makeAstraFolioPresentationTheme(dark: Bool, bubbleMode: Bool, living
     }
 
     // A chart object of its own, so the marker cannot match the stock theme this one was made from.
-    let chart = theme.chart.withUpdated()
+    // Charts: hairline grid and axes, ink2 labels. Line colours come from the chart data, so there is no slot for a
+    // volt primary line here.
+    let chart = theme.chart.withUpdated(
+        labelsColor: p.ink2,
+        helperLinesColor: p.hairline,
+        strongLinesColor: p.hairline,
+        barStrongLinesColor: p.hairline,
+        detailsTextColor: p.ink,
+        detailsArrowColor: p.ink3,
+        detailsViewColor: p.card
+    )
     theme = PresentationTheme(
         name: theme.name,
         index: theme.index,

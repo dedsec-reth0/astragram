@@ -398,11 +398,19 @@ private final class AttachButtonComponent: CombinedComponent {
             }
 
             let titleFont: UIFont
-            switch component.style {
-            case .glass:
-                titleFont = Font.medium(10.0)
-            case .legacy:
-                titleFont = Font.regular(10.0)
+            let titleColor: UIColor
+            if AstraLook.design2027 {
+                // Folio: a 12pt set, the selected tab heavier and in ink rather than a second accent.
+                titleFont = component.isSelected ? Font.semibold(12.0) : Font.medium(12.0)
+                titleColor = component.isSelected ? component.theme.list.itemPrimaryTextColor : component.theme.rootController.tabBar.textColor
+            } else {
+                switch component.style {
+                case .glass:
+                    titleFont = Font.medium(10.0)
+                case .legacy:
+                    titleFont = Font.regular(10.0)
+                }
+                titleColor = context.component.isSelected ? component.theme.rootController.tabBar.selectedTextColor : component.theme.rootController.tabBar.textColor
             }
 
             let title = title.update(
@@ -410,7 +418,7 @@ private final class AttachButtonComponent: CombinedComponent {
                     text: .plain(NSAttributedString(
                         string: name,
                         font: titleFont,
-                        textColor: context.component.isSelected ? component.theme.rootController.tabBar.selectedTextColor : component.theme.rootController.tabBar.textColor,
+                        textColor: titleColor,
                         paragraphAlignment: .center)),
                     horizontalAlignment: .center,
                     truncationType: .end,
@@ -524,7 +532,7 @@ private final class BadgeNode: ASDisplayNode {
     private let textNode: ImmediateTextNode
     private let backgroundNode: ASImageNode
 
-    private let font: UIFont = Font.with(size: 15.0, design: .round, weight: .bold)
+    private let font: UIFont = AstraLook.design2027 ? Font.with(size: 13.0, weight: .bold, traits: [.monospacedNumbers]) : Font.with(size: 15.0, design: .round, weight: .bold)
 
     var text: String = "" {
         didSet {
@@ -948,7 +956,22 @@ private final class MainButtonNode: HighlightTrackingButtonNode {
                 case .premium:
                     textColor = UIColor(rgb: 0x0077ff)
                 }
-                badgeNode = BadgeNode(fillColor: state.textColor, strokeColor: .clear, textColor: textColor)
+                var fillColor: UIColor = state.textColor
+                if AstraLook.design2027 {
+                    // Folio: the count is a volt pill with onVolt digits, unless the button itself is volt (a volt pill
+                    // would vanish on it), where the stock inverse pill already reads as onVolt with volt digits.
+                    let theme = context.sharedContext.currentPresentationData.with { $0 }.theme
+                    let volt = theme.list.itemAccentColor
+                    var isOnVolt = false
+                    if case let .color(backgroundColor) = state.background, backgroundColor.alpha > 0.5, backgroundColor.rgb == volt.rgb {
+                        isOnVolt = true
+                    }
+                    if !isOnVolt {
+                        fillColor = volt
+                        textColor = theme.list.itemCheckColors.foregroundColor
+                    }
+                }
+                badgeNode = BadgeNode(fillColor: fillColor, strokeColor: .clear, textColor: textColor)
                 self.badgeNode = badgeNode
                 self.addSubnode(badgeNode)
             }

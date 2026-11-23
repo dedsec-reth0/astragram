@@ -257,6 +257,9 @@ public struct AstraStrings {
     public var aiNotConfiguredShort: String { t("Сначала добавьте ключ в Настройки → AstraGram → AI", "First add a key in Settings → AstraGram → AI") }
     public var aiFree: String { t("Бесплатно", "Free") }
     public var lookHeader: String { t("ВИД", "LOOK") }
+    // The Folio look page splits the look rows into a design group and a profile and tabs group.
+    public var lookDesignHeader: String { t("Дизайн", "Design") }
+    public var lookProfileTabsHeader: String { t("Профиль и вкладки", "Profile & tabs") }
     public var roundProfileButtons: String { t("Круглые кнопки в профиле", "Round Profile Buttons") }
     public var profileMusicCapsule: String { t("Музыка капсулой в профиле", "Profile Music as a Capsule") }
     public var contactsTab: String { t("Вкладка «Контакты»", "Contacts Tab") }

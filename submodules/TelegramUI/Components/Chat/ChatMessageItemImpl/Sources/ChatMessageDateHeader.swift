@@ -241,11 +241,16 @@ private final class ChatMessageDateSectionSeparatorNode: ASDisplayNode {
 /// label (Medium 13, as typed) stays in the else branch.
 private func astraChatDateHeaderTitle(_ text: String, baseDisplaySize: CGFloat, textColor: UIColor) -> NSAttributedString {
     if AstraLook.design2027 {
-        let font = Font.semibold(min(18.0, floor(baseDisplaySize * 11.0 / 17.0)))
-        return NSAttributedString(string: text.uppercased(with: Locale.current), attributes: [
+        // The chip label scales with the text size (12pt at the default 17pt) and tracks proportionally. At the
+        // accessibility sizes (base above 23pt; `baseDisplaySize` matches `itemListBaseFontSize` step for step, without
+        // pulling ItemListUI into this module) tracked capitals hurt legibility, so the date reads in plain case.
+        let pointSize = min(22.0, floor(baseDisplaySize * 12.0 / 17.0))
+        let font = Font.semibold(pointSize)
+        let isAccessibilitySize = baseDisplaySize > 23.0
+        return NSAttributedString(string: isAccessibilitySize ? text : text.uppercased(with: Locale.current), attributes: [
             NSAttributedString.Key.font: font,
             NSAttributedString.Key.foregroundColor: textColor,
-            NSAttributedString.Key.kern: 0.8 as NSNumber
+            NSAttributedString.Key.kern: (isAccessibilitySize ? 0.0 : 0.06 * pointSize) as NSNumber
         ])
     } else {
         let titleFont = Font.medium(min(18.0, floor(baseDisplaySize * 13.0 / 17.0)))

@@ -3913,6 +3913,10 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         }
         
         var folderItems: [TabSelectorComponent.Item] = []
+        // Folio sets the album chips as uppercase captions.
+        func astraChipTitle(_ title: String) -> String {
+            return AstraLook.design2027 ? title.uppercased(with: .current) : title
+        }
         let mainTitle: String
         let addTitle: String?
         if case .botPreview = self.scope {
@@ -3928,21 +3932,21 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         }
         folderItems.append(TabSelectorComponent.Item(
             id: AnyHashable("_main"),
-            title: mainTitle
+            title: astraChipTitle(mainTitle)
         ))
         
         if case .botPreview = self.scope {
             for language in self.currentBotPreviewLanguages {
                 folderItems.append(TabSelectorComponent.Item(
                     id: AnyHashable(language.id),
-                    title: language.name
+                    title: astraChipTitle(language.name)
                 ))
             }
         } else {
             for folder in self.currentStoryFolders {
                 folderItems.append(TabSelectorComponent.Item(
                     id: AnyHashable(folder.id),
-                    title: folder.title,
+                    title: astraChipTitle(folder.title),
                     isReorderable: self.canManageStories,
                     contextAction: { [weak self] sourceNode, gesture in
                         guard let self else {
@@ -4063,7 +4067,7 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         if self.canManageStories, let addTitle {
             folderItems.append(TabSelectorComponent.Item(
                 id: AnyHashable("_add"),
-                title: addTitle
+                title: astraChipTitle(addTitle)
             ))
         }
         var selectedId = AnyHashable("_main")
@@ -4081,15 +4085,16 @@ public final class PeerInfoStoryPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScr
         let folderTabSize = folderTab.update(
             transition: folderTabTransition,
             component: AnyComponent(TabSelectorComponent(
+                // Folio: the selected chip is an inverse slab (ink fill, card-coloured text).
                 colors: TabSelectorComponent.Colors(
-                    foreground: self.presentationData.theme.list.itemPrimaryTextColor,
-                    selection: self.presentationData.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05),
+                    foreground: AstraLook.design2027 ? self.presentationData.theme.list.itemBlocksBackgroundColor : self.presentationData.theme.list.itemPrimaryTextColor,
+                    selection: AstraLook.design2027 ? self.presentationData.theme.list.itemPrimaryTextColor : self.presentationData.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.05),
                     normal: self.presentationData.theme.list.itemPrimaryTextColor,
                     simple: true
                 ),
                 theme: self.presentationData.theme,
                 customLayout: TabSelectorComponent.CustomLayout(
-                    font: Font.medium(15.0),
+                    font: AstraLook.design2027 ? Font.semibold(12.0) : Font.medium(15.0),
                     spacing: 9.0,
                     verticalInset: 11.0,
                     height: 44.0 - 5.0 * 2.0

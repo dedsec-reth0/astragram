@@ -25,12 +25,27 @@ public final class ListSectionHeaderNode: ASDisplayNode {
     
     public var title: String? {
         didSet {
-            self.label.attributedText = NSAttributedString(string: self.title ?? "", font: titleFont, textColor: self.theme.chatList.sectionHeaderTextColor)
+            self.label.attributedText = self.makeTitleString()
             self.label.accessibilityLabel = self.title
             
             if let (size, leftInset, rightInset) = self.validLayout {
                 self.updateLayout(size: size, leftInset: leftInset, rightInset: rightInset)
             }
+        }
+    }
+    
+    private func makeTitleString() -> NSAttributedString {
+        if AstraLook.design2027 {
+            // Folio plain headers (contacts A-Z, search sections, pickers) are tracked semibold caps in ink2, the
+            // same running-head voice as the grouped list section headers.
+            let folioFont = Font.semibold(12.0)
+            return NSAttributedString(string: (self.title ?? "").uppercased(with: Locale.current), attributes: [
+                .font: folioFont,
+                .foregroundColor: self.theme.chatList.sectionHeaderTextColor,
+                .kern: (0.06 * folioFont.pointSize) as NSNumber
+            ])
+        } else {
+            return NSAttributedString(string: self.title ?? "", font: titleFont, textColor: self.theme.chatList.sectionHeaderTextColor)
         }
     }
     
@@ -148,7 +163,7 @@ public final class ListSectionHeaderNode: ASDisplayNode {
                         
             //self.backgroundLayer.backgroundColor = theme.chatList.sectionHeaderFillColor.cgColor
             
-            self.label.attributedText = NSAttributedString(string: self.title ?? "", font: titleFont, textColor: self.theme.chatList.sectionHeaderTextColor)
+            self.label.attributedText = self.makeTitleString()
 
             self.updateActionTitle()
             

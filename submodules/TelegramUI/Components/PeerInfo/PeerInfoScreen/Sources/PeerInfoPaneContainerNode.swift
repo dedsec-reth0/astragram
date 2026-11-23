@@ -249,7 +249,12 @@ final class PeerInfoPaneTabsContainerPaneNode: ASDisplayNode {
     
     func updateText(context: AccountContext, title: String, icons: [ProfileGiftsContext.State.StarGift] = [], isSelected: Bool, presentationData: PresentationData) {
         self.isSelected = isSelected
-        self.titleNode.attributedText = NSAttributedString(string: title, font: Font.medium(14.0), textColor: isSelected ? presentationData.theme.list.itemAccentColor : presentationData.theme.list.itemSecondaryTextColor)
+        if AstraLook.design2027 {
+            // Folio marks the selected pane by weight and ink, not by the accent colour.
+            self.titleNode.attributedText = NSAttributedString(string: title, font: isSelected ? Font.semibold(15.0) : Font.medium(15.0), textColor: isSelected ? presentationData.theme.list.itemPrimaryTextColor : presentationData.theme.list.itemSecondaryTextColor)
+        } else {
+            self.titleNode.attributedText = NSAttributedString(string: title, font: Font.medium(14.0), textColor: isSelected ? presentationData.theme.list.itemAccentColor : presentationData.theme.list.itemSecondaryTextColor)
+        }
         self.icons = icons
         
         if !icons.isEmpty {
@@ -1458,7 +1463,9 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         self.tabsBackgroundContainer.update(size: tabContainerFrame.size, isDark: presentationData.theme.overallDarkAppearance, transition: ComponentTransition(transition))
         
         transition.updateFrame(view: self.tabsBackgroundView, frame: CGRect(origin: CGPoint(), size: tabContainerFrame.size))
-        self.tabsBackgroundView.update(size: tabContainerFrame.size, cornerRadius: tabContainerFrame.height * 0.5, isDark: presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel), transition: ComponentTransition(transition))
+        // Folio washes the tabs' capsule in volt (accent @0.14) instead of the panel glass tint.
+        let tabsBackgroundTint: GlassBackgroundView.TintColor = AstraLook.design2027 ? .init(kind: .custom(style: .default, color: presentationData.theme.list.itemAccentColor.withAlphaComponent(0.14))) : .init(kind: .panel)
+        self.tabsBackgroundView.update(size: tabContainerFrame.size, cornerRadius: tabContainerFrame.height * 0.5, isDark: presentationData.theme.overallDarkAppearance, tintColor: tabsBackgroundTint, transition: ComponentTransition(transition))
         
         ComponentTransition(transition).setAlpha(view: self.tabsBackgroundContainer, alpha: tabsAlpha)
         
