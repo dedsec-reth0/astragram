@@ -58,7 +58,6 @@ import ChatRecordingViewOnceButtonNode
 import ChatRecordingPreviewInputPanelNode
 import ChatInputContextPanelNode
 import RasterizedCompositionComponent
-import TextLoadingEffect
 import RichTextEditorUIKit
 import RichTextEditorCore
 
@@ -3733,6 +3732,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         transition.updateTransformScale(node: self.sendActionButtons, scale: CGPoint(x: sendActionsScale, y: sendActionsScale))
         actionButtonsTransition.updatePosition(node: self.sendActionButtons, position: sendActionButtonsFrame.offsetBy(dx: -actionButtonsOffset.x, dy: -actionButtonsOffset.y).center)
+        self.astraUpdateTranslateSparkle()
         
         transition.updateBounds(node: self.sendActionButtons, bounds: CGRect(origin: CGPoint(), size: sendActionButtonsFrame.size))
         if let (rect, containerSize) = self.absoluteRect {
@@ -6582,43 +6582,229 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         return nil
     }
 
-    private var astraTranslatingEffectView: TextLoadingEffectView?
+    private var astraTranslateGlowView: AstraTranslateGlowView?
+    private var astraTranslateSparkleView: UIImageView?
+    private var astraTranslateSpinner: CAShapeLayer?
+    private var astraTranslating = false
 
-    /// AstraGram: while the message in the field is being translated before it is sent, its text shimmers (Telegram's
-    /// own loading effect for a message being translated) and the field and the send button wait.
-    public func astraSetTranslating(_ translating: Bool) {
-        guard let richTextInputNode = self.richTextInputNode else {
+    /// AstraGram: whether messages sent from a chat go out translated ("Translate my messages"); set by the app.
+    public static var astraTranslatesOutgoing: ((EnginePeer.Id) -> Bool)?
+
+    /// AstraGram: stars by the send button's arrow while this chat's messages go out translated (hidden while one is
+    /// being translated, when the arc runs round the button instead).
+    private func astraUpdateTranslateSparkle() {
+        let enabled: Bool
+        if let peerId = self.presentationInterfaceState?.chatLocation.peerId, let check = ChatTextInputPanelNode.astraTranslatesOutgoing {
+            enabled = check(peerId)
+        } else {
+            enabled = false
+        }
+        let host = self.sendActionButtons.sendContainerNode.view
+        let size = host.bounds.size
+        if enabled, size.width > 1.0 {
+            let sparkle: UIImageView
+            if let current = self.astraTranslateSparkleView {
+                sparkle = current
+            } else {
+                sparkle = UIImageView()
+                sparkle.isUserInteractionEnabled = false
+                self.astraTranslateSparkleView = sparkle
+            }
+            if sparkle.image?.size != size {
+                sparkle.image = AstraTranslateSendButton.sparklesImage(size: size)
+            }
+            if sparkle.superview !== host {
+                host.addSubview(sparkle)
+            } else {
+                host.bringSubviewToFront(sparkle)
+            }
+            sparkle.frame = CGRect(origin: .zero, size: size)
+            sparkle.alpha = self.astraTranslating ? 0.0 : 1.0
+        } else if let sparkle = self.astraTranslateSparkleView {
+            self.astraTranslateSparkleView = nil
+            sparkle.removeFromSuperview()
+        }
+    }
+
+    private func astraFieldFrame() -> CGRect {
+        return self.textInputContainerBackgroundView.convert(self.textInputContainerBackgroundView.bounds, to: self.view)
+    }
+
+    /// AstraGram: the message in the field is being translated before it is sent: the field lights up, beams sweep
+    /// through it, an arc runs round the send button, and the field and the button wait.
+    public func astraBeginTranslating() {
+        self.astraTranslating = true
+        let field = self.astraFieldFrame()
+        let glow: AstraTranslateGlowView
+        if let current = self.astraTranslateGlowView {
+            glow = current
+        } else {
+            glow = AstraTranslateGlowView(frame: CGRect())
+            self.astraTranslateGlowView = glow
+            self.view.addSubview(glow)
+        }
+        let outset = AstraTranslateGlowView.outset
+        glow.frame = field.insetBy(dx: -outset, dy: -outset)
+        glow.update(fieldSize: field.size, cornerRadius: min(field.height / 2.0, 20.0))
+        glow.start()
+
+        if let sparkle = self.astraTranslateSparkleView {
+            UIView.animate(withDuration: 0.12, animations: {
+                sparkle.alpha = 0.0
+            })
+        }
+        let host = self.sendActionButtons.sendContainerNode.view
+        if self.astraTranslateSpinner == nil, host.bounds.width > 1.0 {
+            let spinner = AstraTranslateSendButton.makeSpinner(size: host.bounds.size)
+            host.layer.addSublayer(spinner)
+            self.astraTranslateSpinner = spinner
+            spinner.opacity = 0.0
+            let fadeIn = CABasicAnimation(keyPath: "opacity")
+            fadeIn.fromValue = 0.0
+            fadeIn.toValue = 1.0
+            fadeIn.duration = 0.2
+            spinner.add(fadeIn, forKey: "fadeIn")
+            spinner.opacity = 1.0
+        }
+        self.richTextInputNode?.inputIsUserInteractionEnabled = false
+        self.sendActionButtons.isUserInteractionEnabled = false
+    }
+
+    /// AstraGram: the translation is ready. The light gathers at the field's left end, the old text blurs and fades,
+    /// `apply` puts the translation in, and it comes in word by word out of a blur; then the light goes, and after a
+    /// short rest `completion` sends it.
+    public func astraRevealTranslation(apply: () -> Void, completion: @escaping () -> Void) {
+        guard let richTextInputNode = self.richTextInputNode, let superview = richTextInputNode.asNode.view.superview else {
+            apply()
+            self.astraEndTranslating(completion: completion)
             return
         }
-        if translating {
-            let rects = richTextInputNode.astraTextLineRects()
-            let effectView: TextLoadingEffectView
-            if let current = self.astraTranslatingEffectView {
-                effectView = current
-            } else {
-                effectView = TextLoadingEffectView(frame: CGRect())
-                effectView.isUserInteractionEnabled = false
-                effectView.alpha = 0.0
-                self.astraTranslatingEffectView = effectView
-                richTextInputNode.asNode.view.addSubview(effectView)
-                ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut).updateAlpha(layer: effectView.layer, alpha: 1.0)
-            }
-            let bounds = richTextInputNode.asNode.view.bounds
-            effectView.frame = bounds
-            let color = self.presentationInterfaceState?.theme.chat.inputPanel.inputTextColor ?? .white
-            effectView.update(color: color, size: bounds.size, rects: rects.isEmpty ? [bounds.insetBy(dx: 4.0, dy: 8.0)] : rects)
-            richTextInputNode.inputIsUserInteractionEnabled = false
-            self.sendActionButtons.isUserInteractionEnabled = false
-            ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut).updateAlpha(node: self.sendActionButtons, alpha: 0.5)
-        } else {
-            if let effectView = self.astraTranslatingEffectView {
-                self.astraTranslatingEffectView = nil
-                effectView.removeFromSuperview()
-            }
-            richTextInputNode.inputIsUserInteractionEnabled = true
-            self.sendActionButtons.isUserInteractionEnabled = true
-            self.sendActionButtons.alpha = 1.0
+        let inputView = richTextInputNode.asNode.view
+        self.astraTranslateGlowView?.gatherLeft()
+
+        // The old text: its picture blurs and fades over it, while the field below already holds the translation.
+        let oldImage = AstraTextBlur.snapshot(inputView)
+        let oldSharp = UIImageView(image: oldImage)
+        let oldBlurred = UIImageView(image: oldImage.flatMap { AstraTextBlur.blurred($0, radius: 7.0) })
+        for view in [oldBlurred, oldSharp] {
+            view.frame = inputView.frame
+            view.isUserInteractionEnabled = false
+            superview.insertSubview(view, aboveSubview: inputView)
         }
+        oldBlurred.alpha = 0.0
+        // The field is hidden by an empty mask (its alpha is reset by layout) until the new text comes in.
+        let hidingMask = CALayer()
+        hidingMask.frame = inputView.bounds
+        inputView.layer.mask = hidingMask
+        apply()
+        UIView.animate(withDuration: 0.22, delay: 0.0, options: [.curveEaseIn], animations: {
+            oldSharp.alpha = 0.0
+            oldBlurred.alpha = 1.0
+        })
+        UIView.animate(withDuration: 0.25, delay: 0.22, options: [.curveEaseOut], animations: {
+            oldBlurred.alpha = 0.0
+            oldBlurred.transform = CGAffineTransform(translationX: 6.0, y: 0.0)
+        }, completion: { _ in
+            oldSharp.removeFromSuperview()
+            oldBlurred.removeFromSuperview()
+        })
+
+        // The new text, once laid out, comes in from the left: a blurred band runs ahead of it and the sharp text
+        // follows, word after word.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self else {
+                completion()
+                return
+            }
+            let bounds = inputView.bounds
+            inputView.layer.mask = nil
+            let newImage = AstraTextBlur.snapshot(inputView)
+            let newBlurred = UIImageView(image: newImage.flatMap { AstraTextBlur.blurred($0, radius: 6.0) })
+            newBlurred.frame = inputView.frame
+            newBlurred.isUserInteractionEnabled = false
+            superview.insertSubview(newBlurred, aboveSubview: inputView)
+
+            // How far the text reaches, so a short translation does not wait for the sweep across empty space.
+            let textMaxX = richTextInputNode.astraTextLineRects().map(\.maxX).max() ?? bounds.width
+            let reach = max(0.2, min(1.0, (textMaxX + 24.0) / max(1.0, bounds.width)))
+            let duration = 0.35 + 0.55 * Double(reach)
+            let band = 0.22
+
+            let sharpMask = CAGradientLayer()
+            sharpMask.frame = bounds
+            sharpMask.startPoint = CGPoint(x: 0.0, y: 0.5)
+            sharpMask.endPoint = CGPoint(x: 1.0, y: 0.5)
+            sharpMask.colors = [UIColor.black.cgColor, UIColor.clear.cgColor]
+            let sharpFrom: [NSNumber] = [NSNumber(value: -band), 0.0]
+            let sharpTo: [NSNumber] = [NSNumber(value: Double(reach)), NSNumber(value: Double(reach) + band)]
+            sharpMask.locations = sharpTo
+            let sharpSweep = CABasicAnimation(keyPath: "locations")
+            sharpSweep.fromValue = sharpFrom
+            sharpSweep.toValue = sharpTo
+            sharpSweep.duration = duration
+            sharpSweep.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            sharpMask.add(sharpSweep, forKey: "sweep")
+
+            let blurMask = CAGradientLayer()
+            blurMask.frame = bounds
+            blurMask.startPoint = CGPoint(x: 0.0, y: 0.5)
+            blurMask.endPoint = CGPoint(x: 1.0, y: 0.5)
+            blurMask.colors = [UIColor.clear.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
+            let blurFrom: [NSNumber] = [NSNumber(value: -band), NSNumber(value: band * 0.3), NSNumber(value: band)]
+            let blurTo: [NSNumber] = [NSNumber(value: Double(reach)), NSNumber(value: Double(reach) + band * 1.3), NSNumber(value: Double(reach) + band * 2.0)]
+            blurMask.locations = blurTo
+            let blurSweep = CABasicAnimation(keyPath: "locations")
+            blurSweep.fromValue = blurFrom
+            blurSweep.toValue = blurTo
+            blurSweep.duration = duration
+            blurSweep.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            blurMask.add(blurSweep, forKey: "sweep")
+
+            inputView.layer.mask = sharpMask
+            newBlurred.layer.mask = blurMask
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.05) { [weak self] in
+                inputView.layer.mask = nil
+                newBlurred.removeFromSuperview()
+                guard let self else {
+                    completion()
+                    return
+                }
+                self.astraEndTranslating(completion: {
+                    // A short rest with the translation in the field, as Telegram does, before it flies off.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: completion)
+                })
+            }
+        }
+    }
+
+    /// AstraGram: the translation is over (or failed): the light and the arc go, and the field works again.
+    public func astraEndTranslating(completion: @escaping () -> Void = {}) {
+        self.astraTranslating = false
+        self.richTextInputNode?.inputIsUserInteractionEnabled = true
+        self.richTextInputNode?.asNode.view.alpha = 1.0
+        self.sendActionButtons.isUserInteractionEnabled = true
+        if let glow = self.astraTranslateGlowView {
+            self.astraTranslateGlowView = nil
+            glow.stop(completion: {
+                glow.removeFromSuperview()
+            })
+        }
+        if let spinner = self.astraTranslateSpinner {
+            self.astraTranslateSpinner = nil
+            CATransaction.begin()
+            CATransaction.setCompletionBlock {
+                spinner.removeFromSuperlayer()
+            }
+            let fadeOut = CABasicAnimation(keyPath: "opacity")
+            fadeOut.fromValue = 1.0
+            fadeOut.toValue = 0.0
+            fadeOut.duration = 0.2
+            spinner.add(fadeOut, forKey: "fadeOut")
+            spinner.opacity = 0.0
+            CATransaction.commit()
+        }
+        completion()
     }
 
     public func makeSnapshotForTransition() -> (backgroundView: UIView, contentView: UIView, sourceRect: CGRect, scrollOffset: CGFloat)? {

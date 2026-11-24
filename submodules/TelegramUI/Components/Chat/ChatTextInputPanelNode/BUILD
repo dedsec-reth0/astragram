@@ -79,7 +79,6 @@ swift_library(
         "//submodules/TelegramUI/Components/Calls/VideoChatMicButtonComponent",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
-        "//submodules/TelegramUI/Components/TextLoadingEffect",
     ],
     visibility = [
         "//visibility:public",

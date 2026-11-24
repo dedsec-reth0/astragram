@@ -494,6 +494,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private var onLayoutCompletions: [(ContainedViewLayoutTransition) -> Void] = []
 
     init(context: AccountContext, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, subject: ChatControllerSubject?, controllerInteraction: ChatControllerInteraction, chatPresentationInterfaceState: ChatPresentationInterfaceState, automaticMediaDownloadSettings: MediaAutoDownloadSettings, navigationBar: NavigationBar?, statusBar: StatusBar?, backgroundNode: WallpaperBackgroundNode, controller: ChatControllerImpl?) {
+        // AstraGram: the send button shows little stars in chats whose messages go out translated.
+        if ChatTextInputPanelNode.astraTranslatesOutgoing == nil {
+            ChatTextInputPanelNode.astraTranslatesOutgoing = { peerId in
+                return AstraOutgoingTranslation.language(peerId: peerId) != nil
+            }
+        }
         self.context = context
         self.chatLocation = chatLocation
         self.chatLocationContextHolder = chatLocationContextHolder
@@ -5199,27 +5205,45 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 let hasTextMention = entities.contains(where: { if case .TextMention = $0.type { return true } else { return false } })
                 if inputText.length != 0, !hasTextMention, !controller.astraPretranslatedTexts.contains(inputText.string) {
                     self.astraTranslatingInput = true
-                    textInputPanelNode.astraSetTranslating(true)
+                    textInputPanelNode.astraBeginTranslating()
                     let original = inputText.string
                     let finish: ((String, [MessageTextEntity])?) -> Void = { [weak self] result in
                         guard let self, let controller = self.controller else {
                             return
                         }
-                        self.astraTranslatingInput = false
-                        (self.inputPanelNode as? ChatTextInputPanelNode)?.astraSetTranslating(false)
+                        let send: () -> Void = { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.astraTranslatingInput = false
+                            self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting, completion: completion)
+                        }
+                        let panel = self.inputPanelNode as? ChatTextInputPanelNode
                         let limit = 4096
                         if let (translated, translatedEntities) = result, !translated.isEmpty, (translated as NSString).length <= limit {
-                            controller.updateChatPresentationInterfaceState(animated: false, interactive: true, { state in
-                                return state.updatedInterfaceState { interfaceState in
-                                    return interfaceState.withUpdatedEffectiveInputState(chatTextInputState(fromComposedRichMessage: .plain(text: translated, entities: translatedEntities)))
-                                }
-                            })
                             controller.astraPretranslatedTexts.insert(translated)
+                            let apply: () -> Void = {
+                                controller.updateChatPresentationInterfaceState(animated: false, interactive: true, { state in
+                                    return state.updatedInterfaceState { interfaceState in
+                                        return interfaceState.withUpdatedEffectiveInputState(chatTextInputState(fromComposedRichMessage: .plain(text: translated, entities: translatedEntities)))
+                                    }
+                                })
+                            }
+                            if let panel {
+                                panel.astraRevealTranslation(apply: apply, completion: send)
+                            } else {
+                                apply()
+                                send()
+                            }
                         } else {
                             // The translation failed: the message goes out as written rather than being lost.
                             controller.astraPretranslatedTexts.insert(original)
+                            if let panel {
+                                panel.astraEndTranslating(completion: send)
+                            } else {
+                                send()
+                            }
                         }
-                        self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting, completion: completion)
                     }
                     let _ = (self.context.engine.messages.translate(text: original, toLang: toLang, entities: entities)
                     |> deliverOnMainQueue).startStandalone(next: { result in
