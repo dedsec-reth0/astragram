@@ -58,6 +58,7 @@ import ChatRecordingViewOnceButtonNode
 import ChatRecordingPreviewInputPanelNode
 import ChatInputContextPanelNode
 import RasterizedCompositionComponent
+import TextLoadingEffect
 import RichTextEditorUIKit
 import RichTextEditorCore
 
@@ -6579,6 +6580,45 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         return nil
+    }
+
+    private var astraTranslatingEffectView: TextLoadingEffectView?
+
+    /// AstraGram: while the message in the field is being translated before it is sent, its text shimmers (Telegram's
+    /// own loading effect for a message being translated) and the field and the send button wait.
+    public func astraSetTranslating(_ translating: Bool) {
+        guard let richTextInputNode = self.richTextInputNode else {
+            return
+        }
+        if translating {
+            let rects = richTextInputNode.astraTextLineRects()
+            let effectView: TextLoadingEffectView
+            if let current = self.astraTranslatingEffectView {
+                effectView = current
+            } else {
+                effectView = TextLoadingEffectView(frame: CGRect())
+                effectView.isUserInteractionEnabled = false
+                effectView.alpha = 0.0
+                self.astraTranslatingEffectView = effectView
+                richTextInputNode.asNode.view.addSubview(effectView)
+                ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut).updateAlpha(layer: effectView.layer, alpha: 1.0)
+            }
+            let bounds = richTextInputNode.asNode.view.bounds
+            effectView.frame = bounds
+            let color = self.presentationInterfaceState?.theme.chat.inputPanel.inputTextColor ?? .white
+            effectView.update(color: color, size: bounds.size, rects: rects.isEmpty ? [bounds.insetBy(dx: 4.0, dy: 8.0)] : rects)
+            richTextInputNode.inputIsUserInteractionEnabled = false
+            self.sendActionButtons.isUserInteractionEnabled = false
+            ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut).updateAlpha(node: self.sendActionButtons, alpha: 0.5)
+        } else {
+            if let effectView = self.astraTranslatingEffectView {
+                self.astraTranslatingEffectView = nil
+                effectView.removeFromSuperview()
+            }
+            richTextInputNode.inputIsUserInteractionEnabled = true
+            self.sendActionButtons.isUserInteractionEnabled = true
+            self.sendActionButtons.alpha = 1.0
+        }
     }
 
     public func makeSnapshotForTransition() -> (backgroundView: UIView, contentView: UIView, sourceRect: CGRect, scrollOffset: CGFloat)? {

@@ -307,6 +307,8 @@ struct ScrolledToMessageId: Equatable {
 public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate {
     /// AstraGram: set while the translated messages are being sent (so they are not translated again).
     var astraSendingTranslated = false
+    /// AstraGram: texts translated in the input field before sending (shown shimmering there): sent as they are.
+    var astraPretranslatedTexts = Set<String>()
     
     var validLayout: ContainerViewLayout?
     /// AstraGram: the streak buddy (серийчик) floating over a chat that has a streak.

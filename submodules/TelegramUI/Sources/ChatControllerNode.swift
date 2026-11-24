@@ -6,6 +6,7 @@ import SwiftSignalKit
 import Display
 import SideColumnLayout
 import TelegramCore
+import AstraGramUI
 import TelegramPresentationData
 import TelegramUIPreferences
 import TextFormat
@@ -187,6 +188,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     let controllerInteraction: ChatControllerInteraction
     private weak var controller: ChatControllerImpl?
     private var astraMessageSendConfirmed = false
+    /// AstraGram: a message in the field is being translated before it is sent.
+    private var astraTranslatingInput = false
     
     let navigationBar: NavigationBar?
     let statusBar: StatusBar?
@@ -5178,6 +5181,55 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 })
             ]), in: .window(.root))
             return
+        }
+        // AstraGram: "Translate my messages" in this chat: the text shimmers in the field while Telegram translates it,
+        // is replaced by the translation, and then goes out with the usual send animation.
+        if self.astraTranslatingInput {
+            return
+        }
+        if scheduleTime == nil, let peerId = self.chatLocation.peerId, let toLang = AstraOutgoingTranslation.language(peerId: peerId), let controller = self.controller {
+            var state = self.chatPresentationInterfaceState
+            if let panel = self.textInputPanelNode {
+                state = state.updatedInterfaceState { $0.withUpdatedEffectiveInputState(panel.inputTextState) }
+            }
+            let content = state.interfaceState.composeInputState.content
+            if state.interfaceState.editMessage == nil, !content.isEmpty, content.isEntityExpressible() {
+                let inputText = trimChatInputText(expandedInputStateAttributedString(attributedString(from: content)))
+                let entities = generateTextEntities(inputText.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(inputText, maxAnimatedEmojisInText: 0))
+                let hasTextMention = entities.contains(where: { if case .TextMention = $0.type { return true } else { return false } })
+                if inputText.length != 0, !hasTextMention, !controller.astraPretranslatedTexts.contains(inputText.string) {
+                    self.astraTranslatingInput = true
+                    textInputPanelNode.astraSetTranslating(true)
+                    let original = inputText.string
+                    let finish: ((String, [MessageTextEntity])?) -> Void = { [weak self] result in
+                        guard let self, let controller = self.controller else {
+                            return
+                        }
+                        self.astraTranslatingInput = false
+                        (self.inputPanelNode as? ChatTextInputPanelNode)?.astraSetTranslating(false)
+                        let limit = 4096
+                        if let (translated, translatedEntities) = result, !translated.isEmpty, (translated as NSString).length <= limit {
+                            controller.updateChatPresentationInterfaceState(animated: false, interactive: true, { state in
+                                return state.updatedInterfaceState { interfaceState in
+                                    return interfaceState.withUpdatedEffectiveInputState(chatTextInputState(fromComposedRichMessage: .plain(text: translated, entities: translatedEntities)))
+                                }
+                            })
+                            controller.astraPretranslatedTexts.insert(translated)
+                        } else {
+                            // The translation failed: the message goes out as written rather than being lost.
+                            controller.astraPretranslatedTexts.insert(original)
+                        }
+                        self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, sendWithoutFormatting: sendWithoutFormatting, completion: completion)
+                    }
+                    let _ = (self.context.engine.messages.translate(text: original, toLang: toLang, entities: entities)
+                    |> deliverOnMainQueue).startStandalone(next: { result in
+                        finish(result)
+                    }, error: { _ in
+                        finish(nil)
+                    })
+                    return
+                }
+            }
         }
         self.historyNode.justSentTextMessage = true
         

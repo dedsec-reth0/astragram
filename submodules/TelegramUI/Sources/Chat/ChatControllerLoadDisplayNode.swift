@@ -1030,10 +1030,15 @@ extension ChatControllerImpl {
             let astraToLang: String? = strongSelf.chatLocation.peerId.flatMap { AstraOutgoingTranslation.language(peerId: $0) }
             let astraNeedsTranslation = astraToLang != nil && messages.contains(where: { message in
                 if case let .message(text, _, _, _, _, _, _, _, _, _) = message {
-                    return !text.isEmpty
+                    return !text.isEmpty && !strongSelf.astraPretranslatedTexts.contains(text)
                 }
                 return false
             })
+            for message in messages {
+                if case let .message(text, _, _, _, _, _, _, _, _, _) = message {
+                    strongSelf.astraPretranslatedTexts.remove(text)
+                }
+            }
             if !strongSelf.astraSendingTranslated && (astraNeedsTranslation || !astraTranslatedSendQueue.batches.isEmpty) {
                 let batch = AstraTranslatedSendQueue.Batch(send: { [weak strongSelf] ready in
                     guard let strongSelf else {
