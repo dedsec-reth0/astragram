@@ -289,17 +289,11 @@ public func translateMessageIds(context: AccountContext, messageIds: [EngineMess
             }
         }
         
-        let translationConfiguration = TranslationConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
-        var enableLocalIfPossible = false
-        switch translationConfiguration.auto {
-        case .system:
-            if #available(iOS 18.0, *) {
-                enableLocalIfPossible = true
-            }
-        default:
-            break
-        }
-        return context.engine.messages.translateMessages(messageIds: messageIdsToTranslate, fromLang: fromLang, toLang: toLang, enableLocalIfPossible: enableLocalIfPossible)
+        // AstraGram: chats are translated by Telegram's own translation of the messages' texts (what the "Translate" menu
+        // item uses, free on every account), not by message ids: asking by id is whole-chat translation, which the
+        // server allows only with Premium, so with Local Premium it failed silently. Nor on the device: the system
+        // translator needs the source language, and in a chat translated on request it was only guessed.
+        return context.engine.messages.translateMessages(messageIds: messageIdsToTranslate, fromLang: fromLang, toLang: toLang, enableLocalIfPossible: false, byText: true)
         |> `catch` { _ -> Signal<Never, NoError> in
             return .complete()
         }

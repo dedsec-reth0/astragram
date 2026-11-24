@@ -217,10 +217,10 @@ func _internal_translateTexts(network: Network, texts: [(String, [MessageTextEnt
     }
 }
 
-func _internal_translateMessages(account: Account, messageIds: [EngineMessage.Id], fromLang: String?, toLang: String, enableLocalIfPossible: Bool, tone: TranslationTone = .neutral) -> Signal<Never, TranslationError> {
+func _internal_translateMessages(account: Account, messageIds: [EngineMessage.Id], fromLang: String?, toLang: String, enableLocalIfPossible: Bool, tone: TranslationTone = .neutral, byText: Bool = false) -> Signal<Never, TranslationError> {
     var signals: [Signal<Void, TranslationError>] = []
     for (peerId, messageIds) in messagesIdsGroupedByPeerId(messageIds) {
-        signals.append(_internal_translateMessagesByPeerId(account: account, peerId: peerId, messageIds: messageIds, fromLang: fromLang, toLang: toLang, enableLocalIfPossible: enableLocalIfPossible, tone: tone))
+        signals.append(_internal_translateMessagesByPeerId(account: account, peerId: peerId, messageIds: messageIds, fromLang: fromLang, toLang: toLang, enableLocalIfPossible: enableLocalIfPossible, tone: tone, byText: byText))
     }
     return combineLatest(signals)
     |> ignoreValues
@@ -281,7 +281,7 @@ func _internal_translateRichMessages(account: Account, inputPeer: Api.InputPeer,
     }
 }
 
-private func _internal_translateMessagesByPeerId(account: Account, peerId: EnginePeer.Id, messageIds: [EngineMessage.Id], fromLang: String?, toLang: String, enableLocalIfPossible: Bool, tone: TranslationTone = .neutral) -> Signal<Void, TranslationError> {
+private func _internal_translateMessagesByPeerId(account: Account, peerId: EnginePeer.Id, messageIds: [EngineMessage.Id], fromLang: String?, toLang: String, enableLocalIfPossible: Bool, tone: TranslationTone = .neutral, byText: Bool = false) -> Signal<Void, TranslationError> {
     return account.postbox.transaction { transaction -> (Api.InputPeer?, [Message]) in
         return (transaction.getPeer(peerId).flatMap(apiInputPeer), messageIds.compactMap({ transaction.getMessage($0) }))
     }
@@ -346,7 +346,47 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
         if id.isEmpty {
             msgs = .single(nil)
         } else {
-            if enableLocalIfPossible, let engineExperimentalInternalTranslationService, let fromLang {
+            if byText {
+                // AstraGram: the messages' own texts go to Telegram's translation, as the "Translate" menu item sends
+                // them. Unlike asking by message id (whole-chat translation, which the server allows only with
+                // Premium) this works on every account, and the server finds the source language itself.
+                let texts: [(String, [MessageTextEntity])] = plainMessageIds.map { messageId in
+                    if let message = messages.first(where: { $0.id == messageId }) {
+                        let entities = message.textEntitiesAttribute?.entities ?? []
+                        return (message.text, entities)
+                    }
+                    return ("", [])
+                }
+                // A few texts per request: the server takes a limited number at once.
+                let chunkSize = 10
+                var chunkSignals: [Signal<[(String, [MessageTextEntity])], TranslationError>] = []
+                var start = 0
+                while start < texts.count {
+                    let chunk = Array(texts[start ..< min(texts.count, start + chunkSize)])
+                    if chunk.allSatisfy({ $0.0.isEmpty }) {
+                        chunkSignals.append(.single(chunk))
+                    } else {
+                        chunkSignals.append(_internal_translateTexts(network: account.network, texts: chunk, toLang: toLang, tone: tone)
+                        |> map { translated -> [(String, [MessageTextEntity])] in
+                            // Keeps one result per text, so the results stay matched to their messages.
+                            return chunk.enumerated().map { index, original in
+                                if index < translated.count, !translated[index].0.isEmpty {
+                                    return translated[index]
+                                }
+                                return original
+                            }
+                        })
+                    }
+                    start += chunkSize
+                }
+                msgs = combineLatest(chunkSignals)
+                |> map { chunks -> Api.messages.TranslatedText? in
+                    let result: [Api.TextWithEntities] = chunks.flatMap { $0 }.map { text, entities in
+                        return .textWithEntities(.init(text: text, entities: apiEntitiesFromMessageTextEntities(entities, associatedPeers: SimpleDictionary())))
+                    }
+                    return .translateResult(.init(result: result))
+                }
+            } else if enableLocalIfPossible, let engineExperimentalInternalTranslationService, let fromLang {
                 msgs = account.postbox.transaction { transaction -> [MessageId: String] in
                     var texts: [MessageId: String] = [:]
                     for messageId in plainMessageIds {
