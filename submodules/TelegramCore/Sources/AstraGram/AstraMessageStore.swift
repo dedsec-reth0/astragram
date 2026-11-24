@@ -345,8 +345,19 @@ public final class AstraMessageStore {
                 opened = database
                 break
             }
-            // Unreadable with the key (damaged): it is started anew rather than left broken.
+            let code = sqlite3_extended_errcode(database) & 0xff
             sqlite3_close(database)
+            guard code == SQLITE_NOTADB || code == SQLITE_CORRUPT else {
+                // Busy (the extension has it open) or not readable yet: the saved messages are kept and it is tried again.
+                Logger.shared.log("AstraGram", "the message store did not open (\(code)), trying again")
+                if attempt < 60 {
+                    self.queue.after(5.0, {
+                        self.open(attempt: attempt + 1)
+                    })
+                }
+                return
+            }
+            // Unreadable with the key (damaged): it is started anew rather than left broken.
             Logger.shared.log("AstraGram", "the message store is unreadable, starting anew")
             AstraMessageStore.removeFiles(self.path)
         }

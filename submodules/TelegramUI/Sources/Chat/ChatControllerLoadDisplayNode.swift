@@ -1040,10 +1040,9 @@ extension ChatControllerImpl {
                 }
             }
             if !strongSelf.astraSendingTranslated && (astraNeedsTranslation || !astraTranslatedSendQueue.batches.isEmpty) {
-                let batch = AstraTranslatedSendQueue.Batch(send: { [weak strongSelf] ready in
-                    guard let strongSelf else {
-                        return
-                    }
+                // The controller is held until the batch goes out: leaving the chat while it is being translated must
+                // not drop the messages (the queue lets go of the batch once it is sent).
+                let batch = AstraTranslatedSendQueue.Batch(send: { ready in
                     strongSelf.astraSendingTranslated = true
                     strongSelf.chatDisplayNode.sendMessages(ready, silentPosting, scheduleTime, repeatPeriod, isAnyMessageTextPartitioned, postpone)
                     strongSelf.astraSendingTranslated = false
@@ -1086,6 +1085,8 @@ extension ChatControllerImpl {
                     |> `catch` { _ -> Signal<EnqueueMessage, NoError> in
                         return .single(message)
                     }
+                    // Offline the request waits for the network: the original goes out instead of holding the chat.
+                    |> timeout(8.0, queue: Queue.mainQueue(), alternate: .single(message))
                 }
                 let _ = (combineLatest(signals)
                 |> take(1)
