@@ -344,6 +344,12 @@ private final class NativeWindow: UIWindow, WindowHost {
 
     override func sendEvent(_ event: UIEvent) {
         self.touchRelease.update(with: event)
+        // AstraGram Liquid Glass: a touch that begins on glass sends a ripple through it.
+        if AstraLook.liquidGlass, event.type == .touches, let handler = AstraLook.liquidGlassTouchBegan, let touches = event.allTouches {
+            for touch in touches where touch.phase == .began {
+                handler(touch)
+            }
+        }
         super.sendEvent(event)
     }
     

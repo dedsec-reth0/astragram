@@ -2,6 +2,8 @@ import Foundation
 import UIKit
 import TelegramCore
 import TelegramPresentationData
+import Display
+import AsyncDisplayKit
 
 /// AstraGram "Liquid Glass+ (beta)": the chat list over a soft gradient, as a floating rounded card (after the Liquid Glass
 /// Telegram concept). Read once at launch: switching it applies after the app restarts.
@@ -13,7 +15,8 @@ enum AstraLiquidGlass {
 
     /// The chat list background: clear in the beta look, so the gradient and the card show through.
     static func chatListBackgroundColor(_ theme: PresentationTheme) -> UIColor {
-        return AstraLiquidGlass.isEnabled ? .clear : theme.chatList.backgroundColor
+        // The Liquid Glass design shows its aurora (behind the controller node) through the list.
+        return (AstraLiquidGlass.isEnabled || theme.isAstraLiquidGlass) ? .clear : theme.chatList.backgroundColor
     }
 }
 
@@ -66,5 +69,51 @@ final class AstraLiquidGlassBackgroundView: UIView {
         let cardFrame = CGRect(x: inset, y: max(0.0, cardTop), width: max(0.0, size.width - inset * 2.0), height: max(0.0, size.height - max(0.0, cardTop) - inset))
         self.cardView.frame = cardFrame
         self.cardView.layer.shadowPath = UIBezierPath(roundedRect: CGRect(origin: CGPoint(), size: cardFrame.size), cornerRadius: 26.0).cgPath
+    }
+}
+
+/// AstraGram Liquid Glass: the rows on screen rise into place one after another on springs, like bubbles surfacing.
+/// One-shot additive animations on the render server, played when a chat list appears or a folder is switched to.
+func astraCascadeIn(_ listNode: ListView) {
+    if !AstraLook.liquidGlassMotion {
+        return
+    }
+    var nodes: [ASDisplayNode] = []
+    listNode.forEachVisibleItemNode { node in
+        nodes.append(node)
+    }
+    nodes.sort(by: { $0.frame.minY < $1.frame.minY })
+    let now = CACurrentMediaTime()
+    for (index, node) in nodes.prefix(14).enumerated() {
+        let layer = node.layer
+        let beginTime = layer.convertTime(now, from: nil) + Double(index) * 0.035
+        let rise = CASpringAnimation(keyPath: "position.y")
+        rise.isAdditive = true
+        rise.fromValue = 30.0 + CGFloat(index) * 5.0
+        rise.toValue = 0.0
+        rise.mass = 1.0
+        rise.stiffness = 170.0
+        rise.damping = 15.0
+        rise.duration = rise.settlingDuration
+        rise.beginTime = beginTime
+        rise.fillMode = .backwards
+        layer.add(rise, forKey: "astraCascadeRise")
+        let squash = CASpringAnimation(keyPath: "transform.scale.x")
+        squash.isAdditive = true
+        squash.fromValue = -0.05
+        squash.toValue = 0.0
+        squash.stiffness = 200.0
+        squash.damping = 12.0
+        squash.duration = squash.settlingDuration
+        squash.beginTime = beginTime
+        squash.fillMode = .backwards
+        layer.add(squash, forKey: "astraCascadeSquash")
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0.0
+        fade.toValue = 1.0
+        fade.duration = 0.28
+        fade.beginTime = beginTime
+        fade.fillMode = .backwards
+        layer.add(fade, forKey: "astraCascadeFade")
     }
 }

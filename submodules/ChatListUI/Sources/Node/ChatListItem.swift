@@ -1467,6 +1467,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     
     private let backgroundNode: ASDisplayNode
     private let highlightedBackgroundNode: ASDisplayNode
+    /// AstraGram Liquid Glass: the row's glass card. It is the bottom subnode of `contextContainer`, so it slides with
+    /// the swipe.
+    private var astraGlassCardNode: ASImageNode?
     
     let contextContainer: ContextControllerSourceNode
     let mainContentContainerNode: ASDisplayNode
@@ -5706,6 +5709,36 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     if AstraLiquidGlass.isEnabled && isPinned && !item.selected {
                         backgroundColor = .clear
                     }
+                    // AstraGram Liquid Glass: every row floats on a card of glass; pinned ones are a brighter glass.
+                    let astraGlassCards = item.presentationData.theme.isAstraLiquidGlass && !item.interaction.isSideListMode && !item.interaction.isSearchMode
+                    if astraGlassCards {
+                        let palette = AstraLiquidGlassPalette(dark: item.presentationData.theme.overallDarkAppearance)
+                        var appearsPinned = isPinned
+                        if case let .groupReference(groupReferenceData) = item.content, groupReferenceData.hiddenByDefault, !groupReferenceData.appearsPinned {
+                            appearsPinned = false
+                        }
+                        let cardFill = item.selected ? palette.accentWash : (appearsPinned ? palette.glassPinned : palette.glass)
+                        let cardFrame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: layout.contentSize.width - params.leftInset - params.rightInset, height: itemHeight)).insetBy(dx: 10.0, dy: 3.0)
+                        let cardNode: ASImageNode
+                        if let current = strongSelf.astraGlassCardNode {
+                            cardNode = current
+                            transition.updateFrame(node: cardNode, frame: cardFrame)
+                        } else {
+                            cardNode = ASImageNode()
+                            cardNode.isLayerBacked = true
+                            cardNode.displaysAsynchronously = false
+                            cardNode.isUserInteractionEnabled = false
+                            cardNode.frame = cardFrame
+                            strongSelf.astraGlassCardNode = cardNode
+                            strongSelf.contextContainer.insertSubnode(cardNode, at: 0)
+                        }
+                        cardNode.image = astraGlassCardImage(isDark: item.presentationData.theme.overallDarkAppearance, fill: cardFill, cornerRadius: 22.0)
+                        transition.updateAlpha(node: cardNode, alpha: 1.0 - (item.interaction.inlineNavigationLocation?.progress ?? 0.0))
+                        backgroundColor = .clear
+                    } else if let cardNode = strongSelf.astraGlassCardNode {
+                        strongSelf.astraGlassCardNode = nil
+                        cardNode.removeFromSupernode()
+                    }
                     if animated {
                         transition.updateBackgroundColor(node: strongSelf.backgroundNode, color: backgroundColor)
                     } else {
@@ -5728,6 +5761,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             highlightedBackgroundFrame = highlightedBackgroundFrame.insetBy(dx: 8.0, dy: 0.0)
                         }
                         strongSelf.revealOptionsHighlightedBackgroundRestingCornerRadius = 24.0
+                    } else if astraGlassCards {
+                        // Liquid Glass: the press lights the card itself.
+                        highlightedBackgroundFrame = CGRect(origin: CGPoint(x: params.leftInset, y: layoutOffset), size: CGSize(width: layout.contentSize.width - params.leftInset - params.rightInset, height: itemHeight)).insetBy(dx: 10.0, dy: 3.0)
+                        strongSelf.revealOptionsHighlightedBackgroundRestingCornerRadius = 22.0
                     } else if AstraLook.springPresses {
                         // AstraGram look: the pressed row is a rounded plate here too.
                         highlightedBackgroundFrame = highlightedBackgroundFrame.insetBy(dx: 8.0, dy: 0.0)

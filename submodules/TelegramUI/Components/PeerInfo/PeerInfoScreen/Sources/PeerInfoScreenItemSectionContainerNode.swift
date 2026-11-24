@@ -54,11 +54,13 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
     private var astraContentHeight: CGFloat = 0.0
     private var astraWidth: CGFloat = 0.0
     private var astraHasCorners = false
+    /// AstraGram Liquid Glass: the card is glass over the aurora, so it is clipped to its rounded shape as while tinted.
+    private var astraGlass = false
     
     /// While tinted the items' corner images (painted in the theme's background) would show as dark corners: the card
     /// is clipped to its rounded shape instead.
     private func astraUpdateClipping() {
-        guard self.astraTint != nil, self.astraHasCorners, self.astraCardRect.height > 0.0 else {
+        guard self.astraTint != nil || self.astraGlass, self.astraHasCorners, self.astraCardRect.height > 0.0 else {
             self.itemContainerNode.layer.mask = nil
             self.backgroundNode.cornerRadius = 0.0
             return
@@ -76,6 +78,13 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
     
     func update(context: AccountContext, width: CGFloat, safeInsets: UIEdgeInsets, hasCorners: Bool, presentationData: PresentationData, items: [PeerInfoScreenItem], transition: ContainedViewLayoutTransition) -> CGFloat {
         self.themeBackgroundColor = presentationData.theme.list.itemBlocksBackgroundColor
+        let astraGlass = presentationData.theme.isAstraLiquidGlass
+        if self.astraGlass != astraGlass {
+            self.astraGlass = astraGlass
+            // A bright rim round the glass card.
+            self.backgroundNode.layer.borderColor = UIColor(white: 1.0, alpha: presentationData.theme.overallDarkAppearance ? 0.14 : 0.8).cgColor
+            self.backgroundNode.layer.cornerCurve = .continuous
+        }
         self.backgroundNode.backgroundColor = self.astraTint ?? presentationData.theme.list.itemBlocksBackgroundColor
         self.topSeparatorNode.backgroundColor = presentationData.theme.list.itemBlocksSeparatorColor
         self.bottomSeparatorNode.backgroundColor = presentationData.theme.list.itemBlocksSeparatorColor
@@ -168,12 +177,14 @@ final class PeerInfoScreenItemSectionContainerNode: ASDisplayNode {
         self.astraContentHeight = contentHeight
         self.astraWidth = width
         self.astraHasCorners = hasCorners
-        if self.astraTint != nil && hasCorners {
-            // The tinted card in its rounded shape.
+        if (self.astraTint != nil || self.astraGlass) && hasCorners {
+            // The tinted (or glass) card in its rounded shape.
             transition.updateFrame(node: self.backgroundNode, frame: cardRect)
             self.backgroundNode.cornerRadius = 26.0
+            self.backgroundNode.layer.borderWidth = (self.astraGlass && self.astraTint == nil) ? 1.0 : 0.0
         } else {
             self.backgroundNode.cornerRadius = 0.0
+            self.backgroundNode.layer.borderWidth = 0.0
             transition.updateFrame(node: self.backgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: contentWithBackgroundOffset), size: CGSize(width: width, height: max(0.0, contentWithBackgroundHeight - contentWithBackgroundOffset))))
         }
         self.astraUpdateClipping()

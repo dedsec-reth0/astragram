@@ -2461,8 +2461,15 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     
     public static var sharedPreviousPowerSavingEnabled: Bool?
     
+    /// AstraGram Liquid Glass: the rows surfaced once, on the list's first appearance.
+    private var astraDidCascade = false
+    
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        if !self.astraDidCascade && self.presentationData.theme.isAstraLiquidGlass && !self.isSideList {
+            self.astraDidCascade = true
+            astraCascadeIn(self.chatListDisplayNode.mainContainerNode.currentItemNode)
+        }
                 
         if self.powerSavingMonitoringDisposable == nil {
             self.powerSavingMonitoringDisposable = (self.context.sharedContext.automaticMediaDownloadSettings

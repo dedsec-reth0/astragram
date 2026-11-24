@@ -372,7 +372,7 @@ public struct PresentationResourcesItemList {
             key = glass ? PresentationResourceKey.itemListCornersBottomGlass : PresentationResourceKey.itemListCornersBottom
         }
         return theme.image(key.rawValue, { theme in
-            return generateImage(CGSize(width: 56.0, height: 56.0), rotatedContext: { (size, context) in
+            let image = generateImage(CGSize(width: 56.0, height: 56.0), rotatedContext: { (size, context) in
                 let bounds = CGRect(origin: CGPoint(), size: size)
                 context.setFillColor(theme.list.blocksBackgroundColor.cgColor)
                 context.fill(bounds)
@@ -393,6 +393,14 @@ public struct PresentationResourcesItemList {
                 context.addPath(path.cgPath)
                 context.fillPath()
             })?.stretchableImage(withLeftCapWidth: 28, topCapHeight: 28)
+            // AstraGram Liquid Glass: these corners are cut out of the row (see `astraIsListCornerImage`), not painted
+            // over it, since the page under glass rows is an aurora, not one colour.
+            if theme.isAstraLiquidGlass, let image {
+                astraListCornerLock.lock()
+                astraListCornerImages.add(image)
+                astraListCornerLock.unlock()
+            }
+            return image
         })
     }
     
@@ -501,4 +509,18 @@ public struct PresentationResourcesItemList {
             return generateTintedImage(image: UIImage(bundleImageName: "Premium/Stars/Stats"), color: .white)?.withRenderingMode(.alwaysTemplate)
         })
     }
+}
+
+/// AstraGram Liquid Glass: the corner images of glass list rows.
+private let astraListCornerImages = NSHashTable<UIImage>.weakObjects()
+private let astraListCornerLock = NSLock()
+
+/// Whether this image is the rounded-corner overlay of a Liquid Glass list row: such an overlay must cut the corners out
+/// of the row rather than cover them with the page colour.
+public func astraIsListCornerImage(_ image: UIImage) -> Bool {
+    astraListCornerLock.lock()
+    defer {
+        astraListCornerLock.unlock()
+    }
+    return astraListCornerImages.contains(image)
 }

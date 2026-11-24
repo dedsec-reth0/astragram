@@ -358,7 +358,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
             60, 61, 62, 63, 64, 65, 73, 74, 75, 76, 77, 78, 66, 67, 68, 69, 100, 101, 102, 103, 104, 70, 71, 72,
             80, 81, 82, 85, 105, 106, 90, 91, 92,
             130, 139, 134, 133, 131, 132, 135, 136, 137, 138, 140, 141,
-            110, 111, 121, 112, 113, 114, 115, 119, 120, 122, 123, 124, 116, 117, 118, 199, 200
+            110, 125, 126, 111, 121, 112, 113, 114, 115, 119, 120, 122, 123, 124, 116, 117, 118, 199, 200
         ]
         var order: [Int32: Int] = [:]
         for (index, id) in ids.enumerated() {
@@ -470,6 +470,14 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         case let .flag(_, _, title, value, enabled, keyPath):
             return toggle(title, value, enabled: enabled) { settings, value in
                 settings[keyPath: keyPath] = value
+                // Liquid Glass and Monochrome are two whole looks: turning one on turns the other off in the same update.
+                if value {
+                    if keyPath == \AstraGramSettingsValues.liquidGlassDesign {
+                        settings.monochrome = false
+                    } else if keyPath == \AstraGramSettingsValues.monochrome {
+                        settings.liquidGlassDesign = false
+                    }
+                }
             }
         case let .header(_, _, text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: section)
@@ -732,6 +740,12 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.button(id: 140, section: .securityTelegram, title: strings.telegramPrivacy, label: "", kind: .telegramPrivacy))
     entries.append(.footer(id: 141, section: .securityTelegram, text: strings.securityFooter))
     entries.append(.header(id: 110, section: .look, text: strings.lookHeader))
+    entries.append(.flag(id: 125, section: .look, title: strings.liquidGlassDesign, value: settings.liquidGlassDesign, enabled: true, keyPath: \.liquidGlassDesign))
+    // Some glass (the settings icons, the tab bar) is set up once per launch, so a restart is offered whenever the switch
+    // differs from the value the app launched with.
+    if settings.liquidGlassDesign != AstraLook.liquidGlassAtLaunch {
+        entries.append(.button(id: 126, section: .look, title: strings.restartApp, label: "", kind: .restartApp))
+    }
     entries.append(.flag(id: 111, section: .look, title: strings.monochrome, value: settings.monochrome, enabled: true, keyPath: \.monochrome))
     if settings.monochrome {
         entries.append(.flag(id: 121, section: .look, title: strings.monochromePlainBackground, value: settings.monochromePlainBackground, enabled: true, keyPath: \.monochromePlainBackground))
@@ -745,7 +759,7 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.flag(id: 122, section: .look, title: strings.astraBadge, value: settings.astraBadge, enabled: true, keyPath: \.astraBadge))
     entries.append(.button(id: 123, section: .look, title: strings.astraBadgeClear, label: "", kind: .clearBadge))
     entries.append(.button(id: 124, section: .look, title: strings.streaks, label: "", kind: .streaks))
-    entries.append(.footer(id: 116, section: .look, text: strings.lookFooter))
+    entries.append(.footer(id: 116, section: .look, text: settings.liquidGlassDesign ? strings.liquidGlassDesignFooter + "\n\n" + strings.lookFooter : strings.lookFooter))
     entries.append(.button(id: 117, section: .onlineExceptions, title: strings.restartApp, label: "", kind: .restartApp))
     entries.append(.footer(id: 118, section: .onlineExceptions, text: strings.restartFooter))
     entries.append(.reset(strings.resetSettings))

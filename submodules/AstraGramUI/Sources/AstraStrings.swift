@@ -262,6 +262,8 @@ public struct AstraStrings {
     public var contactsTab: String { t("Вкладка «Контакты»", "Contacts Tab") }
     public var callsTab: String { t("Вкладка «Звонки»", "Calls Tab") }
     public var monochrome: String { t("Монохромное оформление", "Monochrome Look") }
+    public var liquidGlassDesign: String { t("Дизайн Liquid Glass", "Liquid Glass Design") }
+    public var liquidGlassDesignFooter: String { t("Живое стекло: аврора за списками, стеклянные карточки и сообщения, блик, который следует за наклоном телефона, и жидкая рябь от касаний. С «Уменьшением движения» анимации стихают, с «Понижением прозрачности» стекло становится плотным.", "Living glass: an aurora behind lists, glass cards and messages, a highlight that follows the phone's tilt and liquid ripples from touches. Reduce Motion calms the animations; Reduce Transparency makes the glass solid.") }
     public var lookFooter: String { t("Монохром оставляет только чёрный, белый и серые. Значок AstraGram виден у тех, у кого он тоже включён. Часть изменений применяется после перезапуска.", "Monochrome keeps only black, white and grays. The AstraGram badge is seen by people who have it on too. Some changes apply after a restart.") }
     public var restartApp: String { t("Перезапустить AstraGram", "Restart AstraGram") }
     public var restartFooter: String { t("AstraGram закроется и пришлёт уведомление, чтобы открыться снова.", "AstraGram closes and sends a notification to reopen it.") }

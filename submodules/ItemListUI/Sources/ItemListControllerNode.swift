@@ -338,6 +338,8 @@ open class ItemListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         self.listNodeContainer.addSubnode(self.listNode)
         
         self.listNode.displayedItemRangeChanged = { [weak self] displayedRange, opaqueTransactionState in
+            // Rows that just came on screen get their glass corners cut out.
+            self?.astraPunchVisibleCorners()
             if let strongSelf = self, let visibleEntriesUpdated = strongSelf.visibleEntriesUpdated, let mergedEntries = (opaqueTransactionState as? ItemListNodeOpaqueState)?.mergedEntries {
                 if let visible = displayedRange.visibleRange {
                     let indexRange = (visible.firstIndex, visible.lastIndex)
@@ -713,7 +715,54 @@ open class ItemListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         }
     }
     
+    /// AstraGram Liquid Glass: grouped lists sit on the aurora, which shows through their glass rows.
+    private var astraAuroraView: AstraAuroraView?
+    
+    /// Cuts the glass rows' corners out (see `astraPunchListCorners`) on the rows now on screen.
+    private func astraPunchVisibleCorners() {
+        guard let theme = self.theme, theme.isAstraLiquidGlass else {
+            return
+        }
+        self.listNode.forEachItemNode { itemNode in
+            astraPunchListCorners(in: itemNode)
+        }
+    }
+    
+    private func astraUpdateAurora() {
+        guard let theme = self.theme else {
+            return
+        }
+        var isBlocks = false
+        if let listStyle = self.listStyle, case .blocks = listStyle {
+            isBlocks = true
+        }
+        if theme.isAstraLiquidGlass && isBlocks {
+            let auroraView: AstraAuroraView
+            if let current = self.astraAuroraView {
+                auroraView = current
+            } else {
+                auroraView = AstraAuroraView(frame: self.bounds)
+                self.astraAuroraView = auroraView
+                self.view.insertSubview(auroraView, at: 0)
+            }
+            self.listNode.backgroundColor = .clear
+            self.leftOverlayNode.backgroundColor = .clear
+            self.rightOverlayNode.backgroundColor = .clear
+            if let (layout, _, _) = self.validLayout {
+                auroraView.frame = CGRect(origin: CGPoint(), size: layout.size)
+                auroraView.update(size: layout.size, isDark: theme.overallDarkAppearance)
+            }
+        } else if let auroraView = self.astraAuroraView {
+            self.astraAuroraView = nil
+            auroraView.removeFromSuperview()
+        }
+    }
+    
     open func containerLayoutUpdated(_ layout: ContainerViewLayout, navigationBarHeight: CGFloat, transition: ContainedViewLayoutTransition, additionalInsets: UIEdgeInsets) {
+        if let auroraView = self.astraAuroraView {
+            auroraView.frame = CGRect(origin: CGPoint(), size: layout.size)
+            auroraView.update(size: layout.size, isDark: self.theme?.overallDarkAppearance ?? true)
+        }
         var insets = layout.insets(options: [.input])
         insets.top += navigationBarHeight
         insets.bottom = max(insets.bottom, additionalInsets.bottom)
@@ -985,6 +1034,7 @@ open class ItemListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                         itemHeaderNode.updateTheme(theme: transition.theme)
                     }
                 })
+                self.astraUpdateAurora()
             }
             
             if let updateStyle = transition.updateStyle {
@@ -1013,6 +1063,7 @@ open class ItemListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 if let (layout, _, _) = self.validLayout {
                     self.updateMarginOverlays(layout: layout, listInsets: self.listNode.insets)
                 }
+                self.astraUpdateAurora()
             }
             
             var options = ListViewDeleteAndInsertOptions()
@@ -1180,6 +1231,7 @@ open class ItemListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             
             self.listNode.transaction(deleteIndices: transition.entries.deletions, insertIndicesAndItems: transition.entries.insertions, updateIndicesAndItems: transition.entries.updates, options: options, scrollToItem: scrollToItem, updateOpaqueState: ItemListNodeOpaqueState(mergedEntries: transition.mergedEntries), completion: { [weak self] _ in
                 if let strongSelf = self {
+                    strongSelf.astraPunchVisibleCorners()
                     if !strongSelf.didSetReady {
                         strongSelf.didSetReady = true
                         strongSelf._ready.set(true)

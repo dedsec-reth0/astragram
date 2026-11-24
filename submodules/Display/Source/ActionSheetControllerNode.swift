@@ -159,6 +159,10 @@ final class ActionSheetControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         self.itemGroupsContainerNode.animateDimViewsAlpha(from: 0.0, to: 1.0, duration: 0.4)
+        // AstraGram Liquid Glass: the sheet lands like a drop of gel, flattening a little and springing back.
+        if AstraLook.liquidGlass {
+            astraJellyMaterialize(self.itemGroupsContainerNode.layer, delay: 0.22, landing: true)
+        }
         
         self.layer.animateBounds(from: self.bounds.offsetBy(dx: 0.0, dy: -self.bounds.size.height), to: self.bounds, duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, completion: { [weak tempDimView] _ in
             tempDimView?.removeFromSuperview()

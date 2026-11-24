@@ -1050,6 +1050,12 @@ public final class TabBarComponent: Component {
                     if let previousComponent, previousComponent.selectedId != item.id, isItemSelected {
                         itemComponentView.playSelectionAnimation()
                         selectedItemComponentView.playSelectionAnimation()
+                        // AstraGram Liquid Glass: the selection lands like a drop, with a splash round the icon.
+                        if AstraLook.liquidGlass {
+                            let splashCenter = self.liquidLensView.contentView.convert(itemFrame.center, to: self)
+                            astraDropletSplash(in: self.layer, at: CGPoint(x: splashCenter.x, y: splashCenter.y - 4.0), color: component.theme.rootController.tabBar.selectedIconColor, radius: 20.0)
+                            astraLiquidWobble(selectedItemComponentView.layer, strength: 1.4)
+                        }
                     }
                 }
             }

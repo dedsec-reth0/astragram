@@ -408,6 +408,13 @@ public func currentPresentationDataAndSettings(accountManager: AccountManager<Te
         
         let contactSettings: ContactSynchronizationSettings = internalData.contactSynchronizationSettings?.get(ContactSynchronizationSettings.self) ?? ContactSynchronizationSettings.defaultSettings
         
+        // AstraGram "Liquid Glass" replaces the chosen theme, ahead of Monochrome.
+        if AstraGramSettings.current.liquidGlassDesign {
+            let autoNightModeTriggered = automaticThemeShouldSwitchNow(AutomaticThemeSwitchParameters(settings: themeSettings.automaticThemeSwitchSetting), systemUserInterfaceStyle: systemUserInterfaceStyle)
+            let presentationData = astraLiquidGlassPresentationData(themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered, localizationSettings: localizationSettings, nameDisplayOrder: contactSettings.nameDisplayOrder)
+            return InitialPresentationDataAndSettings(presentationData: presentationData, automaticMediaDownloadSettings: automaticMediaDownloadSettings, autodownloadSettings: autodownloadSettings, callListSettings: callListSettings, inAppNotificationSettings: inAppNotificationSettings, mediaInputSettings: mediaInputSettings, mediaDisplaySettings: mediaDisplaySettings, stickerSettings: stickerSettings, chatSettings: chatSettings, experimentalUISettings: experimentalUISettings)
+        }
+        
         // AstraGram "Monochrome" replaces the chosen theme.
         if AstraGramSettings.current.monochrome {
             let autoNightModeTriggered = automaticThemeShouldSwitchNow(AutomaticThemeSwitchParameters(settings: themeSettings.automaticThemeSwitchSetting), systemUserInterfaceStyle: systemUserInterfaceStyle)
@@ -761,7 +768,7 @@ public func chatServiceBackgroundColor(wallpaper: TelegramWallpaper, mediaBox: M
 }
 
 public func updatedPresentationData(accountManager: AccountManager<TelegramAccountManagerTypes>, applicationInForeground: Signal<Bool, NoError>, systemUserInterfaceStyle: Signal<WindowUserInterfaceStyle, NoError>) -> Signal<PresentationData, NoError> {
-    return combineLatest(accountManager.sharedData(keys: [SharedDataKeys.localizationSettings, ApplicationSpecificSharedDataKeys.presentationThemeSettings, ApplicationSpecificSharedDataKeys.contactSynchronizationSettings]), systemUserInterfaceStyle, AstraGramSettings.signal |> map { ($0.monochrome ? 1 : 0) | ($0.monochromePlainBackground ? 2 : 0) } |> distinctUntilChanged)
+    return combineLatest(accountManager.sharedData(keys: [SharedDataKeys.localizationSettings, ApplicationSpecificSharedDataKeys.presentationThemeSettings, ApplicationSpecificSharedDataKeys.contactSynchronizationSettings]), systemUserInterfaceStyle, AstraGramSettings.signal |> map { ($0.monochrome ? 1 : 0) | ($0.monochromePlainBackground ? 2 : 0) | ($0.liquidGlassDesign ? 4 : 0) } |> distinctUntilChanged)
     |> mapToSignal { sharedData, systemUserInterfaceStyle, astraMonochromeState -> Signal<PresentationData, NoError> in
         // Both switches are in the state, so the presentation follows either of them at once.
         let astraMonochrome = (astraMonochromeState & 1) != 0
@@ -773,6 +780,23 @@ public func updatedPresentationData(accountManager: AccountManager<TelegramAccou
         }
         
         let contactSettings: ContactSynchronizationSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.contactSynchronizationSettings]?.get(ContactSynchronizationSettings.self) ?? ContactSynchronizationSettings.defaultSettings
+        
+        // AstraGram "Liquid Glass" replaces the chosen theme, ahead of Monochrome.
+        if (astraMonochromeState & 4) != 0 {
+            return applicationInForeground
+            |> mapToSignal { inForeground -> Signal<PresentationData, NoError> in
+                if inForeground {
+                    return automaticThemeShouldSwitch(themeSettings.automaticThemeSwitchSetting, systemUserInterfaceStyle: systemUserInterfaceStyle)
+                    |> distinctUntilChanged
+                    |> map { autoNightModeTriggered in
+                        let localizationSettings = sharedData.entries[SharedDataKeys.localizationSettings]?.get(LocalizationSettings.self)
+                        return astraLiquidGlassPresentationData(themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered, localizationSettings: localizationSettings, nameDisplayOrder: contactSettings.nameDisplayOrder)
+                    }
+                } else {
+                    return .complete()
+                }
+            }
+        }
         
         // AstraGram "Monochrome" replaces the chosen theme.
         if astraMonochrome {
@@ -936,6 +960,27 @@ private func bubblelessPresentationData(mediaBox: MediaBox, themeSettings: Prese
     let chatBubbleCorners = PresentationChatBubbleCorners(settings: themeSettings.chatBubbleSettings)
     
     return PresentationData(strings: stringsValue, theme: theme, autoNightModeTriggered: autoNightModeTriggered, chatWallpaper: bubblelessChatWallpaper(theme: theme), chatFontSize: chatFontSize, chatBubbleCorners: chatBubbleCorners, listsFontSize: listsFontSize, dateTimeFormat: dateTimeFormat, nameDisplayOrder: nameDisplayOrder, nameSortOrder: nameSortOrder, reduceMotion: themeSettings.reduceMotion, largeEmoji: themeSettings.largeEmoji)
+}
+
+// AstraGram "Liquid Glass": the presentation data with the glass theme, whatever theme is chosen. Bubbles keep the user's
+// corner settings; the chat background is the aurora gradient, since glass needs colour behind it.
+private func astraLiquidGlassPresentationData(themeSettings: PresentationThemeSettings, autoNightModeTriggered: Bool, localizationSettings: LocalizationSettings?, nameDisplayOrder: PresentationPersonNameOrder) -> PresentationData {
+    let dark = astraMonochromeIsDark(themeSettings: themeSettings, autoNightModeTriggered: autoNightModeTriggered)
+    let bubbleMode = themeSettings.chatBubbleSettings.bubbleMode
+    let theme = makeAstraLiquidGlassPresentationTheme(dark: dark, bubbleMode: bubbleMode)
+    
+    let dateTimeFormat = currentDateTimeFormat()
+    let stringsValue: PresentationStrings
+    if let localizationSettings = localizationSettings {
+        stringsValue = PresentationStrings(primaryComponent: PresentationStrings.Component(languageCode: localizationSettings.primaryComponent.languageCode, localizedName: localizationSettings.primaryComponent.localizedName, pluralizationRulesCode: localizationSettings.primaryComponent.customPluralizationCode, dict: dictFromLocalization(localizationSettings.primaryComponent.localization)), secondaryComponent: localizationSettings.secondaryComponent.flatMap({ PresentationStrings.Component(languageCode: $0.languageCode, localizedName: $0.localizedName, pluralizationRulesCode: $0.customPluralizationCode, dict: dictFromLocalization($0.localization)) }), groupingSeparator: dateTimeFormat.groupingSeparator)
+    } else {
+        stringsValue = defaultPresentationStrings
+    }
+    let nameSortOrder = currentPersonNameSortOrder()
+    let (chatFontSize, listsFontSize) = resolveFontSize(settings: themeSettings)
+    let chatBubbleCorners = PresentationChatBubbleCorners(settings: themeSettings.chatBubbleSettings)
+    let chatWallpaper: TelegramWallpaper = bubbleMode ? theme.chat.defaultWallpaper : bubblelessChatWallpaper(theme: theme)
+    return PresentationData(strings: stringsValue, theme: theme, autoNightModeTriggered: autoNightModeTriggered, chatWallpaper: chatWallpaper, chatFontSize: chatFontSize, chatBubbleCorners: chatBubbleCorners, listsFontSize: listsFontSize, dateTimeFormat: dateTimeFormat, nameDisplayOrder: nameDisplayOrder, nameSortOrder: nameSortOrder, reduceMotion: themeSettings.reduceMotion, largeEmoji: themeSettings.largeEmoji)
 }
 
 // AstraGram "Monochrome": the presentation data with the monochrome theme, whatever theme is chosen. Strings, formats, font sizes and corners as usual.

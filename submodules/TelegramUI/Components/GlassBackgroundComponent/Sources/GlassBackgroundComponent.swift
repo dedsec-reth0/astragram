@@ -528,6 +528,8 @@ public class GlassBackgroundView: UIView {
     private let contentContainer: ContentContainer
     
     private var innerBackgroundView: UIView?
+    /// AstraGram Liquid Glass: the living edge (rim, glints that follow the light, touch ripples).
+    private var astraEdgeLayer: AstraGlassEdgeLayer?
     
     /// UIKit's liquid morph must target the effect view itself so the backdrop
     /// participates in the shape transition along with its content.
@@ -924,10 +926,97 @@ public class GlassBackgroundView: UIView {
             transition.setFrame(view: shadowView, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -shadowInset, dy: -shadowInset))
         }
         transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: size))
+        
+        self.astraUpdateEdge(size: size, shape: shape, isDark: isDark, isVisible: isVisible, transition: transition)
+    }
+    
+    private func astraUpdateEdge(size: CGSize, shape: Shape, isDark: Bool, isVisible: Bool, transition: ComponentTransition) {
+        // Only under Liquid Glass, with transparency allowed, and on glass big enough to have an edge to light.
+        if AstraLook.liquidGlass && AstraLook.liquidGlassTransparency && size.width >= 20.0 && size.height >= 20.0 {
+            let edgeLayer: AstraGlassEdgeLayer
+            var edgeTransition = transition
+            if let current = self.astraEdgeLayer {
+                edgeLayer = current
+            } else {
+                edgeLayer = AstraGlassEdgeLayer()
+                edgeTransition = .immediate
+                self.astraEdgeLayer = edgeLayer
+                self.layer.insertSublayer(edgeLayer, below: self.contentContainer.layer)
+                edgeLayer.setInWindow(self.window != nil)
+            }
+            edgeTransition.setFrame(layer: edgeLayer, frame: CGRect(origin: CGPoint(), size: size))
+            edgeLayer.update(size: size, cornerRadius: shape.maximumCornerRadius(for: size), isDark: isDark)
+            edgeTransition.setAlpha(layer: edgeLayer, alpha: isVisible ? 1.0 : 0.0)
+        } else if let edgeLayer = self.astraEdgeLayer {
+            self.astraEdgeLayer = nil
+            edgeLayer.setInWindow(false)
+            edgeLayer.removeFromSuperlayer()
+        }
     }
     
     override public func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
+    }
+    
+    override public func didMoveToWindow() {
+        super.didMoveToWindow()
+        self.astraEdgeLayer?.setInWindow(self.window != nil)
+    }
+    
+    /// AstraGram Liquid Glass: a touch began at this point (in this view's coordinates).
+    public func astraTouched(at point: CGPoint) {
+        guard AstraLook.liquidGlassMotion, let edgeLayer = self.astraEdgeLayer, edgeLayer.opacity > 0.0 else {
+            return
+        }
+        edgeLayer.ripple(at: point)
+        // Glass UIKit already presses (interactive glass) keeps UIKit's own response; the rest wobbles like gel.
+        if !(self.params?.isInteractive ?? false) {
+            astraLiquidWobble(self.layer)
+        }
+    }
+    
+    /// AstraGram Liquid Glass: finds the glass a touch began on (the view itself, an ancestor, or glass lying behind
+    /// the touched control in an ancestor) and sends a ripple through it.
+    public static func astraHandleTouch(_ touch: UITouch) {
+        guard AstraLook.liquidGlassMotion, var view = touch.view, let window = touch.window else {
+            return
+        }
+        let windowPoint = touch.location(in: window)
+        func glassBehind(in container: UIView, depth: Int) -> GlassBackgroundView? {
+            for subview in container.subviews.reversed() {
+                if subview.isHidden || subview.alpha < 0.01 {
+                    continue
+                }
+                if let glass = subview as? GlassBackgroundView {
+                    if glass.astraEdgeLayer != nil && glass.bounds.contains(glass.convert(windowPoint, from: nil)) {
+                        return glass
+                    }
+                } else if depth > 0 && subview.bounds.contains(subview.convert(windowPoint, from: nil)) {
+                    if let glass = glassBehind(in: subview, depth: depth - 1) {
+                        return glass
+                    }
+                }
+            }
+            return nil
+        }
+        for _ in 0 ..< 7 {
+            if let glass = view as? GlassBackgroundView, glass.astraEdgeLayer != nil {
+                glass.astraTouched(at: glass.convert(windowPoint, from: nil))
+                return
+            }
+            if let glass = glassBehind(in: view, depth: 2) {
+                glass.astraTouched(at: glass.convert(windowPoint, from: nil))
+                return
+            }
+            guard let superview = view.superview else {
+                return
+            }
+            // A full-screen container is too far up: glass found there would not be the one under the finger.
+            if superview.bounds.width >= window.bounds.width && superview.bounds.height >= window.bounds.height * 0.8 {
+                return
+            }
+            view = superview
+        }
     }
 
     private func applyNativeBlurRadius() {

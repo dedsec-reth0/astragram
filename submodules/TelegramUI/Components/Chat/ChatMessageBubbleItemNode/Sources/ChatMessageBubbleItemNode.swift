@@ -1324,6 +1324,12 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
                 transition.vertical.animatePositionAdditive(node: contentNode, offset: CGPoint(x: 0.0, y: heightDifference))
             }
         }
+        
+        // AstraGram Liquid Glass: the message condenses into glass: it lands like gel and a band of light runs across it.
+        if let item = self.item, item.presentationData.theme.theme.isAstraLiquidGlass {
+            astraJellyMaterialize(self.mainContextSourceNode.contentNode.layer, delay: 0.26, landing: true)
+            astraGlassSheen(on: self.backgroundNode.layer, frame: self.backgroundNode.bounds, cornerRadius: item.presentationData.chatBubbleCorners.mainRadius, delay: 0.3, isDark: item.presentationData.theme.theme.overallDarkAppearance)
+        }
     }
     
     public final class AnimationTransitionReplyPanel {

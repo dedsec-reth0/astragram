@@ -136,6 +136,10 @@ final class AlertControllerNode: ASDisplayNode {
             self.bottomDimView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
             self.leftDimView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
             self.rightDimView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
+            // AstraGram Liquid Glass: the alert materializes like gel.
+            if AstraLook.liquidGlass {
+                astraJellyMaterialize(self.containerNode.layer)
+            }
             self.containerNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)/*, completion: { [weak self] finished in
                 if finished {
                     self?.centerDimView.backgroundColor = nil

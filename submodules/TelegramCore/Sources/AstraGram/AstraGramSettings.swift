@@ -110,6 +110,9 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var aiConsentEndpoint: String
     /// Look: with Monochrome, chats get a plain black or white background instead of the chosen one.
     public var monochromePlainBackground: Bool
+    /// Look: the «Liquid Glass» design (aurora backdrop, glass cards and bubbles, living light on glass). It replaces
+    /// the chosen theme while on, and is exclusive with Monochrome.
+    public var liquidGlassDesign: Bool
     /// The AstraGram mark in the account's name, so other AstraGram users see a badge beside it (see `AstraBadge`).
     public var astraBadge: Bool
     /// Whether the user has been asked about the AstraGram badge.
@@ -209,6 +212,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         clipboardLocalOnly: false,
         aiConsentEndpoint: "",
         monochromePlainBackground: false,
+        liquidGlassDesign: false,
         astraBadge: false,
         astraBadgeAsked: false,
         streakBotUsername: "",
@@ -283,6 +287,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         clipboardLocalOnly: Bool,
         aiConsentEndpoint: String,
         monochromePlainBackground: Bool,
+        liquidGlassDesign: Bool,
         astraBadge: Bool,
         astraBadgeAsked: Bool,
         streakBotUsername: String,
@@ -355,6 +360,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.clipboardLocalOnly = clipboardLocalOnly
         self.aiConsentEndpoint = aiConsentEndpoint
         self.monochromePlainBackground = monochromePlainBackground
+        self.liquidGlassDesign = liquidGlassDesign
         self.astraBadge = astraBadge
         self.astraBadgeAsked = astraBadgeAsked
         self.streakBotUsername = streakBotUsername
@@ -432,6 +438,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.clipboardLocalOnly = try container.decodeIfPresent(Bool.self, forKey: .clipboardLocalOnly) ?? d.clipboardLocalOnly
         self.aiConsentEndpoint = try container.decodeIfPresent(String.self, forKey: .aiConsentEndpoint) ?? d.aiConsentEndpoint
         self.monochromePlainBackground = try container.decodeIfPresent(Bool.self, forKey: .monochromePlainBackground) ?? d.monochromePlainBackground
+        self.liquidGlassDesign = try container.decodeIfPresent(Bool.self, forKey: .liquidGlassDesign) ?? d.liquidGlassDesign
         self.astraBadge = try container.decodeIfPresent(Bool.self, forKey: .astraBadge) ?? d.astraBadge
         self.astraBadgeAsked = try container.decodeIfPresent(Bool.self, forKey: .astraBadgeAsked) ?? d.astraBadgeAsked
         self.streakBotUsername = try container.decodeIfPresent(String.self, forKey: .streakBotUsername) ?? d.streakBotUsername

@@ -149,6 +149,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
     private var isSettingUpContentOffset = false
     
     private func applyItemNodeAsCurrent(id: ChatListFilterTabEntryId, itemNode: ChatListContainerItemNode) {
+        let astraHadPreviousItemNode = self.currentItemNodeValue != nil
         if let previousItemNode = self.currentItemNodeValue {
             previousItemNode.listNode.activateSearch = nil
             previousItemNode.listNode.presentAlert = nil
@@ -184,6 +185,14 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
         }
         self.currentItemNodeValue = itemNode
         itemNode.accessibilityElementsHidden = false
+        // AstraGram Liquid Glass: the folder switched to surfaces row by row.
+        if astraHadPreviousItemNode && self.presentationData.theme.isAstraLiquidGlass {
+            DispatchQueue.main.async { [weak itemNode] in
+                if let itemNode {
+                    astraCascadeIn(itemNode.listNode)
+                }
+            }
+        }
         
         itemNode.listNode.activateSearch = { [weak self] in
             self?.activateSearch?()
@@ -843,7 +852,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
         
         if let validLayout = self.validLayout {
             if let _ = validLayout.inlineNavigationLocation {
-                self.backgroundColor = AstraLiquidGlass.isEnabled ? .clear : self.presentationData.theme.chatList.backgroundColor.mixedWith(self.presentationData.theme.chatList.pinnedItemBackgroundColor, alpha: validLayout.inlineNavigationTransitionFraction)
+                self.backgroundColor = (AstraLiquidGlass.isEnabled || self.presentationData.theme.isAstraLiquidGlass) ? .clear : self.presentationData.theme.chatList.backgroundColor.mixedWith(self.presentationData.theme.chatList.pinnedItemBackgroundColor, alpha: validLayout.inlineNavigationTransitionFraction)
             } else {
                 self.backgroundColor = AstraLiquidGlass.chatListBackgroundColor(self.presentationData.theme)
             }
@@ -1078,7 +1087,7 @@ public final class ChatListContainerNode: ASDisplayNode, ASGestureRecognizerDele
         self.isUserInteractionEnabled = !isReorderingFilters
         
         if let _ = inlineNavigationLocation {
-            transition.updateBackgroundColor(node: self, color: AstraLiquidGlass.isEnabled ? .clear : self.presentationData.theme.chatList.backgroundColor.mixedWith(self.presentationData.theme.chatList.pinnedItemBackgroundColor, alpha: inlineNavigationTransitionFraction))
+            transition.updateBackgroundColor(node: self, color: (AstraLiquidGlass.isEnabled || self.presentationData.theme.isAstraLiquidGlass) ? .clear : self.presentationData.theme.chatList.backgroundColor.mixedWith(self.presentationData.theme.chatList.pinnedItemBackgroundColor, alpha: inlineNavigationTransitionFraction))
         } else {
             transition.updateBackgroundColor(node: self, color: AstraLiquidGlass.chatListBackgroundColor(self.presentationData.theme))
         }
@@ -1225,6 +1234,7 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     
     private var containerLayout: (layout: ContainerViewLayout, navigationBarHeight: CGFloat, visualNavigationHeight: CGFloat, cleanNavigationBarHeight: CGFloat, storiesInset: CGFloat)?
     private var astraLiquidGlassBackgroundView: AstraLiquidGlassBackgroundView?
+    private var astraAuroraView: AstraAuroraView?
     
     var contentScrollingEnded: ((ListView) -> Bool)?
     
@@ -2065,6 +2075,22 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
                 self.view.insertSubview(astraBackgroundView, at: 0)
             }
             astraBackgroundView.update(theme: self.presentationData.theme, size: layout.size, cardTop: navigationBarHeight)
+        }
+        // AstraGram Liquid Glass: the aurora behind the chat list.
+        if self.presentationData.theme.isAstraLiquidGlass && !(self.controller?.isSideList ?? false) {
+            let auroraView: AstraAuroraView
+            if let current = self.astraAuroraView {
+                auroraView = current
+            } else {
+                auroraView = AstraAuroraView(frame: CGRect(origin: CGPoint(), size: layout.size))
+                self.astraAuroraView = auroraView
+                self.view.insertSubview(auroraView, at: 0)
+            }
+            auroraView.frame = CGRect(origin: CGPoint(), size: layout.size)
+            auroraView.update(size: layout.size, isDark: self.presentationData.theme.overallDarkAppearance)
+        } else if let auroraView = self.astraAuroraView {
+            self.astraAuroraView = nil
+            auroraView.removeFromSuperview()
         }
         var mainNavigationBarHeight = navigationBarHeight
         var cleanMainNavigationBarHeight = cleanNavigationBarHeight

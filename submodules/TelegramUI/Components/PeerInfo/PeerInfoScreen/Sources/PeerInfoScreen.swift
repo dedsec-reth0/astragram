@@ -316,6 +316,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     private var layoutHeldDuringExpansion: (layout: ContainerViewLayout, navigationHeight: CGFloat)?
     /// The page's colour while an expansion fades it in under the card (the node's own colour is clear then).
     var expansionBackgroundView: UIView?
+    private var astraAuroraView: AstraAuroraView?
     /// What waits for the expansion to return the header's views (a tooltip pointing at one of them would show under
     /// the lent avatar, which the expansion draws above the profile).
     private var actionsAfterExpansion: [() -> Void] = []
@@ -5682,6 +5683,23 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             return
         }
         self.validLayout = (layout, navigationHeight)
+        
+        // AstraGram Liquid Glass: the profile and the settings sit on the aurora.
+        if self.presentationData.theme.isAstraLiquidGlass && self.astraFlowTint == nil {
+            let auroraView: AstraAuroraView
+            if let current = self.astraAuroraView {
+                auroraView = current
+            } else {
+                auroraView = AstraAuroraView(frame: CGRect(origin: CGPoint(), size: layout.size))
+                self.astraAuroraView = auroraView
+                self.view.insertSubview(auroraView, at: 0)
+            }
+            auroraView.frame = CGRect(origin: CGPoint(), size: layout.size)
+            auroraView.update(size: layout.size, isDark: self.presentationData.theme.overallDarkAppearance)
+        } else if let auroraView = self.astraAuroraView {
+            self.astraAuroraView = nil
+            auroraView.removeFromSuperview()
+        }
         
         self.headerNode.customNavigationContentNode = self.paneContainerNode.currentPane?.node.navigationContentNode
         

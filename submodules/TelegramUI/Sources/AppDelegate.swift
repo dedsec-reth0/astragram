@@ -510,18 +510,27 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         // AstraGram look: the glass material and the springy presses, for the modules below the settings.
         AstraLook.glassMaterial = AstraGramSettings.current.glassMaterial
         AstraLook.springPresses = AstraGramSettings.current.springPresses
-        GlassBackgroundView.astraMonochrome = AstraGramSettings.current.monochrome
+        // Liquid Glass wins over Monochrome when an old save has both on.
+        GlassBackgroundView.astraMonochrome = AstraGramSettings.current.monochrome && !AstraGramSettings.current.liquidGlassDesign
+        // The Liquid Glass design: the live flag, the launch value (for what is set up once per process) and the
+        // touch hook that sends ripples through glass. This runs before the first presentation data is built.
+        AstraLook.liquidGlass = AstraGramSettings.current.liquidGlassDesign
+        AstraLook.liquidGlassAtLaunch = AstraGramSettings.current.liquidGlassDesign
+        AstraLook.liquidGlassTouchBegan = { touch in
+            GlassBackgroundView.astraHandleTouch(touch)
+        }
         let _ = (AstraGramSettings.signal
-        |> map { settings -> (Int, Bool, Bool) in
-            return (settings.glassMaterial, settings.springPresses, settings.monochrome)
+        |> map { settings -> (Int, Bool, Bool, Bool) in
+            return (settings.glassMaterial, settings.springPresses, settings.monochrome, settings.liquidGlassDesign)
         }
         |> distinctUntilChanged(isEqual: { lhs, rhs in
             return lhs == rhs
         })
-        |> deliverOnMainQueue).start(next: { glassMaterial, springPresses, monochrome in
+        |> deliverOnMainQueue).start(next: { glassMaterial, springPresses, monochrome, liquidGlassDesign in
             AstraLook.glassMaterial = glassMaterial
             AstraLook.springPresses = springPresses
-            GlassBackgroundView.astraMonochrome = monochrome
+            GlassBackgroundView.astraMonochrome = monochrome && !liquidGlassDesign
+            AstraLook.liquidGlass = liquidGlassDesign
         })
         let astraWindowLayer = window.layer
         let _ = (AstraGramSettings.signal
