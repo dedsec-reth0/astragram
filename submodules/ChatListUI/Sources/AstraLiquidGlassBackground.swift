@@ -108,12 +108,5 @@ func astraCascadeIn(_ listNode: ListView) {
         squash.beginTime = beginTime
         squash.fillMode = .backwards
         layer.add(squash, forKey: "astraCascadeSquash")
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = 0.0
-        fade.toValue = 1.0
-        fade.duration = 0.28
-        fade.beginTime = beginTime
-        fade.fillMode = .backwards
-        layer.add(fade, forKey: "astraCascadeFade")
     }
 }

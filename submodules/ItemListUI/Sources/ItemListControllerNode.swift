@@ -723,8 +723,12 @@ open class ItemListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
         guard let theme = self.theme, theme.isAstraLiquidGlass else {
             return
         }
+        var band: (minX: CGFloat, maxX: CGFloat)?
+        if let listStyle = self.listStyle, case .blocks = listStyle {
+            band = self.selectableBand
+        }
         self.listNode.forEachItemNode { itemNode in
-            astraPunchListCorners(in: itemNode)
+            astraPunchListCorners(in: itemNode, band: band)
         }
     }
     
