@@ -77,7 +77,12 @@ SOURCE_DESCRIPTION = '''Сборки AstraGram для iOS: Telegram с режи�
 
 
 def gh(*args, check=True):
-    return subprocess.run(['gh'] + list(args), check=check, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    result = subprocess.run(['gh'] + list(args), capture_output=True, text=True, encoding='utf-8', errors='replace')
+    if check and result.returncode != 0:
+        # The output is captured, so a failure would otherwise not say why.
+        sys.stderr.write(result.stderr)
+        result.check_returncode()
+    return result
 
 
 def strip_extensions(source_path, target_path):
