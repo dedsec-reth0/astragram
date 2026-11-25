@@ -8,6 +8,14 @@
 // Secrets: BOT_TOKEN (Worker secret). The webhook is checked with a secret derived from the token.
 
 const MAX_PAIRS = 300;
+// One sync per token in this many seconds.
+const SYNC_INTERVAL = 20;
+const MAX_LIST = 2 * MAX_PAIRS;
+// Restored days taken from one pair in one sync, and how far back.
+const RESTORED_PER_SYNC = 10;
+const RESTORED_DAYS = 30;
+// New friends the bot tells about a streak, per owner per day (made-up IDs must not turn the bot into a spam sender).
+const NOTIFY_PER_DAY = 20;
 const STALE_DAYS = 30;
 
 // The bot's admin: their private chat is the control panel and the support inbox. The id is assembled from parts so
@@ -109,7 +117,12 @@ async function tg(env, method, body) {
 
 // Telegram names may carry invisible characters (AstraGram's badge marker is made of them). They are dropped.
 function cleanName(name) {
-  const cleaned = String(name || '').replace(/[\u200B-\u200F\u2060-\u2064\uFEFF]/g, '').trim();
+  let cleaned = String(name || '').replace(/[\u200B-\u200F\u2060-\u2064\uFEFF]/g, '').trim();
+  // The bot quotes names to other people, and Telegram turns a link or @username in the text into a tappable one: a
+  // name made to look like a link (a phishing lure from "the official bot") keeps its letters but loses the shape.
+  if (/(:\/\/|www\.|t\.me|@|[A-Za-z0-9-]\.[A-Za-z]{2,})/i.test(cleaned)) {
+    cleaned = cleaned.replace(/\./g, '\u2024').replace(/@/g, '\uFF20').replace(/:\/\//g, ' ');
+  }
   return (cleaned || 'AstraGram').slice(0, 64);
 }
 
@@ -189,7 +202,9 @@ const PAIR_UPSERT_SHARED =
 async function handleSync(request, env) {
   const owner = await ownerFromRequest(request, env);
   if (!owner) return json({ error: 'not linked' }, 401);
-  if (now() - owner.last_sync < 20) return json({ error: 'too often' }, 429);
+  // Taken in one statement: requests sent at once with the same token cannot all pass a check read before the write.
+  const slot = await env.DB.prepare('UPDATE owners SET last_sync = ? WHERE token_hash = ? AND last_sync <= ?').bind(now(), owner.token_hash, now() - SYNC_INTERVAL).run();
+  if (!(slot.meta && slot.meta.changes)) return json({ error: 'too often' }, 429);
   let body;
   try {
     body = await request.json();
@@ -202,13 +217,20 @@ async function handleSync(request, env) {
   // Version 2 apps keep the account's list of streaks here, shared by all of its devices (see syncList).
   const shared = int(body.v, 1, 100, 1) >= 2;
   const t = now();
-  const statements = [env.DB.prepare('UPDATE owners SET last_sync = ?, tz = ? WHERE token_hash = ?').bind(t, tz, owner.token_hash)];
+  const statements = [env.DB.prepare('UPDATE owners SET tz = ? WHERE token_hash = ?').bind(tz, owner.token_hash)];
   const known = new Set(((await env.DB.prepare('SELECT friend_id FROM pairs WHERE owner_id = ?').bind(owner.tg_id).all()).results || []).map((r) => r.friend_id));
   const list = shared ? await syncList(env, owner, body, pairs, t) : null;
   const friendIds = [];
+  // An account keeps at most MAX_PAIRS streaks' numbers: a new friend past that is not stored (made-up IDs would
+  // otherwise grow the table without end, and the free plan's daily writes run out for everyone).
+  let room = MAX_PAIRS - known.size;
   for (const pair of pairs) {
     const friend = int(pair.friend, 1, Number.MAX_SAFE_INTEGER, 0);
     if (!friend || friend === owner.tg_id) continue;
+    if (!known.has(friend)) {
+      if (room <= 0) continue;
+      room--;
+    }
     // A streak another device turned off: this device has not heard yet, its numbers are stale.
     if (list && list.stopped.has(friend)) continue;
     friendIds.push(friend);
@@ -216,10 +238,12 @@ async function handleSync(request, env) {
     // The days this device restored (a restore asked for in the bot reaches one device only): kept for the account,
     // so its other devices count them too. Only days of the last year, at most 60 a sync.
     if (list && Array.isArray(pair.restored)) {
+      // A restore is of yesterday, and a device syncs every day it is used: only the recent days are new here (older
+      // ones were stored when they were recent). The app sends the newest last.
       const day = int(pair.day, 0, 1e6, 0);
-      for (const value of pair.restored.slice(0, 60)) {
+      for (const value of pair.restored.slice(-RESTORED_PER_SYNC)) {
         const restoredDay = int(value, 0, 1e6, 0);
-        if (restoredDay > 0 && restoredDay < day && restoredDay >= day - 400) {
+        if (restoredDay > 0 && restoredDay < day && restoredDay >= day - RESTORED_DAYS) {
           statements.push(env.DB.prepare('INSERT OR IGNORE INTO streak_restores (owner_id, friend_id, day) VALUES (?, ?, ?)').bind(owner.tg_id, friend, restoredDay));
         }
       }
@@ -246,16 +270,28 @@ async function handleSync(request, env) {
   if (fresh.length > 0) {
     await env.DB.prepare('CREATE TABLE IF NOT EXISTS notified (owner_id INTEGER NOT NULL, friend_id INTEGER NOT NULL, PRIMARY KEY (owner_id, friend_id))').run();
     const name = cleanName(owner.name);
-    for (let i = 0; i < fresh.length; i += D1_CHUNK) {
+    // The friend IDs come from the owner's app, so the bot tells at most NOTIFY_PER_DAY new people a day about one
+    // owner; the rest hear about it on a later day (they are not marked notified until told).
+    let budget = NOTIFY_PER_DAY - (await env.DB.prepare('SELECT COUNT(*) AS c FROM notify_log WHERE owner_id = ? AND created_at > ?').bind(owner.tg_id, t - 86400).first()).c;
+    for (let i = 0; i < fresh.length && budget > 0; i += D1_CHUNK) {
       const chunk = fresh.slice(i, i + D1_CHUNK);
       const listening = (await env.DB.prepare(
         `SELECT tg_id FROM friends WHERE stopped = 0 AND tg_id IN (${chunk.map(() => '?').join(',')})
-           AND tg_id NOT IN (SELECT friend_id FROM notified WHERE owner_id = ?)`
-      ).bind(...chunk, owner.tg_id).all()).results || [];
+           AND tg_id NOT IN (SELECT friend_id FROM notified WHERE owner_id = ?)
+           AND tg_id NOT IN (SELECT friend_id FROM muted WHERE owner_id = ?)`
+      ).bind(...chunk, owner.tg_id, owner.tg_id).all()).results || [];
       for (const row of listening) {
-        await env.DB.prepare('INSERT OR IGNORE INTO notified (owner_id, friend_id) VALUES (?, ?)').bind(owner.tg_id, row.tg_id).run();
+        if (budget <= 0) break;
+        budget--;
+        await env.DB.batch([
+          env.DB.prepare('INSERT OR IGNORE INTO notified (owner_id, friend_id) VALUES (?, ?)').bind(owner.tg_id, row.tg_id),
+          env.DB.prepare('INSERT INTO notify_log (owner_id, created_at) VALUES (?, ?)').bind(owner.tg_id, t),
+        ]);
         const reply = await streaksMessage(env, row.tg_id, true);
         reply.text = `🔥 ${name} начал(а) с тобой огонёк!\n\n${reply.text}`;
+        // Whoever does not know this person can say so: the bot then never names them here again.
+        const mute = [{ text: `🔕 Я не знаю ${name}`, callback_data: `m:${owner.tg_id}` }];
+        reply.reply_markup = { inline_keyboard: [...((reply.reply_markup && reply.reply_markup.inline_keyboard) || []), mute] };
         await tg(env, 'sendMessage', { chat_id: row.tg_id, ...reply });
       }
     }
@@ -300,10 +336,20 @@ async function syncList(env, owner, body, pairs, t) {
     return friend && friend !== owner.tg_id ? friend : 0;
   };
   const statements = [];
+  // At most MAX_LIST rows per account (streaks and turned-off marks): new friends past it are not stored.
+  const listed = new Set(((await env.DB.prepare('SELECT friend_id FROM streak_list WHERE owner_id = ?').bind(owner.tg_id).all()).results || []).map((r) => r.friend_id));
+  let room = MAX_LIST - listed.size;
+  const fits = (friend) => {
+    if (listed.has(friend)) return true;
+    if (room <= 0) return false;
+    room--;
+    listed.add(friend);
+    return true;
+  };
   const stops = Array.isArray(body.stops) ? body.stops.slice(0, MAX_PAIRS) : [];
   for (const value of stops) {
     const friend = friendOf(value);
-    if (!friend) continue;
+    if (!friend || !fits(friend)) continue;
     statements.push(env.DB.prepare(
       `INSERT INTO streak_list (owner_id, friend_id, start_day, stopped, updated_at) VALUES (?, ?, 0, 1, ?)
        ON CONFLICT (owner_id, friend_id) DO UPDATE SET stopped = 1, updated_at = excluded.updated_at`
@@ -312,7 +358,7 @@ async function syncList(env, owner, body, pairs, t) {
   const starts = Array.isArray(body.starts) ? body.starts.slice(0, MAX_PAIRS) : [];
   for (const start of starts) {
     const friend = friendOf(start && start.friend);
-    if (!friend) continue;
+    if (!friend || !fits(friend)) continue;
     statements.push(env.DB.prepare(
       `INSERT INTO streak_list (owner_id, friend_id, start_day, stopped, updated_at) VALUES (?, ?, ?, 0, ?)
        ON CONFLICT (owner_id, friend_id) DO UPDATE SET start_day = excluded.start_day, stopped = 0, updated_at = excluded.updated_at`
@@ -320,7 +366,7 @@ async function syncList(env, owner, body, pairs, t) {
   }
   for (const pair of pairs) {
     const friend = friendOf(pair && pair.friend);
-    if (!friend || pair.startDay === undefined || pair.startDay === null) continue;
+    if (!friend || pair.startDay === undefined || pair.startDay === null || !fits(friend)) continue;
     statements.push(env.DB.prepare(
       'INSERT OR IGNORE INTO streak_list (owner_id, friend_id, start_day, stopped, updated_at) VALUES (?, ?, ?, 0, ?)'
     ).bind(owner.tg_id, friend, int(pair.startDay, 0, 1e6, 0), t));
@@ -449,10 +495,12 @@ async function handleControl(request, env) {
 const MAX_VISUAL_GIFTS = 100;
 const VISUAL_GIFT_DAYS = 90;
 // Gifts one AstraGram user gives another for free (only AstraGram shows them). The sender is the token's owner, so it
-// cannot be forged; a sender gives at most GIFTS_PER_DAY a day, a profile keeps the newest MAX_RECEIVED, and the
-// recipient can take any of them off (`hide`).
+// cannot be forged; a sender gives at most GIFTS_PER_DAY a day and keeps at most GIFTS_PER_SENDER on one profile, a
+// profile holds at most MAX_RECEIVED (a full one takes no more; nothing is pushed off), and the recipient can take any
+// of them off (`hide`).
 const GIFTS_PER_DAY = 20;
 const MAX_RECEIVED = 100;
+const GIFTS_PER_SENDER = 10;
 const giftId = (id) => ((typeof id === 'string' || Number.isSafeInteger(id)) && /^[0-9]{1,20}$/.test(String(id)) ? String(id) : null);
 
 const MAX_PINNED_GIFTS = 6;
@@ -564,12 +612,19 @@ async function handleGifts(request, env) {
     ).bind(owner.tg_id, t, owner.tg_id, t - 86400, GIFTS_PER_DAY).run();
     return !!(taken.meta && taken.meta.changes);
   };
-  const trimReceived = (to) => env.DB.prepare('DELETE FROM visual_gift_received WHERE to_id = ? AND id NOT IN (SELECT id FROM visual_gift_received WHERE to_id = ? ORDER BY id DESC LIMIT ?)').bind(to, to, MAX_RECEIVED).run();
+  // Room on the recipient's profile: gifts are never pushed off it by new ones (someone with a few accounts could
+  // otherwise wipe out every gift a person was given). One sender keeps at most GIFTS_PER_SENDER there, and a full
+  // profile takes no more until its owner takes some off.
+  const hasRoom = async (to) => {
+    const row = await env.DB.prepare('SELECT COUNT(*) AS total, SUM(CASE WHEN from_id = ? THEN 1 ELSE 0 END) AS mine FROM visual_gift_received WHERE to_id = ?').bind(owner.tg_id, to).first();
+    return !row || (row.total < MAX_RECEIVED && (row.mine || 0) < GIFTS_PER_SENDER);
+  };
   let sent = null;
   if (body.send && typeof body.send === 'object') {
     const to = int(body.send.to, 1, Number.MAX_SAFE_INTEGER, 0);
     const gift = giftId(body.send.gift);
     if (!to || to === owner.tg_id || !gift) return json({ error: 'bad gift' }, 400);
+    if (!(await hasRoom(to))) return json({ error: 'too many gifts there' }, 429);
     if (!(await takeGiftQuota())) return json({ error: 'too many gifts today' }, 429);
     const inserted = await env.DB.prepare('INSERT INTO visual_gift_received (to_id, from_id, gift_id, created_at) VALUES (?, ?, ?, ?)').bind(to, owner.tg_id, gift, t).run();
     sent = inserted.meta ? inserted.meta.last_row_id : null;
@@ -577,7 +632,6 @@ async function handleGifts(request, env) {
     if (sent && (text || body.send.anonymous)) {
       await setGiftMeta(env, to, `r${sent}`, { text, anonymous: body.send.anonymous ? 1 : 0 });
     }
-    await trimReceived(to);
   }
   if (Array.isArray(body.hide)) {
     for (const id of body.hide.slice(0, MAX_RECEIVED)) {
@@ -644,6 +698,7 @@ async function handleGifts(request, env) {
     const to = int(body.transfer.to, 1, Number.MAX_SAFE_INTEGER, 0);
     const gift = ref ? await ownedGift(env, owner.tg_id, ref) : null;
     if (!gift || !to || to === owner.tg_id) return json({ error: 'bad transfer' }, 400);
+    if (!(await hasRoom(to))) return json({ error: 'too many gifts there' }, 429);
     // A gift passed on reaches the other profile as one given does (an own gift can be put on from the shop at will):
     // it counts against the same daily limit.
     if (!(await takeGiftQuota())) return json({ error: 'too many gifts today' }, 429);
@@ -651,8 +706,7 @@ async function handleGifts(request, env) {
     if (ref[0] === 'o') {
       await saveOwnGiftList(env, owner.tg_id, (await ownGiftList(env, owner.tg_id)).filter((id) => id !== gift), t);
     }
-    // A new row, also for a received gift passed on: re-pointing the old row would keep its old, low id, and
-    // trimReceived (which keeps the newest ids) could then drop it from the recipient at once.
+    // A new row, also for a received gift passed on: it is the new owner's gift from this account, dated now.
     const inserted = await env.DB.prepare('INSERT INTO visual_gift_received (to_id, from_id, gift_id, created_at) VALUES (?, ?, ?, ?)').bind(to, owner.tg_id, gift, t).run();
     const row = inserted.meta.last_row_id;
     if (ref[0] === 'r') {
@@ -664,7 +718,6 @@ async function handleGifts(request, env) {
     const fields = { text, anonymous: body.transfer.anonymous ? 1 : 0 };
     if (meta && meta.unique_look) fields.unique_look = meta.unique_look;
     await setGiftMeta(env, to, `r${row}`, fields);
-    await trimReceived(to);
     transferred = row;
   }
   // Wearing a gift as the status AstraGram shows beside the name: {ref} or null to take it off.
@@ -813,6 +866,21 @@ async function handleGifts(request, env) {
 // Feedback (bug reports, ideas) and donations, both from AstraGram's settings.
 
 const FEEDBACK_PER_HOUR = 5;
+// Feedback from senders without a streak-bot link, from all addresses together, an hour: an attacker with a whole IPv6
+// range must not bury the admin's inbox.
+const UNVERIFIED_FEEDBACK_PER_HOUR = 60;
+const FEEDBACK_KEEP_DAYS = 180;
+
+// The address a sender is limited by: an IPv4 address, or an IPv6 address's /64 (one home or one server gets a whole
+// /64, and could otherwise change address with every request).
+function feedbackSource(ip) {
+  if (!ip.includes(':')) return ip;
+  const [head, tail = ''] = ip.split('::');
+  const left = head ? head.split(':') : [];
+  const right = ip.includes('::') && tail ? tail.split(':') : [];
+  const groups = ip.includes('::') ? [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right] : left;
+  return groups.slice(0, 4).map((g) => (g || '0').toLowerCase().replace(/^0+(?=.)/, '')).join(':') + '::/64';
+}
 const FEEDBACK_MAX_LENGTH = 4000;
 const DONATION_MIN = 1;
 const DONATION_MAX = 10000;
@@ -834,11 +902,15 @@ async function handleFeedback(request, env) {
   if (text.length < 3) return json({ error: 'empty' }, 400);
   const kind = body.kind === 'idea' ? 'idea' : 'bug';
   const t = now();
-  const ip = request.headers.get('cf-connecting-ip') || '';
+  const ip = feedbackSource(request.headers.get('cf-connecting-ip') || '');
   const recent = (await env.DB.prepare('SELECT COUNT(*) AS c FROM feedback WHERE ip = ? AND created_at > ?').bind(ip, t - 3600).first()).c;
   if (recent >= FEEDBACK_PER_HOUR) return json({ error: 'too often' }, 429);
 
   const owner = request.headers.get('authorization') ? await ownerFromRequest(request, env) : null;
+  if (!owner) {
+    const unverified = (await env.DB.prepare('SELECT COUNT(*) AS c FROM feedback WHERE verified = 0 AND created_at > ?').bind(t - 3600).first()).c;
+    if (unverified >= UNVERIFIED_FEEDBACK_PER_HOUR) return json({ error: 'too often' }, 429);
+  }
   const claimedId = int(body.userId, 1, Number.MAX_SAFE_INTEGER, 0);
   const tgId = owner ? owner.tg_id : (claimedId || null);
   const verified = owner ? 1 : 0;
@@ -940,7 +1012,7 @@ async function hmac(keyBytes, text) {
 
 // The user ({id, first_name, ...}) the web-app data names, or null when the signature or its age does not hold.
 async function verifiedWebAppUser(env, initData, t) {
-  if (typeof initData !== 'string' || initData.length > 4096) return null;
+  if (!env.BOT_TOKEN || typeof initData !== 'string' || initData.length > 4096) return null;
   const params = new URLSearchParams(initData);
   const hash = params.get('hash');
   if (!hash || !/^[0-9a-f]{64}$/.test(hash)) return null;
@@ -951,7 +1023,7 @@ async function verifiedWebAppUser(env, initData, t) {
   lines.sort();
   const secret = await hmac(new TextEncoder().encode('WebAppData'), env.BOT_TOKEN);
   const signed = [...await hmac(secret, lines.join('\n'))].map((b) => b.toString(16).padStart(2, '0')).join('');
-  if (signed !== hash) return null;
+  if (!timingSafeEqual(signed, hash)) return null;
   const authDate = Number(params.get('auth_date'));
   if (!Number.isFinite(authDate) || Math.abs(t - authDate) > LOGIN_MAX_AGE) return null;
   try {
@@ -998,8 +1070,8 @@ async function linkOwner(env, hash, tgId, firstName, t) {
 async function streaksMessage(env, userId, ru) {
   const rows = (await env.DB.prepare(
     `SELECT p.*, o.name AS owner_name, o.tz AS owner_tz FROM pairs p JOIN ${LATEST_OWNER} o ON o.tg_id = p.owner_id
-     WHERE p.friend_id = ? ORDER BY p.count DESC`
-  ).bind(userId).all()).results || [];
+     WHERE p.friend_id = ? AND p.owner_id NOT IN (SELECT owner_id FROM muted WHERE friend_id = ?) ORDER BY p.count DESC`
+  ).bind(userId, userId).all()).results || [];
   if (rows.length === 0) {
     return {
       text: ru
@@ -1110,7 +1182,10 @@ async function handleMessage(env, message) {
     const ownerId = Number(invite[1]);
     const pair = await env.DB.prepare('SELECT 1 FROM pairs WHERE owner_id = ? AND friend_id = ?').bind(ownerId, from.id).first();
     if (!pair) {
-      const owner = await env.DB.prepare('SELECT name FROM owners WHERE tg_id = ?').bind(ownerId).first();
+      // The owner is named only to someone in their list of streaks: the same reply for any other ID, so "/start f<id>"
+      // cannot tell anyone which IDs use AstraGram, nor their names.
+      const listed = await env.DB.prepare('SELECT 1 FROM streak_list WHERE owner_id = ? AND friend_id = ? AND stopped = 0').bind(ownerId, from.id).first();
+      const owner = listed ? await env.DB.prepare('SELECT name FROM owners WHERE tg_id = ?').bind(ownerId).first() : null;
       const who = owner ? cleanName(owner.name) : (ru ? 'собеседника' : 'the other person');
       await tg(env, 'sendMessage', {
         chat_id: from.id,
@@ -1143,6 +1218,16 @@ async function handleCallback(env, callback) {
         : ru
           ? '✅ AstraGram подключён к боту огоньков.\n\nТе, с кем у вас огонёк и у кого нет AstraGram, увидят здесь счёт, получат напоминание вечером и смогут восстановить пропущенный день. Пригласить человека можно с экрана огонька в AstraGram.\n\nБоту приходят только числа, тексты сообщений — никогда. Отключить: AstraGram → огонёк → «Отключить бота огоньков».'
           : '✅ AstraGram is connected to the streak bot.\n\nPeople you have a streak with who do not use AstraGram see the count here, get a reminder in the evening and can restore a missed day. Invite someone from the streak screen in AstraGram.\n\nThe bot gets only numbers, never message texts. To disconnect: AstraGram → streak → Disconnect Streak Bot.',
+    });
+    return;
+  }
+  const muteMatch = (callback.data || '').match(/^m:(\d{1,20})$/);
+  if (muteMatch) {
+    await env.DB.prepare('INSERT OR IGNORE INTO muted (friend_id, owner_id) VALUES (?, ?)').bind(from.id, Number(muteMatch[1])).run();
+    await tg(env, 'answerCallbackQuery', {
+      callback_query_id: callback.id,
+      text: ru ? 'Готово: этот человек больше не появится здесь, напоминаний от него не будет.' : 'Done: this person no longer shows up here, and you get no reminders about them.',
+      show_alert: true,
     });
     return;
   }
@@ -1461,7 +1546,10 @@ async function handleAdminCallback(env, callback) {
 }
 
 async function handleTelegram(request, env) {
-  if (request.headers.get('x-telegram-bot-api-secret-token') !== await webhookSecret(env)) {
+  // Without the token the secret would be a hash of a known string: anyone could forge updates (link any token to any
+  // account) in the minutes before the first deploy sets it.
+  if (!env.BOT_TOKEN) return new Response('not configured', { status: 503 });
+  if (!timingSafeEqual(request.headers.get('x-telegram-bot-api-secret-token') || '', await webhookSecret(env))) {
     return new Response('forbidden', { status: 403 });
   }
   const update = await request.json().catch(() => null);
@@ -1480,18 +1568,28 @@ async function handleTelegram(request, env) {
 // ---------------------------------------------------------------------------------------------------------------
 // Reminders
 
+// Messages one reminder run sends at most (each is one Telegram call): the rest are sent by the next run, ten minutes
+// later in the same evening hour. Planted pairs that all fall due at once cannot take a run past its limits.
+const REMIND_BATCH = 40;
+
 async function remind(env) {
   const t = now();
   const rows = (await env.DB.prepare(
     `SELECT p.*, o.name AS owner_name, o.tz AS tz FROM pairs p
      JOIN ${LATEST_OWNER} o ON o.tg_id = p.owner_id
      JOIN friends f ON f.tg_id = p.friend_id AND f.stopped = 0
-     WHERE p.updated_at > ? AND p.today_done = 0 AND p.theirs < p.need AND p.reminded_day < p.day AND (p.count > 0 OR p.lost_count > 0)`
+     WHERE p.updated_at > ? AND p.today_done = 0 AND p.theirs < p.need AND p.reminded_day < p.day AND (p.count > 0 OR p.lost_count > 0)
+       AND NOT EXISTS (SELECT 1 FROM muted m WHERE m.friend_id = p.friend_id AND m.owner_id = p.owner_id)`
   ).bind(t - 36 * 3600).all()).results || [];
-  for (const row of rows) {
+  const due = rows.filter((row) => {
     const localHour = Math.floor(((t + row.tz) % 86400) / 3600);
     const localDay = Math.floor((t + row.tz) / 86400);
-    if (localHour !== 19 || localDay !== row.day) continue;
+    return localHour === 19 && localDay === row.day;
+  }).slice(0, REMIND_BATCH);
+  if (due.length === 0) return;
+  // Marked first, in one batch: a run cut short sends nothing twice.
+  await env.DB.batch(due.map((row) => env.DB.prepare('UPDATE pairs SET reminded_day = ? WHERE owner_id = ? AND friend_id = ?').bind(row.day, row.owner_id, row.friend_id)));
+  for (const row of due) {
     row.owner_name = cleanName(row.owner_name);
     const left = row.need - row.theirs;
     const shown = row.restorable_day !== null ? Math.max(row.count, row.lost_count) : row.count;
@@ -1499,8 +1597,12 @@ async function remind(env) {
       chat_id: row.friend_id,
       text: `🔥 ${plural(shown, true)} с ${row.owner_name}: напиши сегодня ещё ${left}, чтобы огонёк не погас.`,
     });
-    await env.DB.prepare('UPDATE pairs SET reminded_day = ? WHERE owner_id = ? AND friend_id = ?').bind(row.day, row.owner_id, row.friend_id).run();
   }
+}
+
+// Removal of stale data, hourly, on its own (a failed reminder run must not keep it from running).
+async function cleanup(env) {
+  const t = now();
   // Data nobody updated for a month goes away.
   const stale = t - STALE_DAYS * 86400;
   await env.DB.batch([
@@ -1517,6 +1619,10 @@ async function remind(env) {
     // The daily gift limit looks back one day; the hourly check budget one hour.
     env.DB.prepare('DELETE FROM visual_gift_sends WHERE created_at < ?').bind(t - 86400),
     env.DB.prepare('DELETE FROM check_budget WHERE period < ?').bind(Math.floor(t / 3600) - 1),
+    // Restored days are needed only while the app's count can reach them (it looks back a year).
+    env.DB.prepare('DELETE FROM streak_restores WHERE day < ?').bind(Math.floor(t / 86400) - 400),
+    env.DB.prepare('DELETE FROM notify_log WHERE created_at < ?').bind(t - 86400),
+    env.DB.prepare('DELETE FROM feedback WHERE created_at < ?').bind(t - FEEDBACK_KEEP_DAYS * 86400),
   ]);
 }
 
@@ -1562,10 +1668,27 @@ export default {
   },
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
-      // Every minute: move the broadcast queue along. Reminders and cleanup stay hourly (at minute 5, as before).
-      await drainBroadcast(env);
-      if (new Date(event.scheduledTime).getUTCMinutes() === 5) {
-        await remind(env);
+      // Every minute: move the broadcast queue along. Cleanup hourly at minute 5; reminders every ten minutes from
+      // minute 5 (each run sends at most REMIND_BATCH, the evening hour's later runs send the rest).
+      const minute = new Date(event.scheduledTime).getUTCMinutes();
+      try {
+        await drainBroadcast(env);
+      } catch (error) {
+        console.error('broadcast failed', error && error.message);
+      }
+      if (minute === 5) {
+        try {
+          await cleanup(env);
+        } catch (error) {
+          console.error('cleanup failed', error && error.message);
+        }
+      }
+      if (minute % 10 === 5) {
+        try {
+          await remind(env);
+        } catch (error) {
+          console.error('reminders failed', error && error.message);
+        }
       }
     })());
   },

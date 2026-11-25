@@ -356,8 +356,9 @@ private func makeTelegramUrl(_ path: String, queryItems: [URLQueryItem] = []) ->
     return appendQueryItems(to: "https://t.me\(path)", items: queryItems)
 }
 
-func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, url rawUrl: String, forceExternal: Bool, presentationData: PresentationData, navigationController: NavigationController?, dismissInput: @escaping () -> Void) {
-    // AstraGram security: trackers are cut from the link, and a link that looks dangerous is confirmed first.
+/// AstraGram security: the link with its trackers cut, passed to `proceed` at once, or after the user saw what is
+/// suspicious about it and chose to open it. Every way an external link leaves the app goes through this.
+func astraCheckExternalUrl(context: AccountContext, url rawUrl: String, presentationData: PresentationData, proceed: @escaping (String) -> Void) {
     let url = AstraGramSettings.current.stripLinkTrackers ? AstraLinkSafety.removingTrackers(rawUrl) : rawUrl
     if AstraGramSettings.current.warnSuspiciousLinks, let warning = AstraLinkSafety.warning(for: url), !AstraLinkSafety.consumeConfirmation(url) {
         let isRussian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
@@ -371,15 +372,29 @@ func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, ur
             reason = isRussian ? "Сайт похож на Telegram по названию, но Telegram не принадлежит. Не вводите на нём номер, код входа и пароль." : "The site resembles Telegram by name but is not Telegram's. Do not enter your number, login code or password there."
         case .dangerousFile:
             reason = isRussian ? "Ссылка скачивает файл, который может установить или запустить программу." : "The link downloads a file that can install or run software."
+        case .otherApp:
+            reason = isRussian ? "Ссылка открывается в другом приложении (браузере или установщике приложений), мимо проверок ссылок." : "The link opens in another app (a browser or an app installer), past the link checks."
         }
         context.sharedContext.presentGlobalController(textAlertController(context: context, title: isRussian ? "Подозрительная ссылка" : "Suspicious Link", text: reason + "\n\n" + url, actions: [
             TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {
             }),
             TextAlertAction(type: .genericAction, title: isRussian ? "Открыть" : "Open", action: {
                 AstraLinkSafety.confirm(url)
-                openExternalUrlImpl(context: context, urlContext: urlContext, url: url, forceExternal: forceExternal, presentationData: presentationData, navigationController: navigationController, dismissInput: dismissInput)
+                proceed(url)
             })
         ]), nil)
+        return
+    }
+    proceed(url)
+}
+
+func openExternalUrlImpl(context: AccountContext, urlContext: OpenURLContext, url rawUrl: String, forceExternal: Bool, presentationData: PresentationData, navigationController: NavigationController?, dismissInput: @escaping () -> Void) {
+    // AstraGram security: trackers are cut from the link, and a link that looks dangerous is confirmed first.
+    let url = AstraGramSettings.current.stripLinkTrackers ? AstraLinkSafety.removingTrackers(rawUrl) : rawUrl
+    if AstraGramSettings.current.warnSuspiciousLinks, AstraLinkSafety.warning(for: url) != nil, !AstraLinkSafety.consumeConfirmation(url) {
+        astraCheckExternalUrl(context: context, url: url, presentationData: presentationData, proceed: { url in
+            openExternalUrlImpl(context: context, urlContext: urlContext, url: url, forceExternal: forceExternal, presentationData: presentationData, navigationController: navigationController, dismissInput: dismissInput)
+        })
         return
     }
     // A login part hides the host a link opens (see `externalUrlWithLoginPart`). Every external link leaves through

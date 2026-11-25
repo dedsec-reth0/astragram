@@ -24,8 +24,9 @@ import FaceScanScreen
 
 public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParams) {
     // AstraGram security: a chat locked with Face ID opens after authentication, until the app goes to the background.
-    if case let .peer(lockedPeer) = params.chatLocation, AstraChatLock.needsAuthentication(lockedPeer.id.toInt64()) {
-        let lockedPeerId = lockedPeer.id.toInt64()
+    // A topic of a locked forum is the forum's chat too.
+    if let lockedPeerIdValue = params.chatLocation.asChatLocation.peerId, AstraChatLock.needsAuthentication(lockedPeerIdValue.toInt64()) {
+        let lockedPeerId = lockedPeerIdValue.toInt64()
         let isRussian = params.context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.lowercased().hasPrefix("ru")
         AstraBiometrics.authenticate(reason: isRussian ? "Открыть защищённый чат" : "Open the locked chat", completion: { success in
             if success {

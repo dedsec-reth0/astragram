@@ -549,9 +549,25 @@ public final class AstraMessageStore {
             if sqlite3_step(statement) != SQLITE_DONE, let database = self.database {
                 Logger.shared.log("AstraGram", "sqlite insert error: \(String(cString: sqlite3_errmsg(database)))")
             }
+            // At most `maxEditVersions` versions a message: someone who keeps editing one message must not grow this
+            // store without end. The oldest go (the first version, as sent, is kept).
+            if let trim = self.prepare("""
+                DELETE FROM edit_history WHERE peer_id = ?1 AND namespace = ?2 AND message_id = ?3
+                  AND row_id != (SELECT MIN(row_id) FROM edit_history WHERE peer_id = ?1 AND namespace = ?2 AND message_id = ?3)
+                  AND row_id NOT IN (SELECT row_id FROM edit_history WHERE peer_id = ?1 AND namespace = ?2 AND message_id = ?3 ORDER BY row_id DESC LIMIT ?4)
+                """) {
+                sqlite3_bind_int64(trim, 1, previous.peerId.toInt64())
+                sqlite3_bind_int(trim, 2, previous.messageId.namespace)
+                sqlite3_bind_int(trim, 3, previous.messageId.id)
+                sqlite3_bind_int(trim, 4, AstraMessageStore.maxEditVersions - 1)
+                let _ = sqlite3_step(trim)
+                sqlite3_finalize(trim)
+            }
             self.changesPipe.putNext(Void())
         }
     }
+
+    static let maxEditVersions: Int32 = 50
 
     // MARK: Reading
 

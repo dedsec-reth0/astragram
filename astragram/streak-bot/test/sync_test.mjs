@@ -188,9 +188,13 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   check('sender cannot take it off', r.body.received[200].length, 1);
   r = await gifts('C', { hide: [sentId], check: [] });
   check('recipient takes it off', r.body.mineReceived, []);
-  for (let i = 0; i < 20; i++) await gifts('A', { send: { to: 200, gift: '1' } });
+  // One sender keeps at most 10 gifts on one profile; the day's other 10 go to someone else.
+  for (let i = 0; i < 10; i++) await gifts('A', { send: { to: 200, gift: '1' } });
   r = await gifts('A', { send: { to: 200, gift: '1' } });
-  check('daily limit', r.status, 429);
+  check('at most 10 from one sender on one profile', [r.status, r.body.error], [429, 'too many gifts there']);
+  for (let i = 0; i < 9; i++) await gifts('A', { send: { to: 201, gift: '1' } });
+  r = await gifts('A', { send: { to: 202, gift: '1' } });
+  check('daily limit', [r.status, r.body.error], [429, 'too many gifts today']);
   // The recipient taking gifts off does not give the sender new ones.
   const given = q('SELECT id FROM visual_gift_received WHERE from_id = 100').map((x) => x.id);
   await gifts('C', { hide: given, check: [] });
@@ -346,13 +350,24 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   r = await gifts('A', { check: [100] });
   check('the token owner is not dropped from check', Array.isArray(r.body.users[100]), true);
 
-  // 9k. A received gift passed on gets a new row: the recipient's 100 newer gifts do not trim it away at once.
+  // 9k. A received gift passed on gets a new row, and the old one goes.
   const oldRow = q("INSERT INTO visual_gift_received (to_id, from_id, gift_id, created_at) VALUES (100, 5, '31', 1) RETURNING id")[0].id;
-  for (let i = 0; i < 100; i++) q("INSERT INTO visual_gift_received (to_id, from_id, gift_id, created_at) VALUES (200, 5, '32', 1)");
   r = await gifts('A', { transfer: { ref: `r${oldRow}`, to: 200 }, check: [] });
-  check('a passed-on gift survives the trim', q('SELECT gift_id FROM visual_gift_received WHERE id = ? AND to_id = 200', [r.body.transferred]).map((x) => x.gift_id), ['31']);
+  check('a passed-on gift reaches the new owner', q('SELECT gift_id FROM visual_gift_received WHERE id = ? AND to_id = 200', [r.body.transferred]).map((x) => x.gift_id), ['31']);
   check('the old row is gone', q('SELECT COUNT(*) AS c FROM visual_gift_received WHERE id = ?', [oldRow])[0].c, 0);
   q('DELETE FROM visual_gift_received WHERE to_id = 200');
+  q('DELETE FROM visual_gift_sends');
+  // 9k2. A full profile takes no more gifts, and nothing on it is pushed off (several accounts could otherwise wipe
+  // out every gift a person was given).
+  for (let i = 0; i < 100; i++) q("INSERT INTO visual_gift_received (to_id, from_id, gift_id, created_at) VALUES (200, ?, '32', 1)", [5000 + i]);
+  const keepRow = q("INSERT INTO visual_gift_received (to_id, from_id, gift_id, created_at) VALUES (100, 5, '33', 1) RETURNING id")[0].id;
+  r = await gifts('A', { send: { to: 200, gift: '1' } });
+  check('a full profile refuses a new gift', r.status, 429);
+  r = await gifts('A', { transfer: { ref: `r${keepRow}`, to: 200 } });
+  check('and a gift passed on', r.status, 429);
+  check('nothing pushed off the full profile', q('SELECT COUNT(*) AS c FROM visual_gift_received WHERE to_id = 200')[0].c, 100);
+  check('the refused gift stays with its owner', q('SELECT COUNT(*) AS c FROM visual_gift_received WHERE id = ?', [keepRow])[0].c, 1);
+  q('DELETE FROM visual_gift_received WHERE to_id IN (100, 200)');
   q('DELETE FROM visual_gift_sends');
 
   // 9l. A device a day behind does not put yesterday's numbers back over today's.
@@ -455,6 +470,131 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   check('no check, no budget needed', (await gifts('A', { check: [] })).status, 200);
   q('DELETE FROM check_budget');
   check('within the budget', await badge('B', { show: true, check: [1] }), 200);
+
+  // 9s. Security fixes (2026-11-25).
+  const tgUpdate = async (update, secret) => {
+    const response = await worker.fetch({ url: 'https://bot.example/tg', method: 'POST',
+      headers: { get: (k) => (k === 'x-telegram-bot-api-secret-token' ? secret : null) }, json: async () => update }, env);
+    return response.status;
+  };
+  const secret = (await call({ op: 'sha256', bytes: Array.from(new TextEncoder().encode('x:webhook')) })).slice(0, 48);
+  // Without BOT_TOKEN the webhook refuses everything, even the secret made from an empty token.
+  const noToken = { ...env, BOT_TOKEN: '' };
+  const emptySecret = (await call({ op: 'sha256', bytes: Array.from(new TextEncoder().encode(':webhook')) })).slice(0, 48);
+  const noTokenStatus = (await worker.fetch({ url: 'https://bot.example/tg', method: 'POST',
+    headers: { get: (k) => (k === 'x-telegram-bot-api-secret-token' ? emptySecret : null) }, json: async () => ({}) }, noToken)).status;
+  check('webhook without a token is closed', noTokenStatus, 503);
+  check('wrong webhook secret refused', await tgUpdate({}, 'nope'), 403);
+  const loginNoToken = await worker.fetch({ url: "https://bot.example/api/login", method: "POST",
+    headers: { get: (k) => (k === 'authorization' ? 'Bearer ' + 'e'.repeat(48) : null) },
+    json: async () => ({ initData: call({ op: 'webappdata', id: 900 }) }) }, noToken);
+  check("login without a token is refused", loginNoToken.status, 403);
+
+  // "/start f<id>" names the owner only to someone in their list of streaks.
+  const startF = async (fromId, ownerId) => {
+    sent.length = 0;
+    await tgUpdate({ message: { chat: { type: 'private', id: fromId }, from: { id: fromId, first_name: 'F', language_code: 'ru' }, text: `/start f${ownerId}` } }, secret);
+    return (sent.find((m) => m.method === 'sendMessage') || {}).text || '';
+  };
+  q('DELETE FROM pairs WHERE owner_id = 200 AND friend_id = 910');
+  check('a stranger asking about an ID learns no name', /OwnerC/.test(await startF(910, 200)), false);
+  check('and gets the same reply as for an unknown ID', (await startF(910, 200)).replace(/собеседника/g, ''), (await startF(910, 123456)).replace(/собеседника/g, ''));
+  q('INSERT OR REPLACE INTO streak_list (owner_id, friend_id, start_day, stopped, updated_at) VALUES (200, 910, 1, 0, 0)');
+  check('someone in the owner\'s list is told who', /OwnerC/.test(await startF(910, 200)), true);
+  q('DELETE FROM streak_list WHERE owner_id = 200 AND friend_id = 910');
+
+  // Parallel syncs with one token: one passes the throttle.
+  call({ op: 'reset' });
+  const syncNoReset = async () => {
+    const response = await worker.fetch({ url: 'https://bot.example/api/sync', method: 'POST',
+      headers: { get: (k) => (k === 'authorization' ? 'Bearer ' + TOKENS.C : null) }, json: async () => ({ v: 2, pairs: [] }) }, env);
+    return response.status;
+  };
+  const statuses = await Promise.all([syncNoReset(), syncNoReset(), syncNoReset()]);
+  check('parallel syncs: one passes', statuses.filter((x) => x === 200).length, 1);
+  // At most MAX_PAIRS (300) pairs per account, however many syncs bring new IDs.
+  q('DELETE FROM pairs WHERE owner_id = 200');
+  const many = (from) => Array.from({ length: 300 }, (_, i) => ({ ...pair(100000 + from + i), day: 20420 }));
+  await sync('C', { v: 2, pairs: many(0) });
+  await sync('C', { v: 2, pairs: many(300) });
+  check('pairs capped per account', q('SELECT COUNT(*) AS c FROM pairs WHERE owner_id = 200')[0].c, 300);
+  check('the list capped per account', q('SELECT COUNT(*) AS c FROM streak_list WHERE owner_id = 200')[0].c <= 600, true);
+  // Restored days: only the recent ones, at most 10 a pair.
+  q('DELETE FROM streak_restores WHERE owner_id = 200');
+  const old = Array.from({ length: 60 }, (_, i) => 20360 + i);
+  await sync('C', { v: 2, pairs: [{ ...pair(100000), restored: old }] });
+  const days = q('SELECT day FROM streak_restores WHERE owner_id = 200 AND friend_id = 100000').map((x) => x.day);
+  check('restored days: the newest 10, within 30 days', [days.length, Math.min(...days) >= 20390], [10, true]);
+  q('DELETE FROM pairs WHERE owner_id = 200');
+  q('DELETE FROM streak_list WHERE owner_id = 200');
+  q('DELETE FROM streak_restores WHERE owner_id = 200');
+
+  // New-streak notices: at most 20 a day per owner, with a button to say "I do not know them", which silences them.
+  q('DELETE FROM notified');
+  q('DELETE FROM notify_log');
+  for (let i = 0; i < 25; i++) q('INSERT OR REPLACE INTO friends (tg_id, started_at, stopped) VALUES (?, 0, 0)', [300000 + i]);
+  sent.length = 0;
+  await sync('C', { v: 2, pairs: Array.from({ length: 25 }, (_, i) => pair(300000 + i)) });
+  const notices = sent.filter((m) => m.method === 'sendMessage' && /начал\(а\) с тобой огонёк/.test(m.text || ''));
+  check('notices capped per day', notices.length, 20);
+  const muteButton = notices[0].reply_markup.inline_keyboard.flat().find((b) => /^m:/.test(b.callback_data));
+  check('a notice can be silenced', muteButton.callback_data, 'm:200');
+  sent.length = 0;
+  await tgUpdate({ callback_query: { id: 'cb', from: { id: notices[0].chat_id, first_name: 'F', language_code: 'ru' }, data: muteButton.callback_data } }, secret);
+  check('silenced', q('SELECT COUNT(*) AS c FROM muted WHERE friend_id = ? AND owner_id = 200', [notices[0].chat_id])[0].c, 1);
+  sent.length = 0;
+  await tgUpdate({ message: { chat: { type: 'private', id: notices[0].chat_id }, from: { id: notices[0].chat_id, first_name: 'F', language_code: 'ru' }, text: '/streaks' } }, secret);
+  check('a silenced owner is not listed', /OwnerC/.test((sent.find((m) => m.method === 'sendMessage') || {}).text || ''), false);
+  q('DELETE FROM pairs WHERE owner_id = 200');
+  q('DELETE FROM streak_list WHERE owner_id = 200');
+  q('DELETE FROM friends WHERE tg_id >= 300000');
+
+  // A name made to look like a link loses the link shape in the bot's texts.
+  q("UPDATE owners SET name = 'https://t.me/evil' WHERE tg_id = 200");
+  q('INSERT OR REPLACE INTO friends (tg_id, started_at, stopped) VALUES (310000, 0, 0)');
+  q('DELETE FROM notify_log');
+  sent.length = 0;
+  await sync('C', { v: 2, pairs: [pair(310000)] });
+  const lure = (sent.find((m) => m.method === 'sendMessage') || {}).text || '';
+  check('no link in a quoted name', [/t\.me/.test(lure), /https:\/\//.test(lure)], [false, false]);
+  q("UPDATE owners SET name = 'OwnerC' WHERE tg_id = 200");
+  q('DELETE FROM pairs WHERE owner_id = 200');
+  q('DELETE FROM streak_list WHERE owner_id = 200');
+
+  // Feedback: an IPv6 /64 is one sender; unverified feedback has a global hourly cap.
+  q('DELETE FROM feedback');
+  for (let i = 0; i < 5; i++) await post('/api/feedback', { kind: 'bug', text: 'v6 ' + i }, { 'cf-connecting-ip': `2001:db8:1:2::${i + 1}` });
+  r = await post('/api/feedback', { kind: 'bug', text: 'v6 again' }, { 'cf-connecting-ip': '2001:0db8:0001:0002:ffff::9' });
+  check('an IPv6 /64 is one sender', r.status, 429);
+  const hour = Math.floor(Date.now() / 1000);
+  for (let i = 0; i < 60; i++) q("INSERT INTO feedback (kind, text, tg_id, verified, ip, app, created_at) VALUES ('bug', 'x', NULL, 0, ?, '', ?)", ['10.0.' + i + '.1', hour]);
+  r = await post('/api/feedback', { kind: 'bug', text: 'yet another' }, { 'cf-connecting-ip': '8.8.4.4' });
+  check('unverified feedback capped per hour', r.status, 429);
+  r = await post('/api/feedback', { kind: 'bug', text: 'from a linked app' }, { 'cf-connecting-ip': '8.8.4.4', authorization: 'Bearer ' + TOKENS.C });
+  check('a linked sender still gets through', r.status, 200);
+  q('DELETE FROM feedback');
+
+  // Reminders: at most 40 a run, marked before sending, so the next run sends the rest and nothing twice.
+  const nowS = Math.floor(Date.now() / 1000);
+  const tz19 = (19 * 3600) - (nowS % 86400);   // a time zone where it is 19:xx now
+  const dayAt = Math.floor((nowS + tz19) / 86400);
+  q('UPDATE owners SET tz = ?, last_sync = ? WHERE tg_id = 200', [tz19, nowS]);
+  for (let i = 0; i < 45; i++) {
+    q('INSERT OR REPLACE INTO friends (tg_id, started_at, stopped) VALUES (?, 0, 0)', [320000 + i]);
+    q('INSERT INTO pairs (owner_id, friend_id, count, mine, theirs, today_done, restores_left, restorable_day, lost_count, day, need, updated_at, reminded_day) VALUES (200, ?, 5, 3, 0, 0, 5, NULL, 0, ?, 3, ?, 0)', [320000 + i, dayAt, nowS]);
+  }
+  const reminderRun = async () => {
+    sent.length = 0;
+    let pendingRun;
+    await worker.scheduled({ scheduledTime: Date.UTC(2026, 0, 1, 0, 15) }, env, { waitUntil: (p) => { pendingRun = p; } });
+    await pendingRun;
+    return sent.filter((m) => m.method === 'sendMessage' && /огонёк не погас/.test(m.text || '')).length;
+  };
+  check('reminders: 40 in a run', await reminderRun(), 40);
+  check('reminders: the rest in the next', await reminderRun(), 5);
+  check('reminders: nothing twice', await reminderRun(), 0);
+  q('DELETE FROM pairs WHERE owner_id = 200');
+  q('DELETE FROM friends WHERE tg_id >= 320000');
 
   // 10. Unlink forgets the list.
   call({ op: 'reset' });

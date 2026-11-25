@@ -4,6 +4,8 @@ name = "astragram-streak-bot"
 main = "worker.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
+# No per-version preview URLs: they would serve every older version (without later fixes) against the same D1.
+preview_urls = false
 
 [[d1_databases]]
 binding = "DB"

@@ -374,7 +374,7 @@ private class ReplyThreadHistoryContextImpl {
             strongSelf.unreadCountValue = unreadCountValue
 
             // AstraGram ghost mode: the thread is read locally only.
-            if !AstraGhostMode.mayPushReadState(peerId: messageIndex.id.peerId) {
+            if !AstraGhostMode.mayPushReadState(network: strongSelf.account.network, peerId: messageIndex.id.peerId) {
                 return
             }
 

@@ -5,6 +5,7 @@ import TelegramPresentationData
 import TelegramUIPreferences
 import SwiftSignalKit
 import TelegramCore
+import AstraGramUI
 import Display
 import LegacyComponents
 import DeviceAccess
@@ -420,6 +421,10 @@ final class AuthorizedApplicationContext {
                                 }
                             }
                             
+                            // AstraGram security: nothing of a chat locked with Face ID shows in a banner over the app.
+                            if !AstraChatLock.canShow(firstMessage.id.peerId.toInt64()) {
+                                return
+                            }
                             if inAppNotificationSettings.displayPreviews {
                                 let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
                                 strongSelf.notificationController.enqueue(ChatMessageNotificationItem(context: strongSelf.context, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, messages: messages, threadData: threadData, tapAction: {

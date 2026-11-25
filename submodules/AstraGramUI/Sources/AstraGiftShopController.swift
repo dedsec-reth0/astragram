@@ -275,8 +275,8 @@ final class AstraGiftShopController: UIViewController, UICollectionViewDataSourc
         let alert = UIAlertController(
             title: self.text("Показать подарки другим?", "Show the gifts to others?"),
             message: self.text(
-                "Чтобы другие пользователи AstraGram видели ваши подарки, AstraGram подключит бота огоньков @\(AstraStreakBot.username) (без сообщений в его чат). Серверу уходят ваш Telegram ID и номера выбранных подарков; он отдаёт их только приложениям AstraGram тех, у кого вы есть в чатах.",
-                "For other AstraGram users to see your gifts, AstraGram connects the streak bot @\(AstraStreakBot.username) (with no message in its chat). The server gets your Telegram ID and the chosen gift numbers, and gives them only to the AstraGram apps of people who have you in their chats."
+                "Чтобы другие пользователи AstraGram видели ваши подарки, AstraGram подключит бота огоньков @\(AstraStreakBot.username) (без сообщений в его чат). Серверу уходят ваш Telegram ID и номера выбранных подарков. Он отдаёт их приложению AstraGram, которое спросит о вашем Telegram ID: так их видят те, у кого вы есть в чатах, но может узнать и тот, кто знает ваш ID. Подаренные вам подарки с подписью и дарителем (если он не скрыл себя) видны так же, как на профиле в Telegram.",
+                "For other AstraGram users to see your gifts, AstraGram connects the streak bot @\(AstraStreakBot.username) (with no message in its chat). The server gets your Telegram ID and the chosen gift numbers. It gives them to any AstraGram app that asks about your Telegram ID: that is how people who have you in their chats see them, but anyone who knows your ID can see them too. Gifts given to you show with their caption and giver (unless the giver stayed anonymous), as on a Telegram profile."
             ),
             preferredStyle: .alert
         )

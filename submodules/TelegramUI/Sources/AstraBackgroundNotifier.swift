@@ -73,8 +73,19 @@ final class AstraBackgroundNotifier {
                 return disposables
             }
         }
-        |> deliverOnMainQueue).start(next: { [weak self] context, messages in
-            self?.notify(context: context, messages: messages)
+        |> mapToSignal { context, messages -> Signal<(AccountContext, [Message], Bool, EngineGlobalNotificationSettings), NoError> in
+            // Telegram's passcode and its "Message Preview" switches are kept: with a passcode set, or previews off,
+            // a notification names nobody and quotes nothing.
+            return combineLatest(
+                context.sharedContext.appLockContext.autolockDeadline |> take(1),
+                context.engine.data.get(TelegramEngine.EngineData.Item.NotificationSettings.Global())
+            )
+            |> map { deadline, settings in
+                return (context, messages, deadline != nil, settings)
+            }
+        }
+        |> deliverOnMainQueue).start(next: { [weak self] context, messages, hasPasscode, settings in
+            self?.notify(context: context, messages: messages, hasPasscode: hasPasscode, settings: settings)
         })
 
         if #available(iOS 13.0, *) {
@@ -102,7 +113,7 @@ final class AstraBackgroundNotifier {
         return keywords.contains(where: { !$0.isEmpty && lowercased.contains($0.lowercased()) })
     }
 
-    private func notify(context: AccountContext, messages: [Message]) {
+    private func notify(context: AccountContext, messages: [Message], hasPasscode: Bool, settings: EngineGlobalNotificationSettings) {
         // Only while in the background: "inactive" is also Control Center or a Face ID prompt over the open app.
         guard AstraGramSettings.current.backgroundNotifications, self.application.applicationState == .background else {
             return
@@ -125,8 +136,20 @@ final class AstraBackgroundNotifier {
                 body = EnginePeer(author).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) + ": " + body
             }
             content.title = chatTitle
-            // A chat locked with Face ID, and a secret chat, do not show their messages in a notification.
-            if AstraGramSettings.current.lockedChats.contains(message.id.peerId.toInt64()) || message.id.peerId.namespace == Namespaces.Peer.SecretChat {
+            let displayPreviews: Bool
+            if message.id.peerId.namespace == Namespaces.Peer.CloudUser {
+                displayPreviews = settings.privateChats.displayPreviews
+            } else if let channel = message.peers[message.id.peerId] as? TelegramChannel, case .broadcast = channel.info {
+                displayPreviews = settings.channels.displayPreviews
+            } else {
+                displayPreviews = settings.groupChats.displayPreviews
+            }
+            if hasPasscode {
+                // Not even who wrote: the chat list itself is behind the passcode.
+                content.title = "AstraGram"
+            }
+            // A chat locked with Face ID, a secret chat, a passcode or previews turned off: no text in the notification.
+            if hasPasscode || !displayPreviews || AstraGramSettings.current.lockedChats.contains(message.id.peerId.toInt64()) || message.id.peerId.namespace == Namespaces.Peer.SecretChat {
                 body = AstraStringsCompat.isRussian(presentationData) ? "Новое сообщение" : "New message"
             }
             content.body = body

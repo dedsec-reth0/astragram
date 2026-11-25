@@ -200,3 +200,18 @@ CREATE TABLE IF NOT EXISTS check_budget (
   period INTEGER NOT NULL,
   used INTEGER NOT NULL DEFAULT 0
 );
+
+-- A friend who said a streak's owner is not someone they know (the "🔕" button under the bot's first message about
+-- it): the bot never names that owner to them again, reminds them of nothing from them and lists none of their numbers.
+CREATE TABLE IF NOT EXISTS muted (
+  friend_id INTEGER NOT NULL,
+  owner_id INTEGER NOT NULL,
+  PRIMARY KEY (friend_id, owner_id)
+);
+
+-- When the bot told someone about a new streak, per owner (NOTIFY_PER_DAY a day).
+CREATE TABLE IF NOT EXISTS notify_log (
+  owner_id INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS notify_log_owner ON notify_log(owner_id, created_at);

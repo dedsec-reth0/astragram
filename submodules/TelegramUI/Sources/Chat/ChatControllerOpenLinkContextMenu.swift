@@ -155,6 +155,11 @@ extension ChatControllerImpl {
                     }
                 case .externalBrowser:
                     if case .externalUrl = result {
+                        // AstraGram security: the same link checks as a tap (trackers cut, a suspicious link confirmed).
+                        astraCheckExternalUrl(context: self.context, url: url, presentationData: self.presentationData, proceed: { [weak self] url in
+                        guard let self else {
+                            return
+                        }
                         let _ = (self.context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.webBrowserSettings])
                         |> take(1)
                         |> deliverOnMainQueue).startStandalone(next: { [weak self] sharedData in
@@ -180,6 +185,7 @@ extension ChatControllerImpl {
                             } else {
                                 self.context.sharedContext.applicationBindings.openUrl(targetUrl)
                             }
+                        })
                         })
                     } else {
                         self.openResolved(result: result, sourceMessageId: nil, forceExternal: true, concealed: false)

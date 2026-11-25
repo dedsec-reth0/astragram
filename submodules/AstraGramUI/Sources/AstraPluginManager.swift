@@ -72,6 +72,41 @@ public final class AstraPluginManager {
         }
     }
 
+    /// Plugins switched off at launch because a previous run never came back from them (see `runGuarded`).
+    private var hungIds: Set<String> = []
+
+    /// The file that names the plugin being run right now. JavaScriptCore's time limit does not stop everything (a
+    /// promise chain that never ends runs in the microtask drain, past the watchdog), so a plugin can hang or crash the
+    /// app; the file is written before each call into a plugin and removed after it, and a file still there at the next
+    /// launch names the plugin that never returned. It is switched off then, so the app starts again.
+    private var runningMarker: URL {
+        return self.directory.appendingPathComponent(".running")
+    }
+
+    private func runGuarded<T>(_ id: String, _ body: () -> T) -> T {
+        try? FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
+        try? Data(id.utf8).write(to: self.runningMarker)
+        let result = body()
+        try? FileManager.default.removeItem(at: self.runningMarker)
+        return result
+    }
+
+    /// Switches off the plugin a previous run never returned from (once, at launch).
+    private func disableHungPlugin() {
+        guard let data = try? Data(contentsOf: self.runningMarker) else {
+            return
+        }
+        try? FileManager.default.removeItem(at: self.runningMarker)
+        guard let id = String(data: data, encoding: .utf8), !id.isEmpty else {
+            return
+        }
+        var ids = self.enabledIds
+        if ids.remove(id) != nil {
+            self.enabledIds = ids
+            self.hungIds.insert(id)
+        }
+    }
+
     public var plugins: Signal<[AstraPluginInfo], NoError> {
         return self.infosPromise.get()
     }
@@ -87,6 +122,7 @@ public final class AstraPluginManager {
 
     /// Loads the installed plugins and connects them to TelegramCore. Called once at app launch.
     public func start() {
+        self.disableHungPlugin()
         self.reload()
         AstraPluginHooks.setOutgoingHook({ [weak self] text, peerId in
             return self?.handleOutgoing(text: text, peerId: peerId)
@@ -98,7 +134,25 @@ public final class AstraPluginManager {
 
     // MARK: Management
 
+    /// The installed plugin with this id, if there is one.
+    public func installed(id: String) -> AstraPluginInfo? {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        return self.infos.first(where: { $0.id == id })
+    }
+
+    /// The header (name, author…) a source describes, as `AstraPluginInfo` (not installed, not enabled).
+    public static func info(of source: String) -> AstraPluginInfo? {
+        let header = AstraPluginManager.parseHeader(source)
+        guard let id = header["id"], !id.isEmpty else {
+            return nil
+        }
+        return AstraPluginInfo(id: id, name: header["name"] ?? id, version: header["version"] ?? "", author: header["author"] ?? "", description: header["description"] ?? "", isEnabled: false, error: nil)
+    }
+
     /// Installs (or replaces) a plugin from its source. Returns the plugin id, or nil when the source has no `@id`.
+    /// A plugin that replaces one with the same id but another author does not get what the old one kept (its storage is
+    /// per id, and a stranger's plugin could otherwise take another's id to read it).
     @discardableResult
     public func install(source: String, enable: Bool = true) -> String? {
         let header = AstraPluginManager.parseHeader(source)
@@ -107,6 +161,13 @@ public final class AstraPluginManager {
         }
         try? FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
         let url = self.directory.appendingPathComponent(id + ".js")
+        if let previousSource = try? String(contentsOf: url, encoding: .utf8) {
+            let previousAuthor = AstraPluginManager.parseHeader(previousSource)["author"] ?? ""
+            if previousAuthor != (header["author"] ?? "") {
+                UserDefaults.standard.removeObject(forKey: "ayugram.plugins.storage." + id)
+            }
+        }
+        self.hungIds.remove(id)
         do {
             try source.write(to: url, atomically: true, encoding: .utf8)
         } catch {
@@ -131,6 +192,7 @@ public final class AstraPluginManager {
     }
 
     public func setEnabled(id: String, enabled: Bool) {
+        self.hungIds.remove(id)
         var ids = self.enabledIds
         if enabled {
             ids.insert(id)
@@ -164,8 +226,11 @@ public final class AstraPluginManager {
             let id = url.deletingPathExtension().lastPathComponent
             let isEnabled = enabledIds.contains(id)
             var error: String?
+            if !isEnabled && self.hungIds.contains(id) {
+                error = "Отключён: приложение зависло или закрылось в этом плагине / Switched off: the app hung or closed in this plugin"
+            }
             if isEnabled {
-                switch self.load(id: id, source: source) {
+                switch self.runGuarded(id, { self.load(id: id, source: source) }) {
                 case let .success(plugin):
                     loaded.append(plugin)
                 case let .failure(loadError):
@@ -241,6 +306,24 @@ public final class AstraPluginManager {
         return result
     }
 
+    /// The text of a thrown value without running any of its code: a string or number as is, an Error's `message` only
+    /// when it is a plain data property holding a string (never a getter, never toString).
+    private static func primitiveText(_ value: JSValue) -> String? {
+        if value.isString || value.isNumber || value.isBoolean {
+            let result: String? = value.toString()
+            return result
+        }
+        guard value.isObject, let context = value.context else {
+            return nil
+        }
+        let read: JSValue? = context.evaluateScript("(function (e) { try { var d = Object.getOwnPropertyDescriptor(e, 'message'); return d && typeof d.value === 'string' ? d.value : null } catch (x) { return null } })")
+        guard let reader = read, let message = reader.call(withArguments: [value]), message.isString else {
+            return nil
+        }
+        let result: String? = message.toString()
+        return result
+    }
+
     private static func string(_ value: JSValue) -> String? {
         let result: String? = value.toString()
         return result
@@ -250,8 +333,13 @@ public final class AstraPluginManager {
         let context: JSContext = JSContext()
         var exceptionText: String?
         context.exceptionHandler = { _, exception in
-            let exceptionValue: JSValue? = exception
-            exceptionText = exceptionValue.flatMap { AstraPluginManager.string($0) } ?? "error"
+            // Only a primitive is read: converting a thrown object calls its own toString, which may throw again and
+            // re-enter this handler without end (a plugin that crashes the app at every launch).
+            if exceptionText == nil {
+                exceptionText = "error"
+                let exceptionValue: JSValue? = exception
+                exceptionText = exceptionValue.flatMap { AstraPluginManager.primitiveText($0) } ?? "error"
+            }
         }
 
         let storageKey = "ayugram.plugins.storage." + id
@@ -305,7 +393,7 @@ public final class AstraPluginManager {
             ctx?.exception = exception
             let exceptionValue: JSValue? = exception
             #if DEBUG
-            NSLog("[AstraPlugin \(id)] error: \(exceptionValue.flatMap { AstraPluginManager.string($0) } ?? "")")
+            NSLog("[AstraPlugin \(id)] error: \(exceptionValue.flatMap { AstraPluginManager.primitiveText($0) } ?? "")")
             #else
             let _ = exceptionValue
             #endif
@@ -370,7 +458,7 @@ public final class AstraPluginManager {
                     guard let command = AstraPluginManager.property(commands, name), command.isObject else {
                         continue
                     }
-                    guard let result = AstraPluginManager.call(command, [args, self.chatObject(peerId, in: loaded.context)]) else {
+                    guard let result = self.runGuarded(loaded.id, { AstraPluginManager.call(command, [args, self.chatObject(peerId, in: loaded.context)]) }) else {
                         // The command failed (threw or timed out): the user's text goes out as written, not lost.
                         return nil
                     }
@@ -388,7 +476,7 @@ public final class AstraPluginManager {
             guard let hook = AstraPluginManager.property(loaded.plugin, "onOutgoing"), hook.isObject else {
                 continue
             }
-            guard let result = AstraPluginManager.call(hook, [current, self.chatObject(peerId, in: loaded.context)]) else {
+            guard let result = self.runGuarded(loaded.id, { AstraPluginManager.call(hook, [current, self.chatObject(peerId, in: loaded.context)]) }) else {
                 continue
             }
             if result.isNull {
@@ -426,7 +514,7 @@ public final class AstraPluginManager {
             if let author = message.author {
                 object.setValue(NSNumber(value: astraBotApiId(author.id)), forProperty: "authorId")
             }
-            if let result = AstraPluginManager.call(hook, [object]), result.toBool() {
+            if let result = self.runGuarded(loaded.id, { AstraPluginManager.call(hook, [object]) }), result.toBool() {
                 hide = true
                 break
             }

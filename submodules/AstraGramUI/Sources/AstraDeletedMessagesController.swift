@@ -139,6 +139,8 @@ public func astraDeletedChatsController(context: AccountContext) -> ViewControll
         store.chatsWithDeletedMessages()
     )
     |> map { presentationData, chats -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        // AstraGram security: a chat locked with Face ID shows here only once it is unlocked (opened with Face ID).
+        let chats = chats.filter { AstraChatLock.canShow($0.peerId.toInt64()) }
         let strings = AstraStrings(presentationData.strings)
         var entries: [AstraDeletedChatsEntry] = []
         if chats.isEmpty {
@@ -271,6 +273,7 @@ public func astraDeletedMessagesController(context: AccountContext, peerId: Engi
         store.deletedMessages(peerId: peerId)
     )
     |> map { presentationData, records -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let records = records.filter { AstraChatLock.canShow($0.peerId.toInt64()) }
         let strings = AstraStrings(presentationData.strings)
         var entries: [AstraDeletedMessagesEntry] = []
         if records.isEmpty {

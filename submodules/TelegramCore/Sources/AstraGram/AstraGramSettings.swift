@@ -716,12 +716,16 @@ public final class AstraGramSettings {
 
     /// Replaces the settings with values encoded as JSON (keys left out keep their default values). Used by the
     /// automated UI tests, which pass the settings to test in a launch argument. Returns false for invalid JSON.
+    /// `adjusting` gets the settings being replaced and the decoded ones, and changes the decoded ones before they are
+    /// stored: one update, so no observer ever sees the file's values before the adjustment (a backup's server address
+    /// would otherwise receive the streak-bot token in between).
     @discardableResult
-    public static func replace(withJSON data: Data) -> Bool {
-        guard let value = try? JSONDecoder().decode(AstraGramSettingsValues.self, from: data) else {
+    public static func replace(withJSON data: Data, adjusting: (AstraGramSettingsValues, inout AstraGramSettingsValues) -> Void = { _, _ in }) -> Bool {
+        guard var value = try? JSONDecoder().decode(AstraGramSettingsValues.self, from: data) else {
             return false
         }
         AstraGramSettings.update { current in
+            adjusting(current, &value)
             current = value
         }
         return true

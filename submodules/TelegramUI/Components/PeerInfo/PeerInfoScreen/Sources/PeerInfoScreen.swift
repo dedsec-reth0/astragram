@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Display
+import AstraGramUI
 import AsyncDisplayKit
 import TelegramCore
 import SwiftSignalKit
@@ -7188,6 +7189,20 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         self.cachedDataPromise.set(self.controllerNode.cachedDataPromise.get())
         self._readyInternal.set(self.controllerNode.ready.get())
         
+        // AstraGram security: the profile of a chat locked with Face ID (its shared media, polls, calendar) opens only
+        // once the chat is unlocked, the same check as the chat itself.
+        if !self.isSettings && !self.isMyProfile {
+            AstraChatLock.protect(view: self.view, peerId: self.peerId.toInt64(), isPreview: false, close: { [weak self] in
+                guard let self else {
+                    return
+                }
+                if let navigationController = self.navigationController as? NavigationController, navigationController.viewControllers.last === self {
+                    let _ = navigationController.popViewController(animated: true)
+                } else {
+                    self.dismiss()
+                }
+            })
+        }
         super.displayNodeDidLoad()
     }
     

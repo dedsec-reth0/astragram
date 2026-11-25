@@ -349,6 +349,8 @@ public func astraBookmarksController(context: AccountContext) -> ViewController 
 
     let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, AstraBookmarks.signal)
     |> map { presentationData, bookmarks -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        // AstraGram security: bookmarks from a chat locked with Face ID show once it is unlocked.
+        let bookmarks = bookmarks.filter { AstraChatLock.canShow($0.peerId) }
         let strings = AstraStrings(presentationData.strings)
         let formatter = DateFormatter()
         formatter.dateStyle = .short
@@ -392,7 +394,8 @@ public enum AstraBackup {
                 object["settings"] = settings
             }
         }
-        if let bookmarksData = try? JSONEncoder().encode(AstraBookmarks.all), let bookmarks = try? JSONSerialization.jsonObject(with: bookmarksData) {
+        // Bookmarks from a chat locked with Face ID leave in a file only while it is unlocked.
+        if let bookmarksData = try? JSONEncoder().encode(AstraBookmarks.all.filter { AstraChatLock.canShow($0.peerId) }), let bookmarks = try? JSONSerialization.jsonObject(with: bookmarksData) {
             object["bookmarks"] = bookmarks
         }
         object["plugins"] = AstraPluginManager.shared.exportSources()
@@ -408,9 +411,9 @@ public enum AstraBackup {
         // object or an array: the types are checked first.
         if let settings = object["settings"] as? [String: Any], let settingsData = try? JSONSerialization.data(withJSONObject: settings) {
             // A backup neither wipes the AI key (it carries none) nor takes protection off.
-            let previous = AstraGramSettings.current
-            AstraGramSettings.replace(withJSON: settingsData)
-            AstraGramSettings.update { settings in
+            // One step: the file's values are adjusted before anything sees them (an observer reacting to the file's
+            // streak-bot address would send the account's token there before it was put back).
+            AstraGramSettings.replace(withJSON: settingsData, adjusting: { previous, settings in
                 // The AI address and the host the user agreed to send text to stay this device's own: a backup from
                 // someone else would otherwise send the key and the messages to their server.
                 settings.aiEndpoint = previous.aiEndpoint
@@ -431,7 +434,7 @@ public enum AstraBackup {
                 settings.stripLinkTrackers = settings.stripLinkTrackers || previous.stripLinkTrackers
                 settings.clipboardExpire = settings.clipboardExpire || previous.clipboardExpire
                 settings.clipboardLocalOnly = settings.clipboardLocalOnly || previous.clipboardLocalOnly
-            }
+            })
         }
         // Bookmarks are merged: the ones added since the backup was made stay.
         if let bookmarks = object["bookmarks"] as? [Any], let bookmarksData = try? JSONSerialization.data(withJSONObject: bookmarks), let decoded = try? JSONDecoder().decode([AstraBookmark].self, from: bookmarksData) {

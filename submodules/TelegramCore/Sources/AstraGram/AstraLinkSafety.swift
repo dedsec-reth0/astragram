@@ -12,7 +12,14 @@ public enum AstraLinkSafety {
         case imitatesTelegram
         /// The link downloads a file that can install or run something.
         case dangerousFile
+        /// The link is handed to another app that opens web pages or installs apps (x-safari-https://, itms-services://…).
+        case otherApp
     }
+
+    /// Schemes of apps that open a web page or install an app from a link: such a link skips the checks of a web link.
+    private static let otherAppSchemePrefixes: [String] = [
+        "x-safari-", "googlechrome", "firefox", "opera-http", "microsoft-edge", "brave", "duckduckgo", "itms-services"
+    ]
 
     /// Query parameters that only track where a click came from.
     private static let trackers: Set<String> = [
@@ -36,6 +43,10 @@ public enum AstraLinkSafety {
 
     private static func webComponents(_ string: String) -> URLComponents? {
         guard let components = URLComponents(string: string), let scheme = components.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            // A link written without a scheme ("https-te1egram.org/login") opens as http://…: it is checked as that.
+            if !string.contains(":"), let components = URLComponents(string: "http://" + string), components.host != nil {
+                return components
+            }
             return nil
         }
         return components
@@ -68,10 +79,15 @@ public enum AstraLinkSafety {
 
     /// What is suspicious about the link, if anything.
     public static func warning(for string: String) -> Warning? {
+        if let scheme = URLComponents(string: string)?.scheme?.lowercased(), scheme != "http", scheme != "https", AstraLinkSafety.otherAppSchemePrefixes.contains(where: { scheme.hasPrefix($0) }) {
+            return .otherApp
+        }
         guard let components = AstraLinkSafety.webComponents(string), let rawHost = components.host, !rawHost.isEmpty else {
             return nil
         }
-        let host = rawHost.lowercased()
+        // Letters that look alike in some fonts are compared before lowercasing: a capital I reads as a small l
+        // ("teIegram"), and lowercased it would be an i.
+        let host = rawHost.replacingOccurrences(of: "I", with: "l").lowercased()
         if host.contains("xn--") || host.unicodeScalars.contains(where: { !$0.isASCII }) {
             return .lookalikeLetters
         }

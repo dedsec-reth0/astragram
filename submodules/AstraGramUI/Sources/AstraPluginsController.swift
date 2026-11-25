@@ -135,7 +135,12 @@ public func astraPluginsController(context: AccountContext) -> ViewController {
             performInstall(source: nil)
             return
         }
-        presentControllerImpl?(textAlertController(context: context, title: strings.pluginInstallTitle, text: strings.pluginInstallWarning, actions: [
+        // A plugin that takes the id of an installed one replaces it: said in so many words, with both names and authors.
+        var warning = strings.pluginInstallWarning
+        if let new = AstraPluginManager.info(of: source), let existing = manager.installed(id: new.id) {
+            warning = strings.pluginReplaceWarning(oldName: existing.name, oldAuthor: existing.author, newName: new.name, newAuthor: new.author)
+        }
+        presentControllerImpl?(textAlertController(context: context, title: strings.pluginInstallTitle, text: warning, actions: [
             TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_Cancel, action: {
             }),
             TextAlertAction(type: .genericAction, title: strings.pluginInstallConfirm, action: {

@@ -57,6 +57,48 @@ public enum AstraChatLock {
         AstraChatLock.unlocked.removeAll()
         AstraChatLock.settingsUnlocked = false
     }
+
+    /// Whether anything of this chat (its messages, media, notifications, bookmarks) may be shown right now.
+    public static func canShow(_ peerId: Int64) -> Bool {
+        return !AstraChatLock.needsAuthentication(peerId)
+    }
+
+    private static var isRussian: Bool {
+        return (Locale.preferredLanguages.first ?? "").lowercased().hasPrefix("ru")
+    }
+
+    /// The one check every view of a locked chat goes through (opening it from any screen, a topic of it, a long-press
+    /// preview): the view is covered at once, and opened in full only after Face ID. A preview stays covered (no Face ID
+    /// sheet from a long press); a full view that is not unlocked is closed with `close`.
+    public static func protect(view: UIView, peerId: Int64, isPreview: Bool, close: @escaping () -> Void) {
+        guard AstraChatLock.needsAuthentication(peerId) else {
+            return
+        }
+        let cover = UIView(frame: view.bounds)
+        cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        cover.backgroundColor = .systemBackground
+        let label = UILabel()
+        label.text = "🔒\n" + (AstraChatLock.isRussian ? "Защищённый чат" : "Locked chat")
+        label.numberOfLines = 0
+        label.textAlignment = .center
+        label.font = .systemFont(ofSize: 17, weight: .semibold)
+        label.textColor = .secondaryLabel
+        label.translatesAutoresizingMaskIntoConstraints = false
+        cover.addSubview(label)
+        NSLayoutConstraint.activate([label.centerXAnchor.constraint(equalTo: cover.centerXAnchor), label.centerYAnchor.constraint(equalTo: cover.centerYAnchor)])
+        view.addSubview(cover)
+        if isPreview {
+            return
+        }
+        AstraBiometrics.authenticate(reason: AstraChatLock.isRussian ? "Открыть защищённый чат" : "Open the locked chat", completion: { success in
+            if success {
+                AstraChatLock.markUnlocked(peerId)
+                cover.removeFromSuperview()
+            } else {
+                close()
+            }
+        })
+    }
 }
 
 private final class AstraLockCoverTarget: NSObject {

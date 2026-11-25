@@ -294,6 +294,16 @@ public struct AstraStrings {
     public var telegramPrivacy: String { t("Конфиденциальность Telegram", "Telegram Privacy") }
     public var securityFooter: String { t("Чаты под Face ID скрывают текст в списке. Сторонние клавиатуры видят всё, что вы набираете.", "Chats locked with Face ID hide their text in the chat list. Third-party keyboards see everything you type.") }
     public var pluginInstallTitle: String { t("Установить плагин?", "Install the Plugin?") }
+    /// A new plugin takes the id of one already installed: it replaces it.
+    public func pluginReplaceWarning(oldName: String, oldAuthor: String, newName: String, newAuthor: String) -> String {
+        let sameAuthor = oldAuthor == newAuthor
+        let old = oldAuthor.isEmpty ? "«\(oldName)»" : "«\(oldName)» (\(oldAuthor))"
+        let new = newAuthor.isEmpty ? "«\(newName)»" : "«\(newName)» (\(newAuthor))"
+        if self.isRussian {
+            return "Этот плагин заменит установленный \(old) на \(new)." + (sameAuthor ? "" : " Автор другой: данные старого плагина будут удалены.") + "\n\n" + self.pluginInstallWarning
+        }
+        return "This plugin replaces the installed \(old) with \(new)." + (sameAuthor ? "" : " The author is different: what the old plugin kept is deleted.") + "\n\n" + self.pluginInstallWarning
+    }
     public var pluginInstallWarning: String { t("Плагин — это программа: она видит ваши сообщения и может менять то, что вы отправляете. Устанавливайте плагины только из источников, которым доверяете.", "A plugin is a program: it sees your messages and can change what you send. Install plugins only from sources you trust.") }
     public var pluginInstallConfirm: String { t("Установить", "Install") }
 

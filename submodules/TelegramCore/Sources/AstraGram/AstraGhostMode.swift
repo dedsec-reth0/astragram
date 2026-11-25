@@ -21,7 +21,13 @@ import SwiftSignalKit
 /// So everything that does this marks the account as online here (`markAsOnline`), and the presence manager
 /// (`ManagedAccountPresence.swift`) answers each mark with `account.updateStatus(offline: true)`.
 public enum AstraGhostMode {
-    private static let readAllowances = Atomic<Set<PeerId>>(value: Set())
+    /// One-time allowances, per account (a chat or group has the same id in every logged-in account, and one account's
+    /// "read after send" must not let another account's hidden read receipt out) and per chat.
+    private struct ReadAllowance: Hashable {
+        let network: ObjectIdentifier
+        let peerId: PeerId
+    }
+    private static let readAllowances = Atomic<Set<ReadAllowance>>(value: Set())
 
     /// The network of the account whose activity it was (nil: not known, every account answers).
     private static let onlinePipe = ValuePipe<ObjectIdentifier?>()
@@ -108,14 +114,15 @@ public enum AstraGhostMode {
 
     /// Whether a read receipt for `peerId` may be sent now. Consumes a one-time allowance granted by sending a
     /// message ("mark read after send").
-    static func mayPushReadState(peerId: PeerId) -> Bool {
+    static func mayPushReadState(network: Network, peerId: PeerId) -> Bool {
         if !AstraGramSettings.current.hideReadReceipts {
             return true
         }
         var allowed = false
+        let key = ReadAllowance(network: ObjectIdentifier(network), peerId: peerId)
         let _ = AstraGhostMode.readAllowances.modify { current in
             var current = current
-            if current.remove(peerId) != nil {
+            if current.remove(key) != nil {
                 allowed = true
             }
             return current
@@ -193,9 +200,10 @@ public enum AstraGhostMode {
         guard let stateManager = account.stateManager else {
             return
         }
+        let key = ReadAllowance(network: ObjectIdentifier(account.network), peerId: peerId)
         let _ = AstraGhostMode.readAllowances.modify { current in
             var current = current
-            current.insert(peerId)
+            current.insert(key)
             return current
         }
         let _ = (synchronizePeerReadState(network: account.network, postbox: account.postbox, stateManager: stateManager, peerId: peerId, push: true, validate: false)
@@ -206,7 +214,7 @@ public enum AstraGhostMode {
             // let a later read through.
             let _ = AstraGhostMode.readAllowances.modify { current in
                 var current = current
-                current.remove(peerId)
+                current.remove(key)
                 return current
             }
         })

@@ -272,7 +272,7 @@ private func validatePeerReadState(network: Network, postbox: Postbox, stateMana
 private func pushPeerReadState(network: Network, postbox: Postbox, stateManager: AccountStateManager, peerId: PeerId, readState: PeerReadState) -> Signal<PeerReadState, PeerReadStateValidationError> {
     // AstraGram ghost mode: the read state stays local; the operation is confirmed as if it had been pushed.
     // "Mark as unread" is not a read receipt and is still synchronized.
-    if !AstraGhostMode.mayPushReadState(peerId: peerId) {
+    if !AstraGhostMode.mayPushReadState(network: network, peerId: peerId) {
         if peerId.namespace != Namespaces.Peer.SecretChat, case let .idBased(_, _, _, _, markedUnread) = readState, markedUnread {
             return inputPeer(postbox: postbox, peerId: peerId)
             |> mapToSignal { inputPeer -> Signal<PeerReadState, PeerReadStateValidationError> in

@@ -191,7 +191,9 @@ public enum AstraStreakBot {
             }
             let fallback = {
                 AstraStreakBot.setToken(token, accountPeerId: account.peerId)
-                let _ = enqueueMessages(account: account, peerId: peer.id, messages: [.message(text: "/start l\(token)", attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])]).startStandalone()
+                // messages.startBot, not a sent message: the token must not pass through the plugins' outgoing hook
+                // (a plugin could read it or put its own token in its place). The bot still gets "/start l<token>".
+                let _ = engine.messages.requestStartBot(botPeerId: peer.id, payload: "l\(token)").startStandalone()
                 finish(true)
             }
             var base = AstraStreakBot.serverURL

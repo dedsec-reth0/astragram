@@ -7919,6 +7919,24 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     override public func loadDisplayNode() {
         self.loadDisplayNodeImpl()
+        // AstraGram security: a chat locked with Face ID is covered until it is unlocked, whichever way it was opened (a
+        // forum topic, a long-press preview from search, contacts or a profile).
+        if let lockedPeerId = self.chatLocation.peerId {
+            var isPreview = false
+            if case .standard(.previewing) = self.presentationInterfaceState.mode {
+                isPreview = true
+            }
+            AstraChatLock.protect(view: self.view, peerId: lockedPeerId.toInt64(), isPreview: isPreview, close: { [weak self] in
+                guard let self else {
+                    return
+                }
+                if let navigationController = self.navigationController as? NavigationController, navigationController.viewControllers.last === self {
+                    let _ = navigationController.popViewController(animated: true)
+                } else {
+                    self.dismiss()
+                }
+            })
+        }
         self.galleryPresentationContext.view = self.view
         self.galleryPresentationContext.controllersUpdated = { [weak self] _ in
             guard let self else {

@@ -23,17 +23,49 @@ public enum AstraBookmarks {
     private static let defaultsKey = "ayugram.bookmarks.v1"
     private static let promise = ValuePromise<[AstraBookmark]>(AstraBookmarks.load(), ignoreRepeated: true)
 
+    /// The bookmarks (message texts and chat titles) are kept in a file of their own, not in the app's preferences: the
+    /// file is left out of iPhone backups (iCloud, a computer) and is readable only after the first unlock.
+    private static var fileURL: URL? {
+        guard let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.appendingPathComponent("astragram", isDirectory: true) else {
+            return nil
+        }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+        return directory.appendingPathComponent("bookmarks.json")
+    }
+
     private static func load() -> [AstraBookmark] {
+        if let url = AstraBookmarks.fileURL, let data = try? Data(contentsOf: url) {
+            return (try? JSONDecoder().decode([AstraBookmark].self, from: data)) ?? []
+        }
+        // Bookmarks of earlier versions, in the preferences: moved to the file once.
         guard let data = UserDefaults.standard.data(forKey: AstraBookmarks.defaultsKey) else {
             return []
         }
-        return (try? JSONDecoder().decode([AstraBookmark].self, from: data)) ?? []
+        let bookmarks = (try? JSONDecoder().decode([AstraBookmark].self, from: data)) ?? []
+        if AstraBookmarks.write(bookmarks) {
+            UserDefaults.standard.removeObject(forKey: AstraBookmarks.defaultsKey)
+        }
+        return bookmarks
+    }
+
+    @discardableResult
+    private static func write(_ bookmarks: [AstraBookmark]) -> Bool {
+        guard var url = AstraBookmarks.fileURL, let data = try? JSONEncoder().encode(bookmarks) else {
+            return false
+        }
+        do {
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try? url.setResourceValues(values)
+            return true
+        } catch {
+            return false
+        }
     }
 
     private static func save(_ bookmarks: [AstraBookmark]) {
-        if let data = try? JSONEncoder().encode(bookmarks) {
-            UserDefaults.standard.set(data, forKey: AstraBookmarks.defaultsKey)
-        }
+        AstraBookmarks.write(bookmarks)
         AstraBookmarks.promise.set(bookmarks)
     }
 
