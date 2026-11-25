@@ -5,55 +5,123 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Установить AstraGram</title>
 <meta name="description" content="Добавить источник AstraGram в AltStore или SideStore, или скачать IPA.">
-<meta name="theme-color" content="#0b1230">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
 <style>
-:root{--bg:#0b1230;--card:rgba(255,255,255,.07);--line:rgba(255,255,255,.12);--text:#fff;--muted:rgba(255,255,255,.68);--accent:#3e9bf0}
-*{box-sizing:border-box}
-html,body{margin:0;min-height:100%}
+:root{
+ --bg:#000;
+ --text:#fff;
+ --muted:rgba(255,255,255,.62);
+ --faint:rgba(255,255,255,.38);
+ --glass:rgba(255,255,255,.075);
+ --glass-hi:rgba(255,255,255,.14);
+ --edge:rgba(255,255,255,.16);
+ --edge-top:rgba(255,255,255,.34);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--bg)}
 body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;color:var(--text);
- background:radial-gradient(900px 600px at 10% 0%,#0e4a8a 0%,transparent 60%),radial-gradient(800px 600px at 100% 60%,#4b2a9a 0%,transparent 60%),var(--bg);
- background-attachment:fixed;-webkit-font-smoothing:antialiased;padding:max(28px,env(safe-area-inset-top)) 16px 40px}
-main{max-width:460px;margin:0 auto;text-align:center}
-.logo{width:112px;height:112px;border-radius:26px;box-shadow:0 18px 50px rgba(0,0,20,.5);margin-top:12px}
-h1{font-size:30px;letter-spacing:-.02em;margin:18px 0 6px}
-.lead{color:var(--muted);font-size:16px;line-height:1.45;margin:0 0 26px}
-.btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:56px;border-radius:16px;
- font-size:17px;font-weight:650;text-decoration:none;color:#fff;margin:0 0 12px;border:0;cursor:pointer}
-.primary{background:var(--accent)}
-.secondary{background:var(--card);box-shadow:inset 0 0 0 1px var(--line)}
-.card{background:var(--card);box-shadow:inset 0 0 0 1px var(--line);border-radius:18px;padding:16px;text-align:left;margin-top:22px}
-.card h2{font-size:15px;margin:0 0 8px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+ -webkit-font-smoothing:antialiased;padding:calc(env(safe-area-inset-top) + 28px) 16px calc(env(safe-area-inset-bottom) + 36px);
+ overflow-x:hidden;position:relative}
+
+/* liquid backdrop: soft grey shapes drifting slowly behind the glass */
+.liquid{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.liquid i{position:absolute;border-radius:50%;filter:blur(60px);opacity:.55;will-change:transform}
+.liquid i:nth-child(1){width:70vmax;height:70vmax;left:-25vmax;top:-30vmax;background:radial-gradient(closest-side,#5a5a5f,transparent 70%);animation:d1 26s ease-in-out infinite alternate}
+.liquid i:nth-child(2){width:60vmax;height:60vmax;right:-28vmax;top:20vh;background:radial-gradient(closest-side,#3c3c42,transparent 70%);animation:d2 32s ease-in-out infinite alternate}
+.liquid i:nth-child(3){width:55vmax;height:55vmax;left:-10vmax;bottom:-30vmax;background:radial-gradient(closest-side,#4a4a50,transparent 70%);animation:d3 29s ease-in-out infinite alternate}
+@keyframes d1{to{transform:translate(12vmax,8vmax) scale(1.08)}}
+@keyframes d2{to{transform:translate(-10vmax,-6vmax) scale(.94)}}
+@keyframes d3{to{transform:translate(8vmax,-10vmax) scale(1.06)}}
+.grain{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.05;
+ background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+
+main{position:relative;z-index:1;max-width:440px;margin:0 auto;text-align:center}
+
+/* glass material */
+.glass{position:relative;background:var(--glass);border-radius:28px;
+ -webkit-backdrop-filter:blur(28px) saturate(160%);backdrop-filter:blur(28px) saturate(160%);
+ box-shadow:inset 0 1px 0 var(--edge-top),inset 0 0 0 1px var(--edge),0 20px 50px rgba(0,0,0,.45)}
+.glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+ background:linear-gradient(160deg,rgba(255,255,255,.14) 0%,rgba(255,255,255,.02) 38%,transparent 60%)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.glass{background:rgba(40,40,44,.92)}}
+
+.hero{padding:30px 22px 26px}
+.icon-wrap{width:108px;height:108px;margin:0 auto;border-radius:26px;position:relative;
+ box-shadow:0 18px 44px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.18)}
+.icon-wrap img{width:100%;height:100%;border-radius:26px;display:block;filter:grayscale(1) contrast(1.08) brightness(1.05)}
+.icon-wrap::after{content:"";position:absolute;inset:0;border-radius:26px;background:linear-gradient(165deg,rgba(255,255,255,.28),transparent 45%);pointer-events:none}
+h1{font-size:30px;font-weight:700;letter-spacing:-.025em;margin:20px 0 8px}
+.lead{color:var(--muted);font-size:16px;line-height:1.45;margin:0}
+
+.actions{display:grid;gap:10px;margin:14px 0 0}
+.btn{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;min-height:58px;border-radius:20px;
+ font-size:17px;font-weight:650;letter-spacing:-.01em;text-decoration:none;color:var(--text);border:0;cursor:pointer;
+ transition:transform .18s ease,background-color .18s ease}
+.btn:active{transform:scale(.97)}
+.btn svg{width:20px;height:20px;flex:none}
+.btn.primary{background:#fff;color:#000;box-shadow:0 10px 30px rgba(255,255,255,.12),inset 0 -1px 0 rgba(0,0,0,.08)}
+.btn.primary:active{background:#e8e8ea}
+.btn.glass{border-radius:20px}
+.btn.glass:active{background:var(--glass-hi)}
+
+.card{margin-top:14px;padding:18px 18px 16px;text-align:left}
+.card h2{font-size:13px;margin:0 0 12px;color:var(--faint);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
 .src{display:flex;gap:8px;align-items:center}
-.src code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;background:rgba(0,0,0,.25);padding:10px 12px;border-radius:10px}
-.copy{flex:none;background:var(--accent);color:#fff;border:0;border-radius:10px;padding:10px 14px;font-weight:650;font-size:14px}
-ol{margin:6px 0 0;padding-left:20px;color:var(--muted);line-height:1.55;font-size:15px}
-.small{color:var(--muted);font-size:13px;line-height:1.45;margin-top:22px}
-a.link{color:#8fd3ff}
+.src code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:13px ui-monospace,SFMono-Regular,Menlo,monospace;
+ color:rgba(255,255,255,.85);background:rgba(0,0,0,.35);padding:12px 12px;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.copy{flex:none;background:#fff;color:#000;border:0;border-radius:12px;padding:11px 14px;font-weight:650;font-size:14px;cursor:pointer;min-width:112px;transition:transform .15s ease}
+.copy:active{transform:scale(.96)}
+ol{margin:14px 0 0;padding:0;list-style:none;counter-reset:s}
+ol li{counter-increment:s;display:flex;gap:12px;align-items:flex-start;color:var(--muted);font-size:15px;line-height:1.45;margin-top:10px}
+ol li::before{content:counter(s);flex:none;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+ font-size:13px;font-weight:700;color:#000;background:rgba(255,255,255,.88);margin-top:1px}
+ol b{color:#fff;font-weight:600}
+
+.small{color:var(--faint);font-size:13px;line-height:1.5;margin:22px 8px 0}
+.small a{color:rgba(255,255,255,.8);text-decoration:underline;text-decoration-color:rgba(255,255,255,.3);text-underline-offset:2px}
+
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translate(-50%,20px);opacity:0;z-index:5;
+ padding:12px 18px;border-radius:16px;font-size:15px;font-weight:600;transition:opacity .25s ease,transform .25s ease;white-space:nowrap}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (prefers-reduced-motion:reduce){.liquid i{animation:none}.btn,.copy,.toast{transition:none}}
 </style>
 </head>
 <body>
+<div class="liquid" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="grain" aria-hidden="true"></div>
 <main>
- <img class="logo" src="../icon.png" alt="AstraGram">
- <h1>Установить AstraGram</h1>
- <p class="lead">Нажмите кнопку — откроется AltStore и предложит добавить источник AstraGram. Обновления потом будут приходить туда же.</p>
+ <section class="glass hero">
+  <div class="icon-wrap"><img src="../icon.png" alt="AstraGram"></div>
+  <h1>Установить AstraGram</h1>
+  <p class="lead">Нажмите кнопку — откроется AltStore и предложит добавить источник AstraGram. Обновления потом будут приходить туда же.</p>
+ </section>
 
- <a class="btn primary" id="alt" href="#">📥 Открыть в AltStore</a>
- <a class="btn secondary" id="side" href="#">Открыть в SideStore</a>
- <a class="btn secondary" id="ipa" href="https://github.com/dedsec-reth0/astragram/releases/latest">📦 Скачать IPA</a>
+ <div class="actions">
+  <a class="btn primary" id="alt" href="#">
+   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+   Открыть в AltStore</a>
+  <a class="btn glass" id="side" href="#">Открыть в SideStore</a>
+  <a class="btn glass" id="ipa" href="https://github.com/dedsec-reth0/astragram/releases/latest">
+   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>
+   Скачать IPA</a>
+ </div>
 
- <div class="card">
+ <section class="glass card">
   <h2>Если кнопка не сработала</h2>
   <div class="src"><code id="srcurl"></code><button class="copy" id="copy">Копировать</button></div>
   <ol>
-   <li>Откройте AltStore → <b>Browse</b> → <b>Sources</b> → <b>+</b>.</li>
-   <li>Вставьте скопированный адрес.</li>
-   <li>Найдите AstraGram и нажмите <b>Free</b>.</li>
+   <li><span>Откройте AltStore → <b>Browse</b> → <b>Sources</b> → <b>+</b>.</span></li>
+   <li><span>Вставьте скопированный адрес.</span></li>
+   <li><span>Найдите AstraGram и нажмите <b>Free</b>.</span></li>
   </ol>
- </div>
+ </section>
 
- <p class="small">Нужен iPhone с iOS 15 или новее и установленный <a class="link" href="https://altstore.io">AltStore</a>.
- AstraGram — неофициальный клиент Telegram с открытым кодом: <a class="link" href="https://github.com/dedsec-reth0/astragram">github.com/dedsec-reth0/astragram</a>.</p>
+ <p class="small">Нужен iPhone с iOS 15 или новее и установленный <a href="https://altstore.io">AltStore</a>.
+ AstraGram — неофициальный клиент Telegram с открытым кодом: <a href="https://github.com/dedsec-reth0/astragram">github.com/dedsec-reth0/astragram</a>.</p>
 </main>
+<div class="toast glass" id="toast">Адрес скопирован</div>
 <script>
 (function(){
  var SRC='https://github.com/dedsec-reth0/astragram/releases/download/sidestore-source/source.json';
@@ -61,10 +129,11 @@ a.link{color:#8fd3ff}
  document.getElementById('srcurl').textContent=SRC;
  document.getElementById('alt').href='altstore://source?url='+enc;
  document.getElementById('side').href='sidestore://source?url='+enc;
+ var toast=document.getElementById('toast'),tt;
  document.getElementById('copy').onclick=function(){
-  var b=this;function ok(){b.textContent='Готово';setTimeout(function(){b.textContent='Копировать'},1500)}
+  var b=this;function ok(){b.textContent='Готово';toast.classList.add('show');clearTimeout(tt);tt=setTimeout(function(){b.textContent='Копировать';toast.classList.remove('show')},1600)}
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(SRC).then(ok,function(){})}
-  else{var t=document.createElement('textarea');t.value=SRC;document.body.appendChild(t);t.select();try{document.execCommand('copy');ok()}catch(e){}document.body.removeChild(t)}
+  else{var t=document.createElement('textarea');t.value=SRC;t.setAttribute('readonly','');t.style.position='absolute';t.style.left='-9999px';document.body.appendChild(t);t.select();try{document.execCommand('copy');ok()}catch(e){}document.body.removeChild(t)}
  };
  // Direct link to the latest IPA (free Apple ID build), so the button downloads the file instead of opening GitHub.
  try{fetch('https://api.github.com/repos/dedsec-reth0/astragram/releases/latest').then(function(r){return r.json()}).then(function(j){
