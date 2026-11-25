@@ -397,7 +397,7 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   sent.length = 0;
   await update({ message_id: 20, from: friend, chat: { id: 600, type: 'private' }, text: '/streaks' });
   let list = sent.find((m) => m.method === 'sendMessage');
-  check('a stale row offers no restore', list.reply_markup, undefined);
+  check('a stale row offers no restore', list.reply_markup.inline_keyboard.flat().filter((b) => b.callback_data.startsWith('r:')).length, 0);
   check('a streak is listed once with two devices', (list.text.match(/🔥 /g) || []).length, 1);
   sent.length = 0;
   await callback(friend, 'r:200');
@@ -406,7 +406,7 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   sent.length = 0;
   await update({ message_id: 21, from: friend, chat: { id: 600, type: 'private' }, text: '/streaks' });
   list = sent.find((m) => m.method === 'sendMessage');
-  check('a current row offers the restore', list.reply_markup.inline_keyboard.map((b) => b[0].callback_data), ['r:200']);
+  check('a current row offers the restore', list.reply_markup.inline_keyboard.flat().map((b) => b.callback_data).filter((d) => d.startsWith('r:')), ['r:200']);
   await callback(friend, 'r:200');
   check('the restore is asked for', q('SELECT day FROM restore_requests WHERE owner_id = 200').map((x) => x.day), [today - 1]);
   r = await sync('C', { v: 2, pairs: [{ ...restorePair, restorableDay: today - 1, day: today }] });
@@ -637,6 +637,34 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   await update({ message_id: 91, from: { id: 5, first_name: 'X' }, chat: { id: 5, type: 'private' }, text: '/admin' });
   check('/admin: no button for others', sent.some((m) => m.reply_markup && JSON.stringify(m.reply_markup).includes('/admin')), false);
   check('profile remembered from a message', q('SELECT first_name FROM profiles WHERE tg_id = 5')[0].first_name, 'X');
+
+  // 13. A free message goes to support only after the user chose "write to support"; otherwise the menu answers.
+  const user = { id: 810, first_name: 'U', language_code: 'ru' };
+  const say = (text, id) => update({ message_id: id, from: user, chat: { id: 810, type: 'private' }, text });
+  const clicks = (data) => worker.fetch({ url: 'https://bot.example/tg', method: 'POST',
+    headers: { get: (k) => (k === 'x-telegram-bot-api-secret-token' ? WEBHOOK : null) },
+    json: async () => ({ update_id: 2, callback_query: { id: 'cb', from: user, data, message: { message_id: 1, chat: { id: 810 } } } }) }, env);
+  sent.length = 0;
+  await say('привет', 100);
+  check('free message: not forwarded', sent.filter((m) => m.method === 'forwardMessage').length, 0);
+  check('free message: menu shown', sent.some((m) => m.chat_id === 810 && JSON.stringify(m.reply_markup || {}).includes('u:support')), true);
+  sent.length = 0;
+  await clicks('u:support');
+  await say('не работает перевод', 101);
+  check('support mode: forwarded once', sent.filter((m) => m.method === 'forwardMessage').map((m) => m.message_id), [101]);
+  check('support mode: confirmed', sent.some((m) => m.chat_id === 810 && /Отправлено/.test(m.text || '')), true);
+  sent.length = 0;
+  await say('и ещё', 102);
+  check('support mode ends after one message', sent.filter((m) => m.method === 'forwardMessage').length, 0);
+  sent.length = 0;
+  await say('/support', 103);
+  await clicks('u:cancel');
+  await say('передумал', 104);
+  check('cancel: nothing forwarded', sent.filter((m) => m.method === 'forwardMessage').length, 0);
+  q("INSERT OR REPLACE INTO kv (key, value, updated_at) VALUES ('sup:810', '1', 1)");
+  sent.length = 0;
+  await say('поздно', 105);
+  check('old support mode expired', sent.filter((m) => m.method === 'forwardMessage').length, 0);
 
   print(failures ? `${failures} FAILED` : 'all passed');
 })().catch((e) => print('Exception ' + e + '\n' + e.stack));

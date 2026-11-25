@@ -1144,13 +1144,12 @@ async function handleMessage(env, message) {
     if (await handleAdminMessage(env, message)) return;
   }
 
-  if (text === '/paysupport') {
-    await tg(env, 'sendMessage', {
-      chat_id: from.id,
-      text: ru
-        ? 'Вопрос по оплате? Напишите его сюда одним сообщением (сумму и когда платили) — оно попадёт в поддержку AstraGram, и вам ответят здесь.'
-        : 'A question about a payment? Write it here in one message (the amount and when you paid): it reaches AstraGram support and they reply here.',
-    });
+  if (text === '/support' || text === '/paysupport') {
+    await openSupport(env, from.id, ru, text === '/paysupport');
+    return;
+  }
+  if (text === '/menu') {
+    await tg(env, 'sendMessage', { chat_id: from.id, ...userMenu(ru) });
     return;
   }
 
@@ -1164,16 +1163,27 @@ async function handleMessage(env, message) {
     await tg(env, 'sendMessage', {
       chat_id: from.id,
       text: ru
-        ? 'Огонёк растёт, когда вы с собеседником каждый день пишете друг другу хотя бы по 3 сообщения. Пропущенный день можно восстановить на следующий день — до 5 раз в неделю. Если огонёк погаснет, всё начнётся заново.\n\n/streaks — мои огоньки\n/stop — выключить напоминания\n\nНужна помощь? Просто напишите сюда — сообщение попадёт в поддержку AstraGram, и вам ответят здесь.'
-        : 'A streak grows when you and the other person write at least 3 messages to each other every day. A missed day can be restored the next day — up to 5 times a week. If the streak goes out, it starts over.\n\n/streaks — my streaks\n/stop — turn reminders off\n\nNeed help? Just write here — your message reaches AstraGram support and they reply here.',
+        ? 'Огонёк растёт, когда вы с собеседником каждый день пишете друг другу хотя бы по 3 сообщения. Пропущенный день можно восстановить на следующий день — до 5 раз в неделю. Если огонёк погаснет, всё начнётся заново.\n\n/streaks — мои огоньки\n/support — написать в поддержку\n/stop — выключить напоминания'
+        : 'A streak grows when you and the other person write at least 3 messages to each other every day. A missed day can be restored the next day — up to 5 times a week. If the streak goes out, it starts over.\n\n/streaks — my streaks\n/support — write to support\n/stop — turn reminders off',
+      reply_markup: userMenu(ru).reply_markup,
     });
     return;
   }
 
-  // /start, /start f<id> and /streaks open the streak list; any other free-form message goes to support.
+  // /start, /start f<id> and /streaks open the streak list. Any other message goes to support only after the user
+  // chose "write to support" (/support or the menu button); otherwise the bot answers with its menu.
   const isStreakEntry = text === '/streaks' || text === '/start' || /^\/start f\d{1,20}$/.test(text);
   if (!isStreakEntry && !isAdmin(from.id)) {
-    await handleSupport(env, message);
+    if (await takeSupportMode(env, from.id, t)) {
+      await handleSupport(env, message);
+      await tg(env, 'sendMessage', {
+        chat_id: from.id,
+        text: ru ? '✅ Отправлено в поддержку AstraGram. Ответ придёт сюда.' : '✅ Sent to AstraGram support. The reply will come here.',
+        reply_markup: { inline_keyboard: [[{ text: ru ? '💬 Написать ещё' : '💬 Write more', callback_data: 'u:support' }]] },
+      });
+    } else {
+      await tg(env, 'sendMessage', { chat_id: from.id, ...userMenu(ru, true) });
+    }
     return;
   }
 
@@ -1198,7 +1208,67 @@ async function handleMessage(env, message) {
     }
   }
   const reply = await streaksMessage(env, from.id, ru);
-  await tg(env, 'sendMessage', { chat_id: from.id, ...reply });
+  const rows = reply.reply_markup ? reply.reply_markup.inline_keyboard : [];
+  rows.push([{ text: ru ? '💬 Поддержка' : '💬 Support', callback_data: 'u:support' }, { text: ru ? '❓ Как это работает' : '❓ How it works', callback_data: 'u:help' }]);
+  await tg(env, 'sendMessage', { chat_id: from.id, ...reply, reply_markup: { inline_keyboard: rows } });
+}
+
+// The user's menu: what the bot can do, as buttons. `unknown` when it answers a message it did not understand.
+function userMenu(ru, unknown = false) {
+  return {
+    text: unknown
+      ? (ru ? 'Я бот огоньков AstraGram 🔥 Выберите, что нужно:' : 'I am the AstraGram streak bot 🔥 Choose what you need:')
+      : (ru ? '🔥 <b>AstraGram · огоньки</b>\n\nВыберите, что нужно:' : '🔥 <b>AstraGram · streaks</b>\n\nChoose what you need:'),
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: [
+      [{ text: ru ? '🔥 Мои огоньки' : '🔥 My streaks', callback_data: 'u:streaks' }],
+      [{ text: ru ? '💬 Написать в поддержку' : '💬 Write to support', callback_data: 'u:support' }],
+      [{ text: ru ? '❓ Как это работает' : '❓ How it works', callback_data: 'u:help' }],
+    ] },
+  };
+}
+
+// "Write to support": the user's next message (within SUPPORT_WINDOW) goes to support.
+const SUPPORT_WINDOW = 15 * 60;
+// Under support's answers, so the user can write back.
+const SUPPORT_REPLY_BUTTON = { inline_keyboard: [[{ text: '💬 Ответить', callback_data: 'u:support' }]] };
+
+async function openSupport(env, userId, ru, payment = false) {
+  await kvSet(env, `sup:${userId}`, now());
+  await tg(env, 'sendMessage', {
+    chat_id: userId,
+    text: payment
+      ? (ru ? '💳 Вопрос по оплате? Напишите его одним сообщением: сумму и когда платили. Ответ придёт сюда.' : '💳 A question about a payment? Write it in one message: the amount and when you paid. The reply will come here.')
+      : (ru ? '💬 Напишите сообщение для поддержки AstraGram — текст, фото или видео. Ответ придёт сюда.' : '💬 Write your message to AstraGram support: text, photo or video. The reply will come here.'),
+    reply_markup: { inline_keyboard: [[{ text: ru ? '✖️ Отмена' : '✖️ Cancel', callback_data: 'u:cancel' }]] },
+  });
+}
+
+async function takeSupportMode(env, userId, t) {
+  const since = Number(await kvGet(env, `sup:${userId}`)) || 0;
+  if (!since) return false;
+  await env.DB.prepare('DELETE FROM kv WHERE key = ?').bind(`sup:${userId}`).run();
+  return t - since <= SUPPORT_WINDOW;
+}
+
+async function handleUserCallback(env, callback, ru) {
+  const from = callback.from;
+  await tg(env, 'answerCallbackQuery', { callback_query_id: callback.id });
+  switch (callback.data) {
+    case 'u:support':
+      await openSupport(env, from.id, ru);
+      return;
+    case 'u:cancel':
+      await env.DB.prepare('DELETE FROM kv WHERE key = ?').bind(`sup:${from.id}`).run();
+      if (callback.message) await tg(env, 'editMessageText', { chat_id: from.id, message_id: callback.message.message_id, text: ru ? 'Отменено.' : 'Cancelled.' });
+      return;
+    case 'u:help':
+      await handleMessage(env, { from, chat: { id: from.id, type: 'private' }, text: '/help' });
+      return;
+    case 'u:streaks':
+      await handleMessage(env, { from, chat: { id: from.id, type: 'private' }, text: '/streaks' });
+      return;
+  }
 }
 
 async function handleCallback(env, callback) {
@@ -1206,6 +1276,10 @@ async function handleCallback(env, callback) {
   const ru = isRussian(from);
   if (isAdmin(from.id) && (callback.data || '').startsWith('bc:')) {
     if (await handleAdminCallback(env, callback)) return;
+  }
+  if ((callback.data || '').startsWith('u:')) {
+    await handleUserCallback(env, callback, ru);
+    return;
   }
   // The confirmation of "/start l<token>" (see handleMessage): the token is tied to whoever pressed it.
   const linkMatch = (callback.data || '').match(/^l:([0-9a-f]{48})$/);
@@ -1450,7 +1524,7 @@ async function handleInboxMessage(env, message) {
   if (!box || box.chat !== chat || !message.reply_to_message) return;
   const row = await env.DB.prepare('SELECT user_id FROM support WHERE admin_msg_id = ?').bind(INBOX_KEY + message.reply_to_message.message_id).first();
   if (!row) return;
-  const res = await tg(env, 'copyMessage', { chat_id: row.user_id, from_chat_id: chat, message_id: message.message_id });
+  const res = await tg(env, 'copyMessage', { chat_id: row.user_id, from_chat_id: chat, message_id: message.message_id, reply_markup: SUPPORT_REPLY_BUTTON });
   await tg(env, 'setMessageReaction', { chat_id: chat, message_id: message.message_id, reaction: [{ type: 'emoji', emoji: res.ok ? '👍' : '👎' }] });
   if (!res.ok) {
     await tg(env, 'sendMessage', { chat_id: chat, message_thread_id: message.message_thread_id, reply_parameters: { message_id: message.message_id }, text: '⚠️ Не доставлено — человек не запускал бота или остановил его.' });
@@ -1464,7 +1538,7 @@ async function handleAdminMessage(env, message) {
   if (message.reply_to_message) {
     const row = await env.DB.prepare('SELECT user_id FROM support WHERE admin_msg_id = ?').bind(message.reply_to_message.message_id).first();
     if (row) {
-      const res = await tg(env, 'copyMessage', { chat_id: row.user_id, from_chat_id: ADMIN_ID, message_id: message.message_id });
+      const res = await tg(env, 'copyMessage', { chat_id: row.user_id, from_chat_id: ADMIN_ID, message_id: message.message_id, reply_markup: SUPPORT_REPLY_BUTTON });
       await tg(env, 'setMessageReaction', { chat_id: ADMIN_ID, message_id: message.message_id, reaction: res.ok ? [{ type: 'emoji', emoji: '👍' }] : [] });
       if (!res.ok) {
         await tg(env, 'sendMessage', { chat_id: ADMIN_ID, text: '⚠️ Не доставлено — пользователь мог остановить бота.' });
@@ -1649,6 +1723,8 @@ async function handleSetup(url, env) {
   });
   await tg(env, 'setMyCommands', { commands: [
     { command: 'streaks', description: 'Мои огоньки' },
+    { command: 'menu', description: 'Меню' },
+    { command: 'support', description: 'Написать в поддержку' },
     { command: 'help', description: 'Как работает огонёк' },
     { command: 'stop', description: 'Выключить напоминания' },
     { command: 'paysupport', description: 'Помощь с оплатой' },
