@@ -5220,7 +5220,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         }
                         let panel = self.inputPanelNode as? ChatTextInputPanelNode
                         let limit = 4096
-                        if let (translated, translatedEntities) = result, !translated.isEmpty, (translated as NSString).length <= limit {
+                        if let (translated, translatedEntities) = result, !translated.isEmpty, (translated as NSString).length <= limit, !AstraOutgoingTranslation.isRefusal(original: original, translated: translated) {
                             controller.astraPretranslatedTexts.insert(translated)
                             let apply: () -> Void = {
                                 controller.updateChatPresentationInterfaceState(animated: false, interactive: true, { state in

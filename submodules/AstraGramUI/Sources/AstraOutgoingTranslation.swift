@@ -45,6 +45,19 @@ public enum AstraOutgoingTranslation {
         UserDefaults.standard.set(current, forKey: AstraOutgoingTranslation.storageKey)
     }
 
+    /// Whether the translator answered with a refusal ("I cannot translate this text…") instead of a translation, as it
+    /// does for text it cannot make sense of. Such an answer must never be sent in place of the user's message. A text
+    /// that itself says so is translated to the same words, so the original is checked too.
+    public static func isRefusal(original: String, translated: String) -> Bool {
+        let answer = translated.lowercased()
+        let markers = ["cannot translate", "can't translate", "can’t translate", "unable to translate", "not able to translate", "gibberish", "random characters", "random string", "language i do not recognize", "language i don't recognize", "language i don’t recognize"]
+        guard markers.contains(where: { answer.contains($0) }) else {
+            return false
+        }
+        let source = original.lowercased()
+        return !["translat", "gibberish", "random", "перев", "бессмысл"].contains(where: { source.contains($0) })
+    }
+
     public static func languageName(_ code: String, russian: Bool) -> String {
         guard let language = AstraOutgoingTranslation.languages.first(where: { $0.code == code }) else {
             return code

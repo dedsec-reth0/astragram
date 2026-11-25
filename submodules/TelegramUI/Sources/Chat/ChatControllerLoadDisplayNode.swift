@@ -1066,7 +1066,7 @@ extension ChatControllerImpl {
                     }
                     return strongSelf.context.engine.messages.translate(text: text, toLang: toLang, entities: entities)
                     |> map { result -> EnqueueMessage in
-                        guard let (translated, translatedEntities) = result, !translated.isEmpty else {
+                        guard let (translated, translatedEntities) = result, !translated.isEmpty, !AstraOutgoingTranslation.isRefusal(original: text, translated: translated) else {
                             return message
                         }
                         // The texts were split to the limit before translating; a translation that grew past it
