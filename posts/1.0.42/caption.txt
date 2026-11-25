@@ -1,0 +1,5 @@
+🚀 AstraGram 1.0.42
+
+🛠 Обновления снова приходят в AltStore и SideStore.
+
+📥 Обновление уже в AltStore / SideStore, настройки сохраняются.
