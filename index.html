@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AstraGram — Telegram для iPhone</title>
+<meta name="description" content="AstraGram — неофициальный клиент Telegram для iPhone с открытым кодом: режим призрака, удалённые сообщения, чаты под Face ID, огоньки, AI и плагины. Бесплатно через AltStore и SideStore.">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="AstraGram — Telegram для iPhone">
+<meta property="og:description" content="Режим призрака, удалённые сообщения, чаты под Face ID, AI и плагины. Открытый код. Бесплатно.">
+<meta property="og:image" content="icon.png">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+:root{
+ --bg:#000;--text:#f5f5f7;--muted:rgba(245,245,247,.62);--faint:rgba(245,245,247,.36);
+ --glass:rgba(255,255,255,.06);--glass-2:rgba(255,255,255,.1);--edge:rgba(255,255,255,.12);--edge-top:rgba(255,255,255,.28);
+ --violet:#8b5cf6;--blue:#38bdf8;
+ --display:"SF Pro Display",-apple-system,BlinkMacSystemFont,"Inter Display","Inter",system-ui,sans-serif;
+ --body:"SF Pro Text",-apple-system,BlinkMacSystemFont,"Inter",system-ui,sans-serif;
+ --mono:ui-monospace,SFMono-Regular,Menlo,"DejaVu Sans Mono",monospace;
+ --ease:cubic-bezier(.16,1,.3,1);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{background:var(--bg);scroll-behavior:auto}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+img{display:block}
+::selection{background:rgba(255,255,255,.9);color:#000}
+
+/* ---------- fixed layers ---------- */
+#gl{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block}
+#glFallback{position:fixed;inset:0;z-index:0;display:none;
+ background:radial-gradient(40vmax 40vmax at 60% 40%,rgba(139,92,246,.25),transparent 70%),radial-gradient(35vmax 35vmax at 30% 70%,rgba(56,189,248,.18),transparent 70%)}
+.grain{position:fixed;inset:-50%;z-index:2;pointer-events:none;opacity:.06;
+ background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+ animation:grain 1.2s steps(6) infinite}
+@keyframes grain{0%{transform:translate(0,0)}20%{transform:translate(-3%,2%)}40%{transform:translate(2%,-3%)}60%{transform:translate(-2%,-1%)}80%{transform:translate(3%,1%)}100%{transform:translate(0,0)}}
+.vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,transparent 45%,rgba(0,0,0,.75) 100%)}
+
+/* ---------- intro ---------- */
+#intro{position:fixed;inset:0;z-index:100;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:22px;
+ transition:opacity .9s var(--ease),visibility .9s}
+#intro.gone{opacity:0;visibility:hidden}
+#intro img{width:84px;height:84px;border-radius:20px;opacity:0;transform:scale(.8);filter:blur(10px);animation:introIcon 1s var(--ease) .1s forwards}
+#intro .bar{width:140px;height:2px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
+#intro .bar i{display:block;height:100%;width:0;background:#fff;animation:introBar 1.1s var(--ease) .2s forwards}
+@keyframes introIcon{to{opacity:1;transform:scale(1);filter:blur(0)}}
+@keyframes introBar{to{width:100%}}
+
+/* ---------- glass ---------- */
+.glass{position:relative;background:var(--glass);-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+ box-shadow:inset 0 1px 0 var(--edge-top),inset 0 0 0 1px var(--edge)}
+.glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.015) 40%,transparent 62%)}
+
+/* ---------- nav ---------- */
+nav{position:fixed;z-index:50;left:50%;top:calc(env(safe-area-inset-top) + 14px);transform:translate(-50%,-140%);transition:transform 1s var(--ease) .2s;
+ display:flex;align-items:center;gap:4px;padding:6px;border-radius:999px;width:max-content;max-width:calc(100vw - 24px)}
+body.ready nav{transform:translate(-50%,0)}
+nav .brand{display:flex;align-items:center;gap:10px;padding:4px 14px 4px 4px;font-weight:700;font-family:var(--display);letter-spacing:-.01em}
+nav .brand img{width:34px;height:34px;border-radius:9px}
+nav .links{display:flex}
+nav .links a{padding:10px 14px;border-radius:999px;font-size:14px;color:var(--muted);transition:color .25s,background-color .25s}
+nav .links a:hover{color:#fff;background:rgba(255,255,255,.07)}
+nav .cta{padding:10px 18px;border-radius:999px;background:#fff;color:#000;font-weight:650;font-size:14px;margin-left:4px}
+@media (max-width:760px){nav .links{display:none}}
+
+/* ---------- typography ---------- */
+.eyebrow{font:600 13px/1 var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.h2{font:700 clamp(40px,6.4vw,96px)/1.0 var(--display);letter-spacing:-.045em;margin:14px 0 0}
+.lead{font-size:clamp(17px,1.5vw,21px);line-height:1.5;color:var(--muted);max-width:560px}
+.grad{background:linear-gradient(100deg,#fff 0%,#d9d2ff 40%,#a5e4ff 75%,#fff 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ---------- buttons ---------- */
+.btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:10px;height:56px;padding:0 26px;border-radius:999px;
+ font:650 16px var(--body);letter-spacing:-.01em;cursor:pointer;border:0;will-change:transform;transition:transform .35s var(--ease),background-color .25s}
+.btn svg{width:18px;height:18px}
+.btn.white{background:#fff;color:#000;box-shadow:0 10px 40px rgba(255,255,255,.14)}
+.btn.white:hover{background:#ececef}
+.btn.glass{color:#fff}
+.btn.glass:hover{background:var(--glass-2)}
+.btn:active{transform:scale(.97)}
+
+main{position:relative;z-index:3}
+section{position:relative}
+
+/* ---------- hero ---------- */
+.hero{height:100vh;height:100svh;min-height:640px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 20px}
+.hero h1{margin:0;font:800 clamp(64px,17vw,250px)/.86 var(--display);letter-spacing:-.065em;mix-blend-mode:difference;color:#fff;white-space:nowrap;user-select:none}
+.hero h1 .ch{display:inline-block;opacity:0;transform:translateY(40%) rotateX(-70deg);filter:blur(16px);transform-origin:50% 100%;
+ transition:opacity 1.1s var(--ease),transform 1.3s var(--ease),filter 1.1s var(--ease)}
+body.ready .hero h1 .ch{opacity:1;transform:none;filter:blur(0)}
+.hero .tag{margin-top:clamp(16px,2.6vw,30px);font:500 clamp(18px,2vw,26px)/1.35 var(--display);letter-spacing:-.02em;color:var(--muted);opacity:0;transform:translateY(16px);transition:all 1.2s var(--ease) .75s}
+.hero .tag b{color:#fff;font-weight:600}
+.hero .row{display:flex;gap:12px;margin-top:34px;flex-wrap:wrap;justify-content:center;opacity:0;transform:translateY(16px);transition:all 1.2s var(--ease) .9s}
+.hero .meta{margin-top:26px;display:flex;gap:18px;flex-wrap:wrap;justify-content:center;font-size:13px;color:var(--faint);opacity:0;transition:opacity 1.2s var(--ease) 1.1s}
+.hero .meta span{display:flex;align-items:center;gap:7px}
+.hero .meta i{width:6px;height:6px;border-radius:50%;background:#fff;opacity:.6}
+body.ready .hero .tag,body.ready .hero .row{opacity:1;transform:none}
+body.ready .hero .meta{opacity:1}
+.scrollcue{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + 26px);transform:translateX(-50%);width:26px;height:42px;border-radius:14px;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.35);opacity:0;transition:opacity 1s 1.4s}
+.scrollcue::after{content:"";position:absolute;left:50%;top:9px;width:4px;height:8px;margin-left:-2px;border-radius:2px;background:#fff;animation:cue 1.8s var(--ease) infinite}
+body.ready .scrollcue{opacity:1}
+@keyframes cue{0%{transform:translateY(0);opacity:1}70%{transform:translateY(14px);opacity:0}100%{opacity:0}}
+
+/* ---------- manifesto ---------- */
+.manifesto{height:260vh}
+.manifesto .stick{position:sticky;top:0;height:100vh;height:100svh;display:flex;align-items:center;justify-content:center;padding:0 clamp(20px,6vw,90px)}
+.manifesto p{margin:0;max-width:1100px;font:700 clamp(32px,5.2vw,78px)/1.08 var(--display);letter-spacing:-.04em;text-wrap:balance}
+.manifesto .w{opacity:.14;transition:opacity .35s linear}
+.manifesto .w.on{opacity:1}
+.manifesto .w.hl.on{background:linear-gradient(100deg,#fff,#c9bfff 50%,#9fe0ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ---------- showcase ---------- */
+.showcase{height:calc(100vh * 7)}
+.showcase .stick{position:sticky;top:0;height:100vh;height:100svh;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:clamp(20px,4vw,80px);padding:0 clamp(20px,6vw,100px);max-width:1400px;margin:0 auto}
+.feat-list{position:relative}
+.feat{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);opacity:0;pointer-events:none}
+.feat .num{font:600 14px var(--mono);color:var(--faint);letter-spacing:.06em}
+.feat h3{font:700 clamp(40px,5vw,76px)/1 var(--display);letter-spacing:-.045em;margin:14px 0 18px}
+.feat p{font-size:clamp(16px,1.35vw,19px);line-height:1.55;color:var(--muted);margin:0;max-width:480px}
+.feat ul{list-style:none;padding:0;margin:22px 0 0;display:grid;gap:10px}
+.feat li{display:flex;gap:12px;align-items:flex-start;font-size:15px;color:rgba(245,245,247,.82);line-height:1.4}
+.feat li::before{content:"";flex:none;width:18px;height:18px;margin-top:1px;border-radius:50%;background:#fff;
+ -webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 1a11 11 0 1 0 0 22 11 11 0 0 0 0-22zm-1.4 15.6-4.3-4.3 1.4-1.4 2.9 2.9 6.3-6.3 1.4 1.4z'/></svg>") center/contain no-repeat;
+ mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 1a11 11 0 1 0 0 22 11 11 0 0 0 0-22zm-1.4 15.6-4.3-4.3 1.4-1.4 2.9 2.9 6.3-6.3 1.4 1.4z'/></svg>") center/contain no-repeat}
+.progress{position:absolute;left:0;top:calc(50% + 260px);display:flex;gap:6px}
+.progress i{width:28px;height:3px;border-radius:2px;background:rgba(255,255,255,.14);overflow:hidden;position:relative}
+.progress i b{position:absolute;inset:0;background:#fff;transform:scaleX(0);transform-origin:0 50%}
+.stage{position:relative;height:100%;display:flex;align-items:center;justify-content:center;perspective:1600px}
+
+/* phone */
+.phone{--w:330px;width:var(--w);height:calc(var(--w) * 2.06);position:relative;transform-style:preserve-3d;will-change:transform}
+.phone .body{position:absolute;inset:0;border-radius:calc(var(--w) * .16);
+ background:linear-gradient(105deg,#9a9aa2 0%,#3a3a40 7%,#1d1d22 22%,#141418 50%,#1d1d22 78%,#3a3a40 93%,#a4a4ac 100%);
+ box-shadow:0 60px 120px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.12),inset 0 0 0 1.5px rgba(255,255,255,.22)}
+.phone .bezel{position:absolute;inset:calc(var(--w) * .012);border-radius:calc(var(--w) * .148);background:#000}
+.phone .screen{position:absolute;inset:calc(var(--w) * .03);border-radius:calc(var(--w) * .13);overflow:hidden;background:#000;transform:translateZ(1px)}
+.phone .island{position:absolute;left:50%;top:calc(var(--w) * .04);width:calc(var(--w) * .3);height:calc(var(--w) * .088);margin-left:calc(var(--w) * -.15);border-radius:99px;background:#000;z-index:20}
+.phone .glare{position:absolute;inset:calc(var(--w) * .03);border-radius:calc(var(--w) * .13);pointer-events:none;z-index:30;
+ background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.09) 42%,rgba(255,255,255,.02) 52%,transparent 60%);background-size:250% 100%;background-position:var(--gx,50%) 0;transform:translateZ(2px)}
+.phone .side{position:absolute;width:3px;border-radius:2px;background:linear-gradient(90deg,#77777f,#2a2a30)}
+.phone .shadow{position:absolute;left:10%;right:10%;bottom:-60px;height:60px;border-radius:50%;background:radial-gradient(closest-side,rgba(139,92,246,.35),transparent);filter:blur(10px);transform:translateZ(-80px) rotateX(90deg)}
+
+/* screens: telegram dark, scaled from a 390px-wide design */
+.scr{position:absolute;inset:0;opacity:0;transition:opacity .6s var(--ease),transform .8s var(--ease);transform:scale(1.04);font-family:var(--body);color:#fff}
+.scr.on{opacity:1;transform:none}
+.scr .ui{position:absolute;left:0;top:0;width:390px;height:844px;transform-origin:0 0;background:#0f1419}
+.sb{height:54px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 30px 6px 34px;font-weight:600;font-size:16px}
+.sb .ic{display:flex;gap:6px;align-items:center}
+.sb .bat{width:25px;height:12px;border-radius:3.5px;background:#fff}
+.sb .bars{display:flex;gap:2px;align-items:flex-end;height:11px}.sb .bars i{width:3px;background:#fff;border-radius:1px}
+.th{height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 14px}
+.pill{height:40px;min-width:40px;padding:0 14px;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.th .ttl{text-align:center;font-weight:650;font-size:16px;line-height:1.1}
+.th .ttl small{display:block;font-weight:400;font-size:12px;color:#8a98a8;margin-top:2px}
+.chat{position:absolute;left:0;right:0;top:112px;bottom:0;padding:10px 12px;display:flex;flex-direction:column;gap:6px;
+ background:radial-gradient(500px 400px at 20% 20%,rgba(139,92,246,.12),transparent 70%),radial-gradient(500px 400px at 90% 80%,rgba(56,189,248,.10),transparent 70%),#0f1419}
+.msg{max-width:76%;padding:8px 12px 7px;border-radius:18px;font-size:16px;line-height:1.3;position:relative}
+.msg .t{font-size:11px;color:rgba(255,255,255,.5);margin-left:8px;float:right;margin-top:6px}
+.in{align-self:flex-start;background:#1f2a36;border-bottom-left-radius:6px}
+.out{align-self:flex-end;background:#2b5278;border-bottom-right-radius:6px}
+.sys{align-self:center;font-size:12px;padding:4px 10px;border-radius:12px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.75)}
+.inp{position:absolute;left:10px;right:10px;bottom:30px;height:46px;border-radius:23px;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);display:flex;align-items:center;padding:0 16px;color:#7d8b99;font-size:15px}
+.crow{height:76px;display:flex;align-items:center;gap:12px;padding:0 14px;position:relative}
+.crow .av{width:56px;height:56px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px}
+.crow .tx{flex:1;min-width:0}
+.crow .nm{font-weight:600;font-size:16px;display:flex;align-items:center;gap:6px}
+.crow .pv{font-size:14px;color:#8a98a8;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.crow .rt{text-align:right;font-size:12px;color:#8a98a8;align-self:flex-start;margin-top:16px}
+.crow::after{content:"";position:absolute;left:82px;right:0;bottom:0;height:1px;background:rgba(255,255,255,.06)}
+.lockbar{display:inline-block;height:10px;border-radius:5px;background:#26313d;vertical-align:middle}
+.ios-sw{width:51px;height:31px;border-radius:16px;background:#39393d;position:relative;flex:none;transition:background-color .4s var(--ease)}
+.ios-sw::after{content:"";position:absolute;left:2px;top:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);transition:transform .4s var(--ease)}
+.ios-sw.on{background:#fff}.ios-sw.on::after{transform:translateX(20px);background:#000}
+.grp{margin:0 16px;border-radius:22px;overflow:hidden;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+.srow{height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;font-size:16px;position:relative}
+.srow+.srow::before{content:"";position:absolute;left:56px;right:0;top:0;height:1px;background:rgba(255,255,255,.07)}
+.srow .ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;background:rgba(255,255,255,.12)}
+.srow .sp{flex:1}
+.ghead{font-size:13px;color:#8a98a8;text-transform:uppercase;letter-spacing:.04em;margin:22px 32px 8px}
+
+/* ---------- bento ---------- */
+.bento-wrap{padding:clamp(100px,14vh,180px) clamp(16px,5vw,80px);max-width:1360px;margin:0 auto}
+.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:54px}
+.card{border-radius:30px;padding:28px;min-height:250px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;
+ transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .5s var(--ease)}
+.card .spot{position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .4s;
+ background:radial-gradient(380px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.12),transparent 60%)}
+.card:hover .spot{opacity:1}
+.card h4{font:700 24px/1.1 var(--display);letter-spacing:-.03em;margin:0 0 8px;position:relative}
+.card p{margin:0;font-size:15px;line-height:1.45;color:var(--muted);position:relative}
+.card .art{position:absolute;left:28px;right:28px;top:26px;height:120px;display:flex;align-items:center}
+.span2{grid-column:span 2}.tall{grid-row:span 2;min-height:520px}
+@media (max-width:980px){.bento{grid-template-columns:repeat(2,1fr)}.tall{grid-row:auto;min-height:300px}}
+@media (max-width:560px){.bento{grid-template-columns:1fr}.span2{grid-column:auto}}
+/* card arts */
+.dedsec{font:800 64px/1 var(--display);letter-spacing:-.04em;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.55)}
+.dedsec span{animation:flick 4s infinite}
+@keyframes flick{0%,92%,100%{color:transparent}93%,95%{color:#fff}}
+.adx{display:flex;gap:10px}.adx i{width:64px;height:84px;border-radius:14px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);position:relative;overflow:hidden}
+.adx i:nth-child(2)::after{content:"Реклама";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.08);animation:adout 3.6s var(--ease) infinite}
+@keyframes adout{0%,30%{transform:none;opacity:1}55%,100%{transform:translateY(-110%) scale(.9);opacity:0}}
+.code{font:12px/1.6 var(--mono);color:rgba(255,255,255,.75);white-space:pre}
+.code b{color:#fff;font-weight:600}.code em{color:#a5e4ff;font-style:normal}.code u{color:#c9bfff;text-decoration:none}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{padding:8px 12px;border-radius:999px;font-size:13px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.wave{display:flex;gap:4px;align-items:center;height:60px}.wave i{width:5px;border-radius:3px;background:#fff;animation:wave 1.2s ease-in-out infinite}
+@keyframes wave{0%,100%{height:12px;opacity:.4}50%{height:52px;opacity:1}}
+.mono-sw{display:flex;gap:14px;align-items:center}
+.mono-sw i{width:52px;height:52px;border-radius:50%}
+
+/* ---------- trust ---------- */
+.trust{padding:clamp(90px,14vh,170px) clamp(16px,5vw,80px);max-width:1360px;margin:0 auto}
+.trust-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:16px;margin-top:54px;align-items:stretch}
+@media (max-width:900px){.trust-grid{grid-template-columns:1fr}}
+.term{border-radius:30px;padding:0;overflow:hidden;min-height:420px}
+.term .bar{height:48px;display:flex;align-items:center;gap:8px;padding:0 18px;border-bottom:1px solid rgba(255,255,255,.08);font:13px var(--mono);color:var(--faint)}
+.term .bar i{width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.22)}
+.term .bar span{margin-left:10px}
+.term pre{margin:0;padding:22px 22px 28px;font:14px/1.75 var(--mono);color:rgba(255,255,255,.78);white-space:pre-wrap;word-break:break-word;min-height:360px}
+.term pre .c{color:#fff}.term pre .g{color:#a5e4ff}.term pre .v{color:#c9bfff}.term pre .ok{color:#fff;font-weight:700}
+.caret{display:inline-block;width:9px;height:18px;background:#fff;vertical-align:-3px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.pillars{display:grid;gap:16px}
+.pillar{border-radius:26px;padding:24px 24px 24px 84px;position:relative}
+.pillar .ix{position:absolute;left:22px;top:24px;width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:#fff;color:#000}
+.pillar .ix svg{width:22px;height:22px}
+.pillar h4{margin:0 0 6px;font:700 22px/1.15 var(--display);letter-spacing:-.025em}
+.pillar p{margin:0;color:var(--muted);font-size:15px;line-height:1.5}
+.pillar a{color:#fff;text-decoration:underline;text-decoration-color:rgba(255,255,255,.3);text-underline-offset:3px}
+
+/* ---------- cta ---------- */
+.cta-sec{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:120px 20px 80px}
+.cta-sec h2{font:800 clamp(52px,11vw,170px)/.9 var(--display);letter-spacing:-.06em;margin:0}
+.steps{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:44px auto 0;max-width:900px}
+.step{border-radius:22px;padding:16px 20px;display:flex;gap:12px;align-items:center;text-align:left;font-size:15px;color:rgba(245,245,247,.85)}
+.step b{width:28px;height:28px;border-radius:50%;background:#fff;color:#000;display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+footer{position:relative;z-index:3;padding:40px clamp(16px,5vw,80px) calc(env(safe-area-inset-bottom) + 40px);border-top:1px solid rgba(255,255,255,.08);
+ display:flex;gap:20px;justify-content:space-between;flex-wrap:wrap;color:var(--faint);font-size:13px;line-height:1.6}
+footer a{color:var(--muted)}footer a:hover{color:#fff}
+footer .fl{display:flex;gap:18px;flex-wrap:wrap}
+
+/* ---------- reveal ---------- */
+.rv{opacity:0;transform:translateY(40px);transition:opacity 1.1s var(--ease),transform 1.2s var(--ease)}
+.rv.shown{opacity:1;transform:none}
+.rv.d1{transition-delay:.08s}.rv.d2{transition-delay:.16s}.rv.d3{transition-delay:.24s}.rv.d4{transition-delay:.32s}
+
+/* ---------- cursor ---------- */
+#cur{position:fixed;left:0;top:0;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;z-index:90;pointer-events:none;
+ box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.7);mix-blend-mode:difference;transition:width .35s var(--ease),height .35s var(--ease),margin .35s var(--ease),background-color .35s;display:none}
+#cur.big{width:80px;height:80px;margin:-40px 0 0 -40px;background:#fff}
+@media (pointer:fine){#cur{display:block}}
+
+/* ---------- mobile showcase ---------- */
+@media (max-width:860px){
+ .showcase .stick{grid-template-columns:1fr;grid-template-rows:auto 1fr;align-content:start;padding-top:calc(env(safe-area-inset-top) + 76px);gap:0}
+ .feat-list{height:250px;order:1}
+ .feat{top:0;transform:none}
+ .feat h3{font-size:34px;margin:8px 0 10px}
+ .feat p{font-size:15px}
+ .feat ul{display:none}
+ .progress{top:auto;bottom:0}
+ .stage{order:2;align-items:flex-start}
+ .phone{--w:min(250px,58vw)}
+}
+@media (max-width:560px){.manifesto p{font-size:clamp(28px,8.2vw,40px)}}
+@media (max-width:860px) and (max-height:700px){.phone{--w:min(210px,52vw)}.feat-list{height:220px}}
+
+@media (prefers-reduced-motion:reduce){
+ .grain{animation:none}.rv{transition:none;opacity:1;transform:none}
+ .hero h1 .ch{transition:none}
+}
+</style>
+</head>
+<body>
+<div id="intro"><img src="icon.png" alt=""><div class="bar"><i></i></div></div>
+<canvas id="gl" aria-hidden="true"></canvas>
+<div id="glFallback" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+<div id="cur" aria-hidden="true"></div>
+
+<nav class="glass" aria-label="Навигация">
+ <a class="brand" href="#top"><img src="icon.png" alt="">AstraGram</a>
+ <div class="links"><a href="#features">Возможности</a><a href="#more">Ещё</a><a href="#trust">Открытый код</a></div>
+ <a class="cta mag" href="install/">Установить</a>
+</nav>
+
+<main id="top">
+ <!-- HERO -->
+ <section class="hero" id="hero">
+  <h1 aria-label="AstraGram"><span class="ch">A</span><span class="ch">s</span><span class="ch">t</span><span class="ch">r</span><span class="ch">a</span><span class="ch">G</span><span class="ch">r</span><span class="ch">a</span><span class="ch">m</span></h1>
+  <div class="tag">Telegram для iPhone, <b>который слушается тебя.</b></div>
+  <div class="row">
+   <a class="btn white mag" href="install/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Установить бесплатно</a>
+   <a class="btn glass mag" href="https://github.com/dedsec-reth0/astragram"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>Исходный код</a>
+  </div>
+  <div class="meta"><span><i></i>iOS 15+</span><span><i></i>Бесплатно</span><span><i></i>Открытый код · GPL-2.0</span><span><i></i>AltStore / SideStore</span></div>
+  <div class="scrollcue" aria-hidden="true"></div>
+ </section>
+
+ <!-- MANIFESTO -->
+ <section class="manifesto" id="manifesto">
+  <div class="stick"><p id="mf">Мы взяли Telegram и убрали всё, что мешает. Ты решаешь, отправлять ли «в сети» и «прочитано». Удалённое остаётся у тебя. Лишнее исчезает. А весь код — на виду.</p></div>
+ </section>
+
+ <!-- SHOWCASE -->
+ <section class="showcase" id="features">
+  <div class="stick">
+   <div class="feat-list" id="featList">
+    <div class="feat"><div class="num">01 / 06</div><h3>Режим<br><span class="grad">призрака</span></h3><p>Читай, слушай и смотри истории, не отправляя «в сети», «прочитано» и «печатает». Включается одной кнопкой с призраком над списком чатов.</p>
+     <ul><li>Без отметок о просмотре историй, голосовых и кружков</li><li>Прочитать — только когда ответишь сам</li><li>Сервер Telegram о подключении знает: режим не всесилен</li></ul></div>
+    <div class="feat"><div class="num">02 / 06</div><h3>Удалённое<br><span class="grad">остаётся</span></h3><p>Сообщения, которые собеседник удалил, остаются в чате с меткой. У каждого сообщения — история правок.</p>
+     <ul><li>Работает и в каналах</li><li>Одноразовые фото и видео не сгорают</li><li>Журнал удалённого по всем чатам</li></ul></div>
+    <div class="feat"><div class="num">03 / 06</div><h3>Чаты<br><span class="grad">под Face ID</span></h3><p>Выбранные чаты открываются только по лицу. Их текст скрыт уже в списке чатов, а в переключателе приложений — заставка.</p>
+     <ul><li>Face ID для настроек AstraGram</li><li>Запрет сторонних клавиатур</li><li>Буфер обмена очищается через минуту</li></ul></div>
+    <div class="feat"><div class="num">04 / 06</div><h3><span class="grad">Огоньки</span><br>с друзьями</h3><p>Переписывайся каждый день — огонёк растёт: Искорка, Огонёк, Пламя, Костёр, Звезда. Счёт виден на всех твоих устройствах.</p>
+     <ul><li>Серийчик с гардеробом одёжек</li><li>Восстановление пропущенного дня</li><li>Значок AstraGram у друзей</li></ul></div>
+    <div class="feat"><div class="num">05 / 06</div><h3>AI<br><span class="grad">со своим ключом</span></h3><p>Перевод, пересказ чата, ответ, расшифровка голосовых и текст с фото — через любой OpenAI-совместимый API.</p>
+     <ul><li>Текст уходит в сервис только по твоему действию</li><li>Без ключа — бесплатный сервис с лимитом</li><li>Плагины на JavaScript</li></ul></div>
+    <div class="feat"><div class="num">06 / 06</div><h3>Монохром<br><span class="grad">и стекло</span></h3><p>Оформление только в чёрном, белом и серых. Материал стекла на выбор: стандартный, прозрачный, матовый.</p>
+     <ul><li>Пружинящий отклик кнопок</li><li>Музыка капсулой в профиле</li><li>Без историй и рекламы в каналах</li></ul></div>
+    <div class="progress" id="prog"><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i></div>
+   </div>
+   <div class="stage">
+    <div class="phone" id="phone">
+     <div class="shadow"></div>
+     <div class="side" style="left:-2px;top:20%;height:6%"></div><div class="side" style="left:-2px;top:29%;height:10%"></div><div class="side" style="left:-2px;top:41%;height:10%"></div><div class="side" style="right:-2px;top:30%;height:14%"></div>
+     <div class="body"></div><div class="bezel"></div>
+     <div class="screen" id="screen">
+      <!-- 1 ghost -->
+      <div class="scr"><div class="ui">
+       <div class="sb"><span>9:41</span><span class="ic"><span class="bars"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bat"></span></span></div>
+       <div class="th"><div class="pill">‹</div><div class="ttl">Аня<small id="ghostStatus">в сети</small></div><div class="pill" style="width:40px;padding:0;font-size:20px" id="ghostBtn">👻</div></div>
+       <div class="chat">
+        <div class="sys">Сегодня</div>
+        <div class="msg in">ты видел мою историю? 👀<span class="t">23:40</span></div>
+        <div class="msg in">голосовое послушай 🎧<span class="t">23:41</span></div>
+        <div class="msg in" style="display:flex;align-items:center;gap:10px"><span style="width:34px;height:34px;border-radius:50%;background:#fff;color:#1f2a36;display:flex;align-items:center;justify-content:center;font-size:14px">▶</span><span style="display:flex;gap:2px;align-items:center">${WAVE}</span><span class="t">0:14</span></div>
+        <div class="sys" id="ghostToast" style="margin-top:auto;margin-bottom:70px;opacity:0;transition:opacity .5s">👻 Режим призрака включён</div>
+       </div>
+       <div class="inp">Сообщение</div>
+      </div></div>
+      <!-- 2 deleted -->
+      <div class="scr"><div class="ui">
+       <div class="sb"><span>9:41</span><span class="ic"><span class="bars"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bat"></span></span></div>
+       <div class="th"><div class="pill">‹</div><div class="ttl">Миша<small>был(а) недавно</small></div><div class="pill" style="width:40px;padding:0">М</div></div>
+       <div class="chat">
+        <div class="sys">Сегодня</div>
+        <div class="msg in">го в субботу на концерт?<span class="t">19:02</span></div>
+        <div class="msg out">го! во сколько?<span class="t">19:03</span></div>
+        <div class="msg in" style="box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)">ладно, забей, я пошутил 😅<span class="t">19:05</span><div style="font-size:12px;color:rgba(255,255,255,.65);margin-top:4px">🗑 удалено · сохранено в AstraGram</div></div>
+        <div class="msg in">встречаемся в 8 у входа<span class="t">ред. 19:07</span></div>
+        <div class="glass" style="border-radius:18px;padding:12px 14px;margin-top:8px;align-self:stretch">
+         <div style="font-size:12px;color:#8a98a8;margin-bottom:8px">ИСТОРИЯ ПРАВОК</div>
+         <div style="font-size:14px;color:rgba(255,255,255,.55);text-decoration:line-through">встречаемся в 7 у входа</div>
+         <div style="font-size:14px;margin-top:4px">встречаемся в 8 у входа</div>
+        </div>
+       </div>
+       <div class="inp">Сообщение</div>
+      </div></div>
+      <!-- 3 face id -->
+      <div class="scr"><div class="ui">
+       <div class="sb"><span>9:41</span><span class="ic"><span class="bars"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bat"></span></span></div>
+       <div class="th"><div class="pill">Изм.</div><div class="ttl">Чаты</div><div class="pill" style="width:40px;padding:0">✎</div></div>
+       <div style="position:absolute;left:0;right:0;top:112px">
+        ${ROWS_LOCKED}
+       </div>
+       <div id="faceid" style="position:absolute;left:50%;top:46%;width:170px;height:170px;margin:-85px 0 0 -85px;border-radius:40px;background:rgba(30,30,34,.85);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;box-shadow:0 30px 60px rgba(0,0,0,.6)">
+        <svg width="74" height="74" viewBox="0 0 74 74" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"><path d="M4 22V12a8 8 0 0 1 8-8h10M52 4h10a8 8 0 0 1 8 8v10M70 52v10a8 8 0 0 1-8 8H52M22 70H12a8 8 0 0 1-8-8V52"/><path d="M25 26v6M49 26v6M37 28v14h-4"/><path d="M27 50c5 5 15 5 20 0"/></svg>
+        <div style="font-size:14px;font-weight:600">Face ID</div>
+       </div>
+      </div></div>
+      <!-- 4 streaks -->
+      <div class="scr"><div class="ui">
+       <div class="sb"><span>9:41</span><span class="ic"><span class="bars"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bat"></span></span></div>
+       <div class="th"><div class="pill">‹</div><div class="ttl">Огоньки</div><div class="pill" style="width:40px;padding:0">⋯</div></div>
+       <div style="margin:10px 16px 0;border-radius:26px;padding:20px;background:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.04));box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);text-align:center">
+        <div style="font-size:64px;line-height:1" id="flame">🔥</div>
+        <div style="font:800 44px/1 var(--display);letter-spacing:-.04em;margin-top:8px" id="streakN">42</div>
+        <div style="color:#8a98a8;font-size:14px;margin-top:4px">дня подряд с Аней · <b style="color:#fff">Костёр</b></div>
+        <div style="display:flex;justify-content:space-between;margin-top:18px;font-size:11px;color:#8a98a8">
+         <span>✨<br>Искорка</span><span>🔥<br>Огонёк</span><span>🔥<br>Пламя</span><span style="color:#fff">🔥<br>Костёр</span><span>⭐️<br>Звезда</span></div>
+        <div style="height:6px;border-radius:3px;background:rgba(255,255,255,.1);margin-top:10px;overflow:hidden"><i id="streakBar" style="display:block;height:100%;width:72%;background:#fff;border-radius:3px"></i></div>
+       </div>
+       <div class="ghead">Горят</div>
+       ${ROWS_STREAK}
+      </div></div>
+      <!-- 5 ai -->
+      <div class="scr"><div class="ui">
+       <div class="sb"><span>9:41</span><span class="ic"><span class="bars"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bat"></span></span></div>
+       <div class="th"><div class="pill">‹</div><div class="ttl">Lukas<small>в сети</small></div><div class="pill" style="width:40px;padding:0">L</div></div>
+       <div class="chat">
+        <div class="sys">Сегодня</div>
+        <div class="msg in">Hey! Are we still meeting tomorrow at the station?<span class="t">10:12</span></div>
+        <div class="msg in" style="background:linear-gradient(160deg,#2a3542,#1f2a36);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)"><div style="font-size:11px;color:#a5e4ff;margin-bottom:3px">✦ Перевод · AI</div><span id="aiText"></span><span class="t">10:12</span></div>
+        <div class="glass" style="border-radius:18px;padding:10px;margin-top:10px;display:grid;gap:4px;align-self:flex-end;width:210px">
+         <div style="font-size:14px;padding:6px 8px">🌐 Перевести</div><div style="font-size:14px;padding:6px 8px">📝 Пересказать чат</div><div style="font-size:14px;padding:6px 8px">💬 Предложить ответ</div><div style="font-size:14px;padding:6px 8px">🎙 Расшифровать голосовое</div>
+        </div>
+       </div>
+       <div class="inp">Сообщение</div>
+      </div></div>
+      <!-- 6 mono -->
+      <div class="scr"><div class="ui" style="background:#000">
+       <div class="sb"><span>9:41</span><span class="ic"><span class="bars"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bat"></span></span></div>
+       <div class="th"><div class="pill">‹</div><div class="ttl">Оформление</div><div class="pill" style="opacity:0">.</div></div>
+       <div class="ghead">Вид</div>
+       <div class="grp">
+        <div class="srow"><span class="ico">◐</span>Монохром<span class="sp"></span><span class="ios-sw" data-sw="0"></span></div>
+        <div class="srow"><span class="ico">◇</span>Пружинящие кнопки<span class="sp"></span><span class="ios-sw" data-sw="1"></span></div>
+        <div class="srow"><span class="ico">♫</span>Музыка капсулой<span class="sp"></span><span class="ios-sw" data-sw="2"></span></div>
+       </div>
+       <div class="ghead">Материал стекла</div>
+       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 16px">
+        <div class="glass" id="mat0" style="border-radius:20px;height:110px;display:flex;align-items:flex-end;padding:10px;font-size:13px;transition:box-shadow .4s">Стандарт</div>
+        <div id="mat1" style="border-radius:20px;height:110px;display:flex;align-items:flex-end;padding:10px;font-size:13px;background:rgba(255,255,255,.03);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);transition:box-shadow .4s">Прозрачный</div>
+        <div id="mat2" style="border-radius:20px;height:110px;display:flex;align-items:flex-end;padding:10px;font-size:13px;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);transition:box-shadow .4s">Матовый</div>
+       </div>
+       <div class="ghead">Меньше лишнего</div>
+       <div class="grp">
+        <div class="srow"><span class="ico">⊘</span>Скрыть истории<span class="sp"></span><span class="ios-sw on"></span></div>
+        <div class="srow"><span class="ico">⊘</span>Без рекламы в каналах<span class="sp"></span><span class="ios-sw on"></span></div>
+       </div>
+      </div></div>
+     </div>
+     <div class="island"></div>
+     <div class="glare" id="glare"></div>
+    </div>
+   </div>
+  </div>
+ </section>
+
+ <!-- BENTO -->
+ <section id="more"><div class="bento-wrap">
+  <div class="eyebrow rv">И ещё десятки мелочей</div>
+  <h2 class="h2 rv d1">Всё, чего тебе<br><span class="grad">не хватало.</span></h2>
+  <div class="bento">
+   <div class="card glass span2 rv"><span class="spot"></span><div class="art"><div class="dedsec">DED<span>SEC</span></div></div><h4>DEDSEC</h4><p>Тишина всех групп и каналов одной кнопкой, включая новые. Исключения — в профиле чата.</p></div>
+   <div class="card glass tall rv d1"><span class="spot"></span><div class="art" style="height:300px;align-items:flex-start"><div class="code"><u>// плагин: команда .flip</u>
+<b>AstraGram</b>.onSend(<em>msg</em> =&gt; {
+  if (<em>msg</em>.text.startsWith(<em>".flip"</em>))
+    <em>msg</em>.text = <em>msg</em>.text
+      .slice(5).split(<em>""</em>)
+      .reverse().join(<em>""</em>)
+})</div></div><h4>Плагины на JavaScript</h4><p>Свои команды и обработчики сообщений. Перед установкой приложение предупреждает: плагин видит ваши сообщения.</p></div>
+   <div class="card glass rv d2"><span class="spot"></span><div class="art"><div class="adx"><i></i><i></i><i></i></div></div><h4>Без рекламы</h4><p>В каналах нет рекламных постов и похожих каналов.</p></div>
+   <div class="card glass rv"><span class="spot"></span><div class="art"><div class="wave"><i style="animation-delay:0s"></i><i style="animation-delay:.1s"></i><i style="animation-delay:.2s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.4s"></i><i style="animation-delay:.5s"></i><i style="animation-delay:.6s"></i><i style="animation-delay:.7s"></i></div></div><h4>Уведомления без push</h4><p>Сообщения приходят, пока AstraGram держит соединение в фоне.</p></div>
+   <div class="card glass rv d1"><span class="spot"></span><div class="art"><div class="chips"><span>/скидк[аи]/</span><span>спам</span><span>#реклама</span><span>крипт.*</span></div></div><h4>Фильтры</h4><p>Скрывать сообщения по словам и регулярным выражениям.</p></div>
+   <div class="card glass span2 rv d2"><span class="spot"></span><div class="art"><div class="chips"><span>🔖 Закладки</span><span>📝 Шаблоны</span><span>🔔 Уведомления по словам</span><span>🆔 ID в профиле</span><span>⏱ Секунды во времени</span><span>📤 Экспорт настроек</span></div></div><h4>Мелочи, которые решают</h4><p>Закладки, шаблоны ответов, детали сообщения, режим стримера, скриншоты и копирование без запретов.</p></div>
+  </div>
+ </div></section>
+
+ <!-- TRUST -->
+ <section id="trust"><div class="trust">
+  <div class="eyebrow rv">Открытый код</div>
+  <h2 class="h2 rv d1">Не верь на слово.<br><span class="grad">Проверь сам.</span></h2>
+  <div class="trust-grid">
+   <div class="term glass rv"><div class="bar"><i></i><i></i><i></i><span>~/astragram</span></div><pre id="term"></pre></div>
+   <div class="pillars">
+    <div class="pillar glass rv d1"><div class="ix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg></div><h4>Код открыт. Весь.</h4><p>Исходники лежат на <a href="https://github.com/dedsec-reth0/astragram">GitHub</a> под лицензией GPL-2.0. Основа — открытый код Telegram-iOS.</p></div>
+    <div class="pillar glass rv d2"><div class="ix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 22V12"/><path d="M21 7l-9 5-9-5"/></svg></div><h4>Собирает GitHub, не мы</h4><p>Каждая сборка идёт на GitHub Actions — её журнал видно всем. Релиз помечен тегом на коммит, из которого собран.</p></div>
+    <div class="pillar glass rv d3"><div class="ix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L20 3"/><path d="M17 6l3 3"/><path d="M15 8l2 2"/></svg></div><h4>Ключи API — твои</h4><p>При первом запуске ты вводишь свои API ID и Hash с my.telegram.org.</p></div>
+   </div>
+  </div>
+ </div></section>
+
+ <!-- CTA -->
+ <section class="cta-sec" id="get">
+  <div>
+   <div class="eyebrow rv">Бесплатно · iOS 15+</div>
+   <h2 class="rv d1" style="margin-top:18px">Поставь<br><span class="grad">за минуту.</span></h2>
+   <div class="steps">
+    <div class="step glass rv d1"><b>1</b>Установи AltStore или SideStore</div>
+    <div class="step glass rv d2"><b>2</b>Добавь источник AstraGram</div>
+    <div class="step glass rv d3"><b>3</b>Нажми Free — и готово</div>
+   </div>
+   <div class="row rv d3" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:34px">
+    <a class="btn white mag" href="install/#altstore">Открыть в AltStore</a>
+    <a class="btn glass mag" href="install/#ipa">Скачать IPA</a>
+   </div>
+   <div class="rv d4" style="margin-top:22px;font-size:14px;color:var(--faint)" id="ver">Последняя сборка — на GitHub</div>
+  </div>
+ </section>
+</main>
+
+<footer>
+ <div>AstraGram — неофициальный клиент Telegram. С Telegram не связан; название и логотип Telegram принадлежат их владельцу.<br>Push-уведомления в сборках из AltStore не приходят; режим призрака не скрывает подключение от сервера Telegram.</div>
+ <div class="fl"><a href="https://github.com/dedsec-reth0/astragram">GitHub</a><a href="https://t.me/astragram_news">Канал в Telegram</a><a href="install/">Установка</a></div>
+</footer>
+
+<script>
+/* ================= content helpers ================= */
+(function(){
+ const WAVE=Array.from({length:22},(_,i)=>`<i style="display:block;width:3px;border-radius:2px;background:rgba(255,255,255,.75);height:${6+Math.round(Math.abs(Math.sin(i*1.7))*18)}px"></i>`).join('');
+ const av=(l,c)=>`<div class="av" style="background:linear-gradient(160deg,${c[0]},${c[1]})">${l}</div>`;
+ const locked=[['Аня','А',['#ff7eb3','#ff5c8a'],1,'23:41'],['AstraGram','',null,0,'23:20','Обновление уже в AltStore'],['Банк','Б',['#fde047','#f59e0b'],1,'22:10'],['Семья ❤️','С',['#5eead4','#22c55e'],0,'21:58','Мама: ты поел?'],['Работа','Р',['#7dd3fc','#3b82f6'],0,'21:47','Лена: отчёт до утра, ок?'],['Миша','М',['#c4b5fd','#8b5cf6'],1,'20:15'],['Учёба','У',['#f0abfc','#d946ef'],0,'18:02','Катя: конспект.pdf']];
+ const ROWS_LOCKED=locked.map(r=>`<div class="crow">${r[2]?av(r[1],r[2]):'<img class="av" src="icon.png" style="border-radius:50%">'}<div class="tx"><div class="nm">${r[3]?'🔒 ':''}${r[0]}</div><div class="pv">${r[3]?'<span class="lockbar" style="width:140px"></span> <span class="lockbar" style="width:60px"></span>':r[5]}</div></div><div class="rt">${r[4]}</div></div>`).join('');
+ const streak=[['Аня','А',['#ff7eb3','#ff5c8a'],'🔥 42'],['Лёха','Л',['#fdba74','#f97316'],'🔥 9'],['Миша','М',['#c4b5fd','#8b5cf6'],'✨ 2']];
+ const ROWS_STREAK=streak.map(r=>`<div class="crow">${av(r[1],r[2])}<div class="tx"><div class="nm">${r[0]}</div><div class="pv">написали сегодня</div></div><div class="rt" style="color:#fff;font-size:15px;font-weight:600;margin-top:0;align-self:center">${r[3]}</div></div>`).join('');
+ const s=document.getElementById('screen');
+ s.innerHTML=s.innerHTML.replace('${WAVE}',WAVE).replace('${ROWS_LOCKED}',ROWS_LOCKED).replace('${ROWS_STREAK}',ROWS_STREAK);
+ // manifesto words
+ const mf=document.getElementById('mf');const HL=['убрали','мешает.','«в','сети»','«прочитано».','остаётся','исчезает.','на','виду.'];
+ mf.innerHTML=mf.textContent.split(' ').map(w=>`<span class="w${HL.includes(w)?' hl':''}">${w}</span>`).join(' ');
+})();
+
+/* ================= WebGL liquid chrome ================= */
+const GL=(function(){
+ const cv=document.getElementById('gl');
+ const gl=cv.getContext('webgl',{antialias:false,alpha:false,powerPreference:'high-performance',preserveDrawingBuffer:false});
+ if(!gl){cv.style.display='none';document.getElementById('glFallback').style.display='block';return null}
+ const VS=`attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}`;
+ const FS=`precision highp float;
+ uniform vec2 R;uniform float T;uniform vec2 MS;uniform float MO;uniform vec3 POS;uniform float SC;uniform vec2 ROT;uniform float DIM;uniform float SPIN;
+ #define STEPS 56
+ float smin(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
+ float dot2(vec3 v){return dot(v,v);}
+ float udTri(vec3 p,vec3 a,vec3 b,vec3 c){vec3 ba=b-a,pa=p-a,cb=c-b,pb=p-b,ac=a-c,pc=p-c;vec3 nor=cross(ba,ac);
+  return sqrt((sign(dot(cross(ba,nor),pa))+sign(dot(cross(cb,nor),pb))+sign(dot(cross(ac,nor),pc))<2.)
+  ?min(min(dot2(ba*clamp(dot(ba,pa)/dot2(ba),0.,1.)-pa),dot2(cb*clamp(dot(cb,pb)/dot2(cb),0.,1.)-pb)),dot2(ac*clamp(dot(ac,pc)/dot2(ac),0.,1.)-pc))
+  :dot(nor,pa)*dot(nor,pa)/dot2(nor));}
+ mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+ float blob(vec3 p){
+  float d=1e5;
+  for(int i=0;i<5;i++){float f=float(i);
+   vec3 c=.62*vec3(sin(T*.37*(1.+f*.13)+f*1.9),cos(T*.31*(1.+f*.11)+f*2.7)*.8,sin(T*.29*(1.+f*.17)+f*3.1)*.7);
+   d=smin(d,length(p-c)-(.46+.07*sin(T*.6+f*1.3)),.48);}
+  vec3 mp=vec3(MS*vec2(1.25,.8),.55);d=smin(d,length(p-mp)-.3,.55);
+  d+=.025*sin(4.*p.x+T*.9)*sin(4.3*p.y+T*1.1)*sin(3.7*p.z-T*.7);
+  return d;}
+ float plane(vec3 p){
+  p.xy*=rot(-.38);
+  p.y-=.02*sin(p.x*3.+T*1.6);
+  vec3 n=vec3(1.25,.06,0.);vec3 tl=vec3(-.85,.16,-1.0),tr=vec3(-.85,.16,1.0),tm=vec3(-.62,0.,0.),tk=vec3(-.8,-.4,0.);
+  float w=min(udTri(p,n,tl,tm),udTri(p,n,tr,tm));float k=udTri(p,n,tm,tk);
+  return min(w,k)-.022;}
+ float map(vec3 p){
+  p-=POS;p/=SC;
+  p.xz*=rot(ROT.x+SPIN);p.yz*=rot(ROT.y);
+  float b=MO<.999?blob(p):1e5;float pl=MO>.001?plane(p):1e5;
+  return mix(b,pl,smoothstep(0.,1.,MO))*SC;}
+ vec3 nrm(vec3 p){vec2 e=vec2(.0015,-.0015);return normalize(e.xyy*map(p+e.xyy)+e.yyx*map(p+e.yyx)+e.yxy*map(p+e.yxy)+e.xxx*map(p+e.xxx));}
+ vec3 env(vec3 d){
+  vec3 c=vec3(.006);
+  c+=vec3(1.)*smoothstep(.55,.95,d.y)*.95;
+  c+=vec3(1.)*pow(max(0.,1.-abs(d.x-.62)*5.),3.)*smoothstep(-.3,.5,d.y)*.9;
+  c+=vec3(1.)*pow(max(0.,1.-abs(d.x+.75)*7.),3.)*smoothstep(-.1,.7,d.y)*.45;
+  c+=vec3(.55,.36,.98)*pow(max(0.,-d.x*.9-d.z*.3),3.)*.85;
+  c+=vec3(.22,.74,.97)*pow(max(0.,d.x*.7-d.z*.5),3.)*.7;
+  c+=vec3(.05)*exp(-abs(d.y+.1)*5.);
+  return c;}
+ void main(){
+  vec2 uv=(gl_FragCoord.xy-.5*R)/R.y;
+  vec3 ro=vec3(0.,0.,4.2),rd=normalize(vec3(uv,-1.75));
+  vec3 col=vec3(0.);
+  // bound sphere
+  vec3 oc=ro-POS;float br=2.0*SC;float b=dot(oc,rd),c=dot(oc,oc)-br*br,h=b*b-c;
+  if(h>0.){
+   float t=max(-b-sqrt(h),0.),tm=-b+sqrt(h);bool hit=false;
+   for(int i=0;i<STEPS;i++){vec3 p=ro+rd*t;float d=map(p);if(d<.0015){hit=true;break;}t+=d*.85;if(t>tm)break;}
+   if(hit){vec3 p=ro+rd*t;vec3 n=nrm(p);vec3 r=reflect(rd,n);float fr=pow(1.-max(dot(n,-rd),0.),3.);
+    vec3 e=env(r);
+    vec3 iri=.5+.5*cos(6.2831*(fr*1.1+vec3(0.,.33,.67)+T*.03));
+    col=e*(.55+.45*fr)+iri*fr*.22+vec3(.02);
+    // the paper plane reads as frosted white glass, like the logo
+    vec3 L=normalize(vec3(.5,.9,.7));float dif=abs(dot(n,L));float back=abs(dot(n,normalize(vec3(-.7,-.2,.5))));
+    vec3 paper=vec3(.86,.88,.95)*(.28+.72*dif)+vec3(.55,.36,.98)*.25*back+vec3(.22,.74,.97)*.35*fr;
+    col=mix(col,paper*(.75+.25*e),smoothstep(.3,1.,MO)*.62);
+    col+=vec3(1.)*pow(max(dot(r,normalize(vec3(.4,.8,.6))),0.),60.)*.8;
+    col*=DIM;}
+  }
+  // soft halo behind object
+  vec2 sp=POS.xy/(4.2-POS.z)*1.75;float g=length(uv-sp);
+  col+=DIM*(vec3(.55,.36,.98)*.10*exp(-g*g*2.2/(SC*SC))+vec3(.22,.74,.97)*.06*exp(-pow(length(uv-sp-vec2(.25,-.15)),2.)*3./(SC*SC)));
+  col=col/(1.+col*.25);
+  col=pow(col,vec3(.92));
+  gl_FragColor=vec4(col,1.);}`;
+ function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(o));return null}return o}
+ const pr=gl.createProgram();const v=sh(gl.VERTEX_SHADER,VS),f=sh(gl.FRAGMENT_SHADER,FS);
+ if(!v||!f){cv.style.display='none';document.getElementById('glFallback').style.display='block';return null}
+ gl.attachShader(pr,v);gl.attachShader(pr,f);gl.linkProgram(pr);gl.useProgram(pr);
+ const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+ const loc=gl.getAttribLocation(pr,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+ const U={};['R','T','MS','MO','POS','SC','ROT','DIM','SPIN'].forEach(n=>U[n]=gl.getUniformLocation(pr,n));
+ const mobile=matchMedia('(max-width:860px)').matches||/iPhone|iPad|Android/.test(navigator.userAgent);
+ let q=mobile?.5:.62; // internal resolution relative to CSS pixels (x dpr, capped)
+ let W=0,H=0;
+ function size(){const d=Math.min(window.devicePixelRatio||1,2);W=Math.max(2,Math.round(innerWidth*d*q));H=Math.max(2,Math.round(innerHeight*d*q));cv.width=W;cv.height=H;gl.viewport(0,0,W,H)}
+ size();addEventListener('resize',size);
+ let ft=[],lastAdj=0;
+ return {draw(s,t,dt){
+  gl.uniform2f(U.R,W,H);gl.uniform1f(U.T,t);gl.uniform2f(U.MS,s.mx,s.my);gl.uniform1f(U.MO,s.morph);gl.uniform3f(U.POS,s.x,s.y,s.z);
+  gl.uniform1f(U.SC,s.sc);gl.uniform2f(U.ROT,s.ry,s.rx);gl.uniform1f(U.DIM,s.dim);gl.uniform1f(U.SPIN,s.spin);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  // adaptive resolution: keep frames under ~22ms
+  ft.push(dt);if(ft.length>40){const avg=ft.reduce((a,b)=>a+b)/ft.length;ft=[];
+   if(avg>24&&q>.3){q=Math.max(.3,q-.07);size()}else if(avg<13&&q<(mobile?.6:.8)&&t-lastAdj>4){q+=.04;lastAdj=t;size()}}
+ }};
+})();
+
+/* ================= scroll timeline ================= */
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v)),lerp=(a,b,k)=>a+(b-a)*k;
+const ease=t=>1-Math.pow(1-clamp(t),3),eio=t=>{t=clamp(t);return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2};
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+const isMobile=()=>innerWidth<=860;
+function secProg(el){const r=el.getBoundingClientRect();const total=r.height-innerHeight;return total<=0?clamp(-r.top/innerHeight):clamp(-r.top/total)}
+function secVis(el){const r=el.getBoundingClientRect();return clamp((innerHeight-r.top)/(innerHeight+r.height))}
+
+// canvas states (x,y in world units; mobile adjusts)
+const ST={
+ hero:{x:0,y:0,z:0,sc:1.0,morph:0,rx:0,ry:0,dim:1},
+ plane:{x:0,y:-.05,z:0,sc:1.12,morph:1,rx:.35,ry:.5,dim:1},
+ side:{x:1.75,y:.95,z:-1.2,sc:.42,morph:1,rx:.2,ry:.8,dim:.55},
+ left:{x:-1.9,y:-.6,z:-1.6,sc:.6,morph:.0,rx:0,ry:0,dim:.45},
+ cta:{x:0,y:.78,z:-.6,sc:.62,morph:1,rx:.3,ry:.45,dim:1},
+};
+function mixS(a,b,k){const o={};for(const n in a)o[n]=lerp(a[n],b[n],k);return o}
+const cur={x:0,y:0,z:0,sc:1,morph:0,rx:0,ry:0,dim:1,mx:0,my:0,spin:0};
+let mouse={x:0,y:0},sm={x:0,y:0};
+addEventListener('pointermove',e=>{mouse.x=e.clientX/innerWidth*2-1;mouse.y=-(e.clientY/innerHeight*2-1)},{passive:true});
+if(window.DeviceOrientationEvent&&/iPhone|iPad|Android/.test(navigator.userAgent)){addEventListener('deviceorientation',e=>{if(e.gamma==null)return;mouse.x=clamp(e.gamma/30,-1,1);mouse.y=clamp((45-e.beta)/30,-1,1)},{passive:true})}
+
+const secHero=$('#hero'),secMf=$('#manifesto'),secF=$('#features'),secMore=$('#more'),secTrust=$('#trust'),secGet=$('#get');
+const words=$$('#mf .w');
+const feats=$$('.feat'),scrs=$$('.scr'),bars=$$('#prog b'),phone=$('#phone'),glare=$('#glare');
+let activeF=-1;
+function target(){
+ const pm=secProg(secMf),pf=secProg(secF);
+ const vMore=secVis(secMore),vTrust=secVis(secTrust),vGet=secVis(secGet);
+ const heroOut=clamp(-secHero.getBoundingClientRect().top/innerHeight);
+ let s=ST.hero;
+ if(heroOut<1&&pm<=0){s=mixS(ST.hero,{...ST.hero,y:.25,sc:1.05},heroOut)}
+ const mfK=eio(pm*1.25);
+ if(pm>0)s=mixS(ST.hero,ST.plane,mfK);
+ if(pf>0||secF.getBoundingClientRect().top<innerHeight){const k=eio(clamp((innerHeight-secF.getBoundingClientRect().top)/innerHeight));s=mixS(s,ST.side,k)}
+ if(vMore>0){s=mixS(s,ST.left,eio(clamp(vMore*1.8)))}
+ if(vTrust>.05){s=mixS(s,{...ST.left,x:1.9,y:.5,morph:.0,dim:.4},eio(clamp((vTrust-.05)*1.8)))}
+ if(vGet>.1){s=mixS(s,ST.cta,eio(clamp((vGet-.1)*2.2)))}
+ if(isMobile()){s={...s,x:s.x*.35,y:s.y*(s.y>0?1.2:1),sc:s.sc*(s===ST.hero?.8:.85)}}
+ return {s,pm,pf};
+}
+
+/* manifesto + showcase DOM */
+let lastScreen=-1,screenT0=0;
+function updateDOM(pm,pf,t){
+ const n=Math.floor(pm*1.15*words.length);
+ words.forEach((w,i)=>w.classList.toggle('on',i<n));
+ // showcase
+ const N=feats.length;const fpos=clamp(pf*N,0,N-.0001);const idx=Math.floor(fpos);const local=fpos-idx;
+ if(idx!==activeF){activeF=idx;screenT0=t;}
+ feats.forEach((f,i)=>{const d=i-fpos+.5;const vis=i===idx;const k=vis?ease(Math.min(local*5,(1-local)*5,1)):0;
+  f.style.opacity=i===idx?Math.max(.0,Math.min(1,local*6, (1-local)*6)):0;
+  f.style.transform=(isMobile()?'':'translateY(-50%) ')+`translateY(${(i<idx?-30:i>idx?30:(.5-local)*-40)}px)`;
+  f.style.filter=`blur(${i===idx?(1-Math.min(1,local*6,(1-local)*6))*8:8}px)`;});
+ scrs.forEach((s,i)=>s.classList.toggle('on',i===idx));
+ bars.forEach((b,i)=>b.style.transform=`scaleX(${i<idx?1:i===idx?local:0})`);
+ // phone pose
+ const sw=Math.sin((local-.5)*Math.PI)*-10;
+ const rx=-sm.y*6+4,ry=sm.x*10+sw+(isMobile()?0:-8);
+ const pIn=clamp((innerHeight-secF.getBoundingClientRect().top)/innerHeight);
+ phone.style.transform=`translateY(${(1-ease(pIn))*160}px) rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${(isMobile()?0:2)+sm.x*-1.5}deg) scale(${lerp(.86,1,ease(pIn))})`;
+ glare.style.setProperty('--gx',(50+ry*3)+'%');
+ // per-screen micro animations
+ const lt=t-screenT0;
+ if(idx===0){const on=lt>1.0;$('#ghostStatus').textContent=on?'был(а) недавно':'в сети';$('#ghostBtn').style.background=on?'#fff':'';$('#ghostBtn').style.filter=on?'grayscale(1) invert(1)':'';$('#ghostToast').style.opacity=on&&lt<3.2?1:0}
+ if(idx===2){const k=(lt%3)/3;const fid=$('#faceid');fid.style.transform=`scale(${k<.15?lerp(.8,1,k/.15):1})`;fid.style.opacity=k<.85?1:1-(k-.85)/.15}
+ if(idx===3){$('#streakN').textContent=Math.min(42,Math.floor(lt*28));$('#flame').style.transform=`scale(${1+.06*Math.sin(t*6)})`}
+ if(idx===4){const full='Привет! Мы всё ещё встречаемся завтра на вокзале?';$('#aiText').textContent=full.slice(0,Math.floor(clamp((lt-.4)/1.6)*full.length))}
+ if(idx===5){$$('.ios-sw[data-sw]').forEach(el=>el.classList.toggle('on',lt>.5+(+el.dataset.sw)*.45));['mat0','mat1','mat2'].forEach((id,i)=>{$('#'+id).style.boxShadow=(Math.floor(lt/1.2)%3===i)?'inset 0 0 0 2px #fff':'inset 0 0 0 1px rgba(255,255,255,.1)'})}
+}
+// fit 390px screen design into the phone screen
+function fitScreens(){const sc=$('#screen');const k=sc.clientWidth/390;$$('.scr .ui').forEach(u=>{u.style.transform=`scale(${k})`;u.style.height=(sc.clientHeight/k)+'px'})}
+addEventListener('resize',fitScreens);
+
+/* ================= main loop ================= */
+let tPrev=performance.now(),T0=tPrev,visible=true;
+document.addEventListener('visibilitychange',()=>{visible=!document.hidden;tPrev=performance.now()});
+function frame(now){
+ requestAnimationFrame(frame);
+ if(!visible)return;
+ const dt=Math.min(64,now-tPrev);tPrev=now;const t=(now-T0)/1000;
+ const k=1-Math.pow(.0025,dt/1000);
+ sm.x+=(mouse.x-sm.x)*k*1.6;sm.y+=(mouse.y-sm.y)*k*1.6;
+ const {s,pm,pf}=target();
+ const kk=1-Math.pow(.004,dt/1000);
+ for(const n in s)cur[n]+=(s[n]-cur[n])*kk;
+ cur.mx=sm.x;cur.my=sm.y;cur.spin=reduce?0:(cur.morph>.5?Math.sin(t*.35)*.35+sm.x*.35:t*.08);
+ const draw={...cur,rx:cur.rx+sm.y*.25,ry:cur.ry+sm.x*.3};
+ if(GL)GL.draw(draw,reduce?0:t,dt);
+ updateDOM(pm,pf,t);
+ // nav reacts
+}
+/* ================= interactions ================= */
+// reveal
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('shown');io.unobserve(e.target)}}),{threshold:.15});
+$$('.rv').forEach(el=>io.observe(el));
+// magnetic buttons + cursor
+const cursor=$('#cur');let cx=-100,cy=-100,tx=-100,ty=-100;
+addEventListener('pointermove',e=>{tx=e.clientX;ty=e.clientY},{passive:true});
+(function cl(){cx+=(tx-cx)*.22;cy+=(ty-cy)*.22;cursor.style.transform=`translate(${cx}px,${cy}px)`;requestAnimationFrame(cl)})();
+$$('a,button,.card').forEach(el=>{el.addEventListener('pointerenter',()=>cursor.classList.add('big'));el.addEventListener('pointerleave',()=>cursor.classList.remove('big'))});
+if(matchMedia('(pointer:fine)').matches){
+ $$('.mag').forEach(el=>{el.addEventListener('pointermove',e=>{const r=el.getBoundingClientRect();el.style.transform=`translate(${(e.clientX-r.left-r.width/2)*.25}px,${(e.clientY-r.top-r.height/2)*.35}px)`});el.addEventListener('pointerleave',()=>el.style.transform='')});
+ $$('.card').forEach(el=>{el.addEventListener('pointermove',e=>{const r=el.getBoundingClientRect();const x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;el.style.setProperty('--mx',x*100+'%');el.style.setProperty('--my',y*100+'%');el.style.setProperty('--ry',(x-.5)*8+'deg');el.style.setProperty('--rx',(.5-y)*8+'deg')});el.addEventListener('pointerleave',()=>{el.style.setProperty('--rx','0deg');el.style.setProperty('--ry','0deg')})});
+}
+// terminal with live release data
+(function(){
+ const pre=$('#term');let started=false;
+ const lines=d=>[
+  ['$ ','c','git clone github.com/dedsec-reth0/astragram'],
+  ['','','Cloning into \'astragram\'... done.'],
+  ['$ ','c','gh release view --json name,tagName'],
+  ['','v',d.name],['','g','tag     '+d.tag],
+  ['$ ','c','git rev-parse '+d.tag],
+  ['','g',d.sha],
+  ['$ ','c','gh run list -w "Build AstraGram" -L 1'],
+  ['','ok','✓ Build AstraGram · master · '+d.short],
+  ['','','# релиз собран из этого коммита — проверь сам'],
+ ];
+ function run(d){const L=lines(d);let i=0,j=0,out='';
+  (function step(){if(i>=L.length){pre.innerHTML=out+'<span class="caret"></span>';return}
+   const [pfx,cls,txt]=L[i];const isCmd=cls==='c';
+   if(isCmd){j++;const part=txt.slice(0,j);pre.innerHTML=out+pfx+`<span class="c">${part}</span><span class="caret"></span>`;if(j>=txt.length){out+=pfx+`<span class="c">${txt}</span>\n`;i++;j=0;setTimeout(step,260)}else setTimeout(step,reduce?0:22)}
+   else{out+=`<span class="${cls}">${txt}</span>\n`;pre.innerHTML=out+'<span class="caret"></span>';i++;setTimeout(step,reduce?0:140)}})()}
+ const fallback={name:'AstraGram 1.0.37 Alpha (103820)',tag:'v13.2-103820',sha:'92e7e6474fb0e046017bd4c8121e2a8b3b2ca7d8',short:'92e7e64'};
+ let data=fallback;
+ fetch('https://api.github.com/repos/dedsec-reth0/astragram/releases/latest').then(r=>r.ok?r.json():null).then(j=>{
+  if(j&&j.tag_name){const sha=/^[0-9a-f]{40}$/.test(j.target_commitish)?j.target_commitish:fallback.sha;
+   data={name:j.name,tag:j.tag_name,sha,short:sha.slice(0,7)};
+   const v=$('#ver');const m=(j.name||'').match(/([\d.]+).*\((\d+)\)/);if(m)v.textContent=`Последняя сборка — ${m[1]} (${m[2]}), ${new Date(j.published_at).toLocaleDateString('ru-RU',{day:'numeric',month:'long'})}`}
+ }).catch(()=>{});
+ new IntersectionObserver((es,o)=>{if(es[0].isIntersecting&&!started){started=true;o.disconnect();setTimeout(()=>run(data),400)}},{threshold:.3}).observe(pre);
+})();
+// intro
+function start(){fitScreens();document.getElementById('intro').classList.add('gone');document.body.classList.add('ready');$$('.hero h1 .ch').forEach((c,i)=>c.style.transitionDelay=(.05+i*.055)+'s')}
+const introMin=new Promise(r=>setTimeout(r,reduce?0:1250));
+Promise.all([introMin,document.fonts?document.fonts.ready:Promise.resolve()]).then(start);
+setTimeout(start,3500);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
