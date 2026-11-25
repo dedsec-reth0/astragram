@@ -27,7 +27,7 @@ window.AstraScene=(function(){
   p.y-=.02*sin(p.x*3.+T*1.6);
   vec3 n=vec3(1.25,.06,0.);vec3 tl=vec3(-.85,.16,-1.0),tr=vec3(-.85,.16,1.0),tm=vec3(-.62,0.,0.),tk=vec3(-.8,-.4,0.);
   float w=min(udTri(p,n,tl,tm),udTri(p,n,tr,tm));float k=udTri(p,n,tm,tk);
-  return min(w,k)-.022;}
+  return min(w,k)-.03;}
  float map(vec3 p){
   p-=POS;p/=SC;
   p.xz*=rot(ROT.x+SPIN);p.yz*=rot(ROT.y);
@@ -49,7 +49,7 @@ window.AstraScene=(function(){
   vec3 col=vec3(0.);
   // bound sphere
   vec3 oc=ro-POS;float br=2.0*SC;float b=dot(oc,rd),c=dot(oc,oc)-br*br,h=b*b-c;
-  if(h>0.){
+  if(h>0.&&DIM>.01){
    float t=max(-b-sqrt(h),0.),tm=-b+sqrt(h);bool hit=false;
    for(int i=0;i<STEPS;i++){vec3 p=ro+rd*t;float d=map(p);if(d<.0015){hit=true;break;}t+=d*.85;if(t>tm)break;}
    if(hit){vec3 p=ro+rd*t;vec3 n=nrm(p);vec3 r=reflect(rd,n);float fr=pow(1.-max(dot(n,-rd),0.),3.);

@@ -154,7 +154,7 @@ body.ready .scrollcue{opacity:1}
 .phone .glare{position:absolute;inset:calc(var(--w) * .03);border-radius:calc(var(--w) * .13);pointer-events:none;z-index:30;
  background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.09) 42%,rgba(255,255,255,.02) 52%,transparent 60%);background-size:250% 100%;background-position:var(--gx,50%) 0;transform:translateZ(2px)}
 .phone .side{position:absolute;width:3px;border-radius:2px;background:linear-gradient(90deg,#77777f,#2a2a30)}
-.phone .shadow{position:absolute;left:10%;right:10%;bottom:-60px;height:60px;border-radius:50%;background:radial-gradient(closest-side,rgba(139,92,246,.35),transparent);filter:blur(10px);transform:translateZ(-80px) rotateX(90deg)}
+.phone .shadow{position:absolute;left:12%;right:12%;bottom:-46px;height:46px;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.7),transparent);filter:blur(8px);transform:translateZ(-2px)}
 
 /* screens: telegram dark, scaled from a 390px-wide design */
 .scr{position:absolute;inset:0;opacity:0;transition:opacity .6s var(--ease),transform .8s var(--ease);transform:scale(1.04);font-family:var(--body);color:#fff}
@@ -541,7 +541,7 @@ html.pt-out body{opacity:0;filter:blur(10px);transition:opacity .38s cubic-bezie
 </footer>
 
 <script src="i18n.js?v=3"></script>
-<script src="scene.js?v=3"></script>
+<script src="scene.js?v=4"></script>
 <script>
 /* ================= i18n ================= */
 const LANGS=['ru','en','uk','es','pt','de','fr','tr'];
@@ -630,6 +630,8 @@ function target(){
  if(vTrust>.05){s=mixS(s,{...ST.left,x:1.9,y:.5,morph:.0,dim:.4},eio(clamp((vTrust-.05)*1.8)))}
  if(vGet>.1){s=mixS(s,ST.cta,eio(clamp((vGet-.1)*2.2)))}
  if(isMobile()){s={...s,x:s.x*.35,y:s.y*(s.y>0?1.2:1),sc:s.sc*(s===ST.hero?.8:.85)}}
+ // phones: the plane would hang half off the top edge over the phone showcase; fade the 3D object out there
+ if(isMobile()){const kf=clamp((innerHeight-secF.getBoundingClientRect().top)/innerHeight)*(1-clamp(vMore*1.8));s.dim*=1-kf}
  return {s,pm,pf};
 }
 
