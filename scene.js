@@ -39,7 +39,7 @@ window.AstraScene=(function(){
   c+=vec3(1.)*smoothstep(.55,.95,d.y)*.95;
   c+=vec3(1.)*pow(max(0.,1.-abs(d.x-.62)*5.),3.)*smoothstep(-.3,.5,d.y)*.9;
   c+=vec3(1.)*pow(max(0.,1.-abs(d.x+.75)*7.),3.)*smoothstep(-.1,.7,d.y)*.45;
-  c+=vec3(.55,.36,.98)*pow(max(0.,-d.x*.9-d.z*.3),3.)*.85;
+  c+=vec3(.46,.40,.98)*pow(max(0.,-d.x*.9-d.z*.3),3.)*.75;
   c+=vec3(.22,.74,.97)*pow(max(0.,d.x*.7-d.z*.5),3.)*.7;
   c+=vec3(.05)*exp(-abs(d.y+.1)*5.);
   return c;}
@@ -57,16 +57,18 @@ window.AstraScene=(function(){
     col=e*(.55+.45*fr)+vec3(.02);
     // the paper plane reads as frosted white glass, like the logo
     vec3 L=normalize(vec3(.5,.9,.7));float dif=abs(dot(n,L));float back=abs(dot(n,normalize(vec3(-.7,-.2,.5))));
-    vec3 paper=vec3(.86,.88,.95)*(.28+.72*dif)+vec3(.55,.36,.98)*.25*back+vec3(.22,.74,.97)*.35*fr;
+    vec3 paper=vec3(.86,.88,.95)*(.28+.72*dif)+vec3(.46,.40,.98)*.22*back+vec3(.22,.74,.97)*.35*fr;
     col=mix(col,paper*(.75+.25*e),smoothstep(.3,1.,MO)*.62);
     col+=vec3(1.)*pow(max(dot(r,normalize(vec3(.4,.8,.6))),0.),60.)*.8;
     col*=DIM;}
   }
-  // soft halo behind object
+  // soft halo behind object (cool tones only)
   vec2 sp=POS.xy/(4.2-POS.z)*1.75;float g=length(uv-sp);
-  col+=DIM*(vec3(.55,.36,.98)*.10*exp(-g*g*2.2/(SC*SC))+vec3(.22,.74,.97)*.06*exp(-pow(length(uv-sp-vec2(.25,-.15)),2.)*3./(SC*SC)));
+  col+=DIM*(vec3(.42,.40,.95)*.075*exp(-g*g*2.2/(SC*SC))+vec3(.22,.62,.95)*.05*exp(-pow(length(uv-sp-vec2(.25,-.15)),2.)*3./(SC*SC)));
   col=col/(1.+col*.25);
   col=pow(col,vec3(.92));
+  // dither: breaks the 8-bit steps of the dark gradients into grain instead of visible bands
+  col+=(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233))+T*.1)*43758.5453)-.5)*(2.5/255.);
   gl_FragColor=vec4(col,1.);}`;
  function sh(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(o));return null}return o}
  const pr=gl.createProgram();const v=sh(gl.VERTEX_SHADER,VS),f=sh(gl.FRAGMENT_SHADER,FS);
