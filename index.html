@@ -65,6 +65,18 @@ nav .links a{padding:10px 14px;border-radius:999px;font-size:14px;color:var(--mu
 nav .links a:hover{color:#fff;background:rgba(255,255,255,.07)}
 nav .cta{padding:10px 18px;border-radius:999px;background:#fff;color:#000;font-weight:650;font-size:14px;margin-left:4px}
 @media (max-width:760px){nav .links{display:none}}
+.lang{position:relative}
+.lang-btn{display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;border-radius:999px;border:0;background:transparent;color:var(--muted);font:600 13px var(--body);cursor:pointer;transition:color .25s,background-color .25s}
+.lang-btn:hover,.lang-btn[aria-expanded=true]{color:#fff;background:rgba(255,255,255,.07)}
+.lang-btn svg{width:17px;height:17px}
+.lang-menu{position:absolute;right:0;top:calc(100% + 10px);min-width:200px;padding:6px;border-radius:20px;display:grid;gap:2px;
+ background:rgba(20,20,24,.72);opacity:0;visibility:hidden;transform:translateY(-6px) scale(.98);transform-origin:top right;transition:opacity .25s var(--ease),transform .35s var(--ease),visibility .25s}
+.lang-menu.open{opacity:1;visibility:visible;transform:none}
+.lang-menu button{display:flex;align-items:center;gap:12px;height:42px;padding:0 12px;border-radius:14px;border:0;background:transparent;color:rgba(245,245,247,.85);font:500 15px var(--body);cursor:pointer;text-align:left}
+.lang-menu button b{width:26px;font:700 11px var(--mono);color:var(--faint)}
+.lang-menu button:hover{background:rgba(255,255,255,.08);color:#fff}
+.lang-menu button.on{background:#fff;color:#000}.lang-menu button.on b{color:rgba(0,0,0,.5)}
+@media (max-width:420px){nav .brand{padding-right:8px}.lang-btn{padding:0 8px}}
 
 /* ---------- typography ---------- */
 .eyebrow{font:600 13px/1 var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
@@ -184,23 +196,32 @@ body.ready .scrollcue{opacity:1}
 /* ---------- bento ---------- */
 .bento-wrap{padding:clamp(100px,14vh,180px) clamp(16px,5vw,80px);max-width:1360px;margin:0 auto}
 .bento{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:54px}
-.card{border-radius:30px;padding:28px;min-height:250px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;
+.card{border-radius:30px;padding:28px;min-height:250px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start;
  transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .5s var(--ease)}
 .card .spot{position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .4s;
  background:radial-gradient(380px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.12),transparent 60%)}
 .card:hover .spot{opacity:1}
 .card h4{font:700 24px/1.1 var(--display);letter-spacing:-.03em;margin:0 0 8px;position:relative}
 .card p{margin:0;font-size:15px;line-height:1.45;color:var(--muted);position:relative}
-.card .art{position:absolute;left:28px;right:28px;top:26px;height:120px;display:flex;align-items:center}
+.card .art{position:relative;display:flex;align-items:center;min-height:96px;margin:0 0 auto;padding-bottom:24px}
+.card h4{margin-top:auto}
+.card.tall .art{align-items:flex-start}
 .span2{grid-column:span 2}.tall{grid-row:span 2;min-height:520px}
 @media (max-width:980px){.bento{grid-template-columns:repeat(2,1fr)}.tall{grid-row:auto;min-height:300px}}
 @media (max-width:560px){.bento{grid-template-columns:1fr}.span2{grid-column:auto}}
 /* card arts */
-.dedsec{font:800 64px/1 var(--display);letter-spacing:-.04em;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.55)}
-.dedsec span{animation:flick 4s infinite}
-@keyframes flick{0%,92%,100%{color:transparent}93%,95%{color:#fff}}
+.mute{display:flex;align-items:center;gap:12px}
+.mute .bell{position:relative;width:52px;height:52px;border-radius:16px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);
+ display:flex;align-items:center;justify-content:center}
+.mute .bell::before{content:"";width:22px;height:24px;background:#fff;-webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 26'><path d='M12 0a2 2 0 0 1 2 2v.7A8 8 0 0 1 20 10.5V16l3 4v1H1v-1l3-4v-5.5A8 8 0 0 1 10 2.7V2a2 2 0 0 1 2-2zm-3 23h6a3 3 0 0 1-6 0z'/></svg>") center/contain no-repeat;
+ mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 26'><path d='M12 0a2 2 0 0 1 2 2v.7A8 8 0 0 1 20 10.5V16l3 4v1H1v-1l3-4v-5.5A8 8 0 0 1 10 2.7V2a2 2 0 0 1 2-2zm-3 23h6a3 3 0 0 1-6 0z'/></svg>") center/contain no-repeat;animation:ring 3.2s ease-in-out infinite}
+.mute .bell i{position:absolute;left:50%;top:50%;width:34px;height:3px;margin:-1.5px 0 0 -17px;border-radius:2px;background:#fff;box-shadow:0 0 0 2px #1b1b1f;transform:rotate(-45deg) scaleX(0);animation:slash 3.2s var(--ease) infinite}
+.mute .bell:nth-child(2)::before,.mute .bell:nth-child(2) i{animation-delay:.15s}.mute .bell:nth-child(3)::before,.mute .bell:nth-child(3) i{animation-delay:.3s}
+.mute b{margin-left:8px;font:700 13px var(--mono);letter-spacing:.14em;color:var(--faint)}
+@keyframes ring{0%,8%{transform:rotate(0)}2%{transform:rotate(14deg)}4%{transform:rotate(-12deg)}6%{transform:rotate(8deg)}30%,100%{transform:rotate(0);opacity:.45}}
+@keyframes slash{0%,10%{transform:rotate(-45deg) scaleX(0)}22%,85%{transform:rotate(-45deg) scaleX(1)}100%{transform:rotate(-45deg) scaleX(0)}}
 .adx{display:flex;gap:10px}.adx i{width:64px;height:84px;border-radius:14px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);position:relative;overflow:hidden}
-.adx i:nth-child(2)::after{content:"Реклама";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.08);animation:adout 3.6s var(--ease) infinite}
+.adx i:nth-child(2)::after{content:attr(data-ad);position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:rgba(255,255,255,.7);background:rgba(255,255,255,.08);animation:adout 3.6s var(--ease) infinite}
 @keyframes adout{0%,30%{transform:none;opacity:1}55%,100%{transform:translateY(-110%) scale(.9);opacity:0}}
 .code{font:12px/1.6 var(--mono);color:rgba(255,255,255,.75);white-space:pre}
 .code b{color:#fff;font-weight:600}.code em{color:#a5e4ff;font-style:normal}.code u{color:#c9bfff;text-decoration:none}
@@ -281,46 +302,48 @@ footer .fl{display:flex;gap:18px;flex-wrap:wrap}
 <div class="grain" aria-hidden="true"></div>
 <div id="cur" aria-hidden="true"></div>
 
-<nav class="glass" aria-label="Навигация">
+<nav class="glass" data-i-aria="nav.aria">
  <a class="brand" href="#top"><img src="icon.png" alt="">AstraGram</a>
- <div class="links"><a href="#features">Возможности</a><a href="#more">Ещё</a><a href="#trust">Открытый код</a></div>
- <a class="cta mag" href="install/">Установить</a>
+ <div class="links"><a href="#features" data-i="nav.0"></a><a href="#more" data-i="nav.1"></a><a href="#trust" data-i="nav.2"></a></div>
+ <div class="lang"><button class="lang-btn" id="langBtn" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.8 5.6 3.8 9s-1.2 6.4-3.8 9c-2.6-2.6-3.8-5.6-3.8-9S9.4 5.6 12 3z"/></svg><span id="langCur">RU</span></button>
+  <div class="lang-menu glass" id="langMenu" role="menu"></div></div>
+ <a class="cta mag" href="install/" data-i="nav.3"></a>
 </nav>
 
 <main id="top">
  <!-- HERO -->
  <section class="hero" id="hero">
   <h1 aria-label="AstraGram"><span class="ch">A</span><span class="ch">s</span><span class="ch">t</span><span class="ch">r</span><span class="ch">a</span><span class="ch">G</span><span class="ch">r</span><span class="ch">a</span><span class="ch">m</span></h1>
-  <div class="tag">Telegram для iPhone, <b>который слушается тебя.</b></div>
+  <div class="tag" data-i="hero.tag"></div>
   <div class="row">
-   <a class="btn white mag" href="install/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Установить бесплатно</a>
-   <a class="btn glass mag" href="https://github.com/dedsec-reth0/astragram"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>Исходный код</a>
+   <a class="btn white mag" href="install/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span data-i="hero.install"></span></a>
+   <a class="btn glass mag" href="https://github.com/dedsec-reth0/astragram"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg><span data-i="hero.code"></span></a>
   </div>
-  <div class="meta"><span><i></i>iOS 15+</span><span><i></i>Бесплатно</span><span><i></i>Открытый код · GPL-2.0</span><span><i></i>AltStore / SideStore</span></div>
+  <div class="meta"><span><i></i>iOS 15+</span><span><i></i><b data-i="hero.free" style="font-weight:inherit"></b></span><span><i></i><b data-i="hero.open" style="font-weight:inherit"></b></span><span><i></i>AltStore / SideStore</span></div>
   <div class="scrollcue" aria-hidden="true"></div>
  </section>
 
  <!-- MANIFESTO -->
  <section class="manifesto" id="manifesto">
-  <div class="stick"><p id="mf">Мы взяли Telegram и убрали всё, что мешает. Ты решаешь, отправлять ли «в сети» и «прочитано». Удалённое остаётся у тебя. Лишнее исчезает. А весь код — на виду.</p></div>
+  <div class="stick"><p id="mf"></p></div>
  </section>
 
  <!-- SHOWCASE -->
  <section class="showcase" id="features">
   <div class="stick">
    <div class="feat-list" id="featList">
-    <div class="feat"><div class="num">01 / 06</div><h3>Режим<br><span class="grad">призрака</span></h3><p>Читай, слушай и смотри истории, не отправляя «в сети», «прочитано» и «печатает». Включается одной кнопкой с призраком над списком чатов.</p>
-     <ul><li>Без отметок о просмотре историй, голосовых и кружков</li><li>Прочитать — только когда ответишь сам</li><li>Сервер Telegram о подключении знает: режим не всесилен</li></ul></div>
-    <div class="feat"><div class="num">02 / 06</div><h3>Удалённое<br><span class="grad">остаётся</span></h3><p>Сообщения, которые собеседник удалил, остаются в чате с меткой. У каждого сообщения — история правок.</p>
-     <ul><li>Работает и в каналах</li><li>Одноразовые фото и видео не сгорают</li><li>Журнал удалённого по всем чатам</li></ul></div>
-    <div class="feat"><div class="num">03 / 06</div><h3>Чаты<br><span class="grad">под Face ID</span></h3><p>Выбранные чаты открываются только по лицу. Их текст скрыт уже в списке чатов, а в переключателе приложений — заставка.</p>
-     <ul><li>Face ID для настроек AstraGram</li><li>Запрет сторонних клавиатур</li><li>Буфер обмена очищается через минуту</li></ul></div>
-    <div class="feat"><div class="num">04 / 06</div><h3><span class="grad">Огоньки</span><br>с друзьями</h3><p>Переписывайся каждый день — огонёк растёт: Искорка, Огонёк, Пламя, Костёр, Звезда. Счёт виден на всех твоих устройствах.</p>
-     <ul><li>Серийчик с гардеробом одёжек</li><li>Восстановление пропущенного дня</li><li>Значок AstraGram у друзей</li></ul></div>
-    <div class="feat"><div class="num">05 / 06</div><h3>AI<br><span class="grad">со своим ключом</span></h3><p>Перевод, пересказ чата, ответ, расшифровка голосовых и текст с фото — через любой OpenAI-совместимый API.</p>
-     <ul><li>Текст уходит в сервис только по твоему действию</li><li>Без ключа — бесплатный сервис с лимитом</li><li>Плагины на JavaScript</li></ul></div>
-    <div class="feat"><div class="num">06 / 06</div><h3>Монохром<br><span class="grad">и стекло</span></h3><p>Оформление только в чёрном, белом и серых. Материал стекла на выбор: стандартный, прозрачный, матовый.</p>
-     <ul><li>Пружинящий отклик кнопок</li><li>Музыка капсулой в профиле</li><li>Без историй и рекламы в каналах</li></ul></div>
+    <div class="feat"><div class="num">01 / 06</div><h3 data-i="f.0.0"></h3><p data-i="f.0.1"></p>
+     <ul><li data-i="f.0.2"></li><li data-i="f.0.3"></li><li data-i="f.0.4"></li></ul></div>
+    <div class="feat"><div class="num">02 / 06</div><h3 data-i="f.1.0"></h3><p data-i="f.1.1"></p>
+     <ul><li data-i="f.1.2"></li><li data-i="f.1.3"></li><li data-i="f.1.4"></li></ul></div>
+    <div class="feat"><div class="num">03 / 06</div><h3 data-i="f.2.0"></h3><p data-i="f.2.1"></p>
+     <ul><li data-i="f.2.2"></li><li data-i="f.2.3"></li><li data-i="f.2.4"></li></ul></div>
+    <div class="feat"><div class="num">04 / 06</div><h3 data-i="f.3.0"></h3><p data-i="f.3.1"></p>
+     <ul><li data-i="f.3.2"></li><li data-i="f.3.3"></li><li data-i="f.3.4"></li></ul></div>
+    <div class="feat"><div class="num">05 / 06</div><h3 data-i="f.4.0"></h3><p data-i="f.4.1"></p>
+     <ul><li data-i="f.4.2"></li><li data-i="f.4.3"></li><li data-i="f.4.4"></li></ul></div>
+    <div class="feat"><div class="num">06 / 06</div><h3 data-i="f.5.0"></h3><p data-i="f.5.1"></p>
+     <ul><li data-i="f.5.2"></li><li data-i="f.5.3"></li><li data-i="f.5.4"></li></ul></div>
     <div class="progress" id="prog"><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i></div>
    </div>
    <div class="stage">
@@ -332,41 +355,39 @@ footer .fl{display:flex;gap:18px;flex-wrap:wrap}
       <!-- 1 ghost -->
       <div class="scr"><div class="ui">
        <div class="sb"><span>9:41</span><span class="ic"><span class="bars"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bat"></span></span></div>
-       <div class="th"><div class="pill">‹</div><div class="ttl">Аня<small id="ghostStatus">в сети</small></div><div class="pill" style="width:40px;padding:0;font-size:20px" id="ghostBtn">👻</div></div>
+       <div class="th"><div class="pill">‹</div><div class="ttl"><span data-p="anya.0"></span><small id="ghostStatus"></small></div><div class="pill" style="width:40px;padding:0;font-size:20px" id="ghostBtn">👻</div></div>
        <div class="chat">
-        <div class="sys">Сегодня</div>
-        <div class="msg in">ты видел мою историю? 👀<span class="t">23:40</span></div>
-        <div class="msg in">голосовое послушай 🎧<span class="t">23:41</span></div>
-        <div class="msg in" style="display:flex;align-items:center;gap:10px"><span style="width:34px;height:34px;border-radius:50%;background:#fff;color:#1f2a36;display:flex;align-items:center;justify-content:center;font-size:14px">▶</span><span style="display:flex;gap:2px;align-items:center">${WAVE}</span><span class="t">0:14</span></div>
-        <div class="sys" id="ghostToast" style="margin-top:auto;margin-bottom:70px;opacity:0;transition:opacity .5s">👻 Режим призрака включён</div>
+        <div class="sys" data-i="ui.today"></div>
+        <div class="msg in"><span data-i="ui.g1"></span><span class="t">23:40</span></div>
+        <div class="msg in"><span data-i="ui.g2"></span><span class="t">23:41</span></div>
+        <div class="msg in" style="display:flex;align-items:center;gap:10px"><span style="width:34px;height:34px;border-radius:50%;background:#fff;color:#1f2a36;display:flex;align-items:center;justify-content:center;font-size:14px">▶</span><span style="display:flex;gap:2px;align-items:center" id="waveBox"></span><span class="t">0:14</span></div>
+        <div class="sys" id="ghostToast" style="margin-top:auto;margin-bottom:70px;opacity:0;transition:opacity .5s" data-i="ui.ghostOn"></div>
        </div>
-       <div class="inp">Сообщение</div>
+       <div class="inp" data-i="ui.msg"></div>
       </div></div>
       <!-- 2 deleted -->
       <div class="scr"><div class="ui">
        <div class="sb"><span>9:41</span><span class="ic"><span class="bars"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bat"></span></span></div>
-       <div class="th"><div class="pill">‹</div><div class="ttl">Миша<small>был(а) недавно</small></div><div class="pill" style="width:40px;padding:0">М</div></div>
+       <div class="th"><div class="pill">‹</div><div class="ttl"><span data-p="mike.0"></span><small data-i="ui.recent"></small></div><div class="pill" style="width:40px;padding:0" data-p="mike.1"></div></div>
        <div class="chat">
-        <div class="sys">Сегодня</div>
-        <div class="msg in">го в субботу на концерт?<span class="t">19:02</span></div>
-        <div class="msg out">го! во сколько?<span class="t">19:03</span></div>
-        <div class="msg in" style="box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)">ладно, забей, я пошутил 😅<span class="t">19:05</span><div style="font-size:12px;color:rgba(255,255,255,.65);margin-top:4px">🗑 удалено · сохранено в AstraGram</div></div>
-        <div class="msg in">встречаемся в 8 у входа<span class="t">ред. 19:07</span></div>
+        <div class="sys" data-i="ui.today"></div>
+        <div class="msg in"><span data-i="ui.d1"></span><span class="t">19:02</span></div>
+        <div class="msg out"><span data-i="ui.d2"></span><span class="t">19:03</span></div>
+        <div class="msg in" style="box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)"><span data-i="ui.d3"></span><span class="t">19:05</span><div style="font-size:12px;color:rgba(255,255,255,.65);margin-top:4px" data-i="ui.dLabel"></div></div>
+        <div class="msg in"><span data-i="ui.d4"></span><span class="t"><span data-i="ui.edited"></span> 19:07</span></div>
         <div class="glass" style="border-radius:18px;padding:12px 14px;margin-top:8px;align-self:stretch">
-         <div style="font-size:12px;color:#8a98a8;margin-bottom:8px">ИСТОРИЯ ПРАВОК</div>
-         <div style="font-size:14px;color:rgba(255,255,255,.55);text-decoration:line-through">встречаемся в 7 у входа</div>
-         <div style="font-size:14px;margin-top:4px">встречаемся в 8 у входа</div>
+         <div style="font-size:12px;color:#8a98a8;margin-bottom:8px;text-transform:uppercase" data-i="ui.hist"></div>
+         <div style="font-size:14px;color:rgba(255,255,255,.55);text-decoration:line-through" data-i="ui.dOld"></div>
+         <div style="font-size:14px;margin-top:4px" data-i="ui.d4"></div>
         </div>
        </div>
-       <div class="inp">Сообщение</div>
+       <div class="inp" data-i="ui.msg"></div>
       </div></div>
       <!-- 3 face id -->
       <div class="scr"><div class="ui">
        <div class="sb"><span>9:41</span><span class="ic"><span class="bars"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bat"></span></span></div>
-       <div class="th"><div class="pill">Изм.</div><div class="ttl">Чаты</div><div class="pill" style="width:40px;padding:0">✎</div></div>
-       <div style="position:absolute;left:0;right:0;top:112px">
-        ${ROWS_LOCKED}
-       </div>
+       <div class="th"><div class="pill" data-i="ui.edit"></div><div class="ttl" data-i="ui.chats"></div><div class="pill" style="width:40px;padding:0">✎</div></div>
+       <div style="position:absolute;left:0;right:0;top:112px" id="rowsLocked"></div>
        <div id="faceid" style="position:absolute;left:50%;top:46%;width:170px;height:170px;margin:-85px 0 0 -85px;border-radius:40px;background:rgba(30,30,34,.85);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;box-shadow:0 30px 60px rgba(0,0,0,.6)">
         <svg width="74" height="74" viewBox="0 0 74 74" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"><path d="M4 22V12a8 8 0 0 1 8-8h10M52 4h10a8 8 0 0 1 8 8v10M70 52v10a8 8 0 0 1-8 8H52M22 70H12a8 8 0 0 1-8-8V52"/><path d="M25 26v6M49 26v6M37 28v14h-4"/><path d="M27 50c5 5 15 5 20 0"/></svg>
         <div style="font-size:14px;font-weight:600">Face ID</div>
@@ -375,52 +396,52 @@ footer .fl{display:flex;gap:18px;flex-wrap:wrap}
       <!-- 4 streaks -->
       <div class="scr"><div class="ui">
        <div class="sb"><span>9:41</span><span class="ic"><span class="bars"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bat"></span></span></div>
-       <div class="th"><div class="pill">‹</div><div class="ttl">Огоньки</div><div class="pill" style="width:40px;padding:0">⋯</div></div>
+       <div class="th"><div class="pill">‹</div><div class="ttl" data-i="ui.streaks"></div><div class="pill" style="width:40px;padding:0">⋯</div></div>
        <div style="margin:10px 16px 0;border-radius:26px;padding:20px;background:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.04));box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);text-align:center">
         <div style="font-size:64px;line-height:1" id="flame">🔥</div>
         <div style="font:800 44px/1 var(--display);letter-spacing:-.04em;margin-top:8px" id="streakN">42</div>
-        <div style="color:#8a98a8;font-size:14px;margin-top:4px">дня подряд с Аней · <b style="color:#fff">Костёр</b></div>
+        <div style="color:#8a98a8;font-size:14px;margin-top:4px" data-i="ui.streakCap"></div>
         <div style="display:flex;justify-content:space-between;margin-top:18px;font-size:11px;color:#8a98a8">
-         <span>✨<br>Искорка</span><span>🔥<br>Огонёк</span><span>🔥<br>Пламя</span><span style="color:#fff">🔥<br>Костёр</span><span>⭐️<br>Звезда</span></div>
+         <span>✨<br><b data-i="ui.stages.0" style="font-weight:400"></b></span><span>🔥<br><b data-i="ui.stages.1" style="font-weight:400"></b></span><span>🔥<br><b data-i="ui.stages.2" style="font-weight:400"></b></span><span style="color:#fff">🔥<br><b data-i="ui.stages.3" style="font-weight:400"></b></span><span>⭐️<br><b data-i="ui.stages.4" style="font-weight:400"></b></span></div>
         <div style="height:6px;border-radius:3px;background:rgba(255,255,255,.1);margin-top:10px;overflow:hidden"><i id="streakBar" style="display:block;height:100%;width:72%;background:#fff;border-radius:3px"></i></div>
        </div>
-       <div class="ghead">Горят</div>
-       ${ROWS_STREAK}
+       <div class="ghead" data-i="ui.hot"></div>
+       <div id="rowsStreak"></div>
       </div></div>
       <!-- 5 ai -->
       <div class="scr"><div class="ui">
        <div class="sb"><span>9:41</span><span class="ic"><span class="bars"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bat"></span></span></div>
-       <div class="th"><div class="pill">‹</div><div class="ttl">Lukas<small>в сети</small></div><div class="pill" style="width:40px;padding:0">L</div></div>
+       <div class="th"><div class="pill">‹</div><div class="ttl">Lukas<small data-i="ui.online"></small></div><div class="pill" style="width:40px;padding:0">L</div></div>
        <div class="chat">
-        <div class="sys">Сегодня</div>
-        <div class="msg in">Hey! Are we still meeting tomorrow at the station?<span class="t">10:12</span></div>
-        <div class="msg in" style="background:linear-gradient(160deg,#2a3542,#1f2a36);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)"><div style="font-size:11px;color:#a5e4ff;margin-bottom:3px">✦ Перевод · AI</div><span id="aiText"></span><span class="t">10:12</span></div>
-        <div class="glass" style="border-radius:18px;padding:10px;margin-top:10px;display:grid;gap:4px;align-self:flex-end;width:210px">
-         <div style="font-size:14px;padding:6px 8px">🌐 Перевести</div><div style="font-size:14px;padding:6px 8px">📝 Пересказать чат</div><div style="font-size:14px;padding:6px 8px">💬 Предложить ответ</div><div style="font-size:14px;padding:6px 8px">🎙 Расшифровать голосовое</div>
+        <div class="sys" data-i="ui.today"></div>
+        <div class="msg in"><span id="aiSrc"></span><span class="t">10:12</span></div>
+        <div class="msg in" style="background:linear-gradient(160deg,#2a3542,#1f2a36);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)"><div style="font-size:11px;color:#a5e4ff;margin-bottom:3px" data-i="ui.aiLabel"></div><span id="aiText"></span><span class="t">10:12</span></div>
+        <div class="glass" style="border-radius:18px;padding:10px;margin-top:10px;display:grid;gap:4px;align-self:flex-end;width:230px">
+         <div style="font-size:14px;padding:6px 8px" data-i="ui.aiMenu.0"></div><div style="font-size:14px;padding:6px 8px" data-i="ui.aiMenu.1"></div><div style="font-size:14px;padding:6px 8px" data-i="ui.aiMenu.2"></div><div style="font-size:14px;padding:6px 8px" data-i="ui.aiMenu.3"></div>
         </div>
        </div>
-       <div class="inp">Сообщение</div>
+       <div class="inp" data-i="ui.msg"></div>
       </div></div>
       <!-- 6 mono -->
       <div class="scr"><div class="ui" style="background:#000">
        <div class="sb"><span>9:41</span><span class="ic"><span class="bars"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bat"></span></span></div>
-       <div class="th"><div class="pill">‹</div><div class="ttl">Оформление</div><div class="pill" style="opacity:0">.</div></div>
-       <div class="ghead">Вид</div>
+       <div class="th"><div class="pill">‹</div><div class="ttl" data-i="ui.appearance"></div><div class="pill" style="opacity:0">.</div></div>
+       <div class="ghead" data-i="ui.look"></div>
        <div class="grp">
-        <div class="srow"><span class="ico">◐</span>Монохром<span class="sp"></span><span class="ios-sw" data-sw="0"></span></div>
-        <div class="srow"><span class="ico">◇</span>Пружинящие кнопки<span class="sp"></span><span class="ios-sw" data-sw="1"></span></div>
-        <div class="srow"><span class="ico">♫</span>Музыка капсулой<span class="sp"></span><span class="ios-sw" data-sw="2"></span></div>
+        <div class="srow"><span class="ico">◐</span><span data-i="ui.mono"></span><span class="sp"></span><span class="ios-sw" data-sw="0"></span></div>
+        <div class="srow"><span class="ico">◇</span><span data-i="ui.springy"></span><span class="sp"></span><span class="ios-sw" data-sw="1"></span></div>
+        <div class="srow"><span class="ico">♫</span><span data-i="ui.capsule"></span><span class="sp"></span><span class="ios-sw" data-sw="2"></span></div>
        </div>
-       <div class="ghead">Материал стекла</div>
+       <div class="ghead" data-i="ui.material"></div>
        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 16px">
-        <div class="glass" id="mat0" style="border-radius:20px;height:110px;display:flex;align-items:flex-end;padding:10px;font-size:13px;transition:box-shadow .4s">Стандарт</div>
-        <div id="mat1" style="border-radius:20px;height:110px;display:flex;align-items:flex-end;padding:10px;font-size:13px;background:rgba(255,255,255,.03);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);transition:box-shadow .4s">Прозрачный</div>
-        <div id="mat2" style="border-radius:20px;height:110px;display:flex;align-items:flex-end;padding:10px;font-size:13px;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);transition:box-shadow .4s">Матовый</div>
+        <div class="glass" id="mat0" style="border-radius:20px;height:110px;display:flex;align-items:flex-end;padding:10px;font-size:13px;transition:box-shadow .4s" data-i="ui.mats.0"></div>
+        <div id="mat1" style="border-radius:20px;height:110px;display:flex;align-items:flex-end;padding:10px;font-size:13px;background:rgba(255,255,255,.03);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);transition:box-shadow .4s" data-i="ui.mats.1"></div>
+        <div id="mat2" style="border-radius:20px;height:110px;display:flex;align-items:flex-end;padding:10px;font-size:13px;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);transition:box-shadow .4s" data-i="ui.mats.2"></div>
        </div>
-       <div class="ghead">Меньше лишнего</div>
+       <div class="ghead" data-i="ui.less"></div>
        <div class="grp">
-        <div class="srow"><span class="ico">⊘</span>Скрыть истории<span class="sp"></span><span class="ios-sw on"></span></div>
-        <div class="srow"><span class="ico">⊘</span>Без рекламы в каналах<span class="sp"></span><span class="ios-sw on"></span></div>
+        <div class="srow"><span class="ico">⊘</span><span data-i="ui.hideStories"></span><span class="sp"></span><span class="ios-sw on"></span></div>
+        <div class="srow"><span class="ico">⊘</span><span data-i="ui.noAds"></span><span class="sp"></span><span class="ios-sw on"></span></div>
        </div>
       </div></div>
      </div>
@@ -433,34 +454,34 @@ footer .fl{display:flex;gap:18px;flex-wrap:wrap}
 
  <!-- BENTO -->
  <section id="more"><div class="bento-wrap">
-  <div class="eyebrow rv">И ещё десятки мелочей</div>
-  <h2 class="h2 rv d1">Всё, чего тебе<br><span class="grad">не хватало.</span></h2>
+  <div class="eyebrow rv" data-i="bento.eyebrow"></div>
+  <h2 class="h2 rv d1" data-i="bento.h2"></h2>
   <div class="bento">
-   <div class="card glass span2 rv"><span class="spot"></span><div class="art"><div class="dedsec">DED<span>SEC</span></div></div><h4>DEDSEC</h4><p>Тишина всех групп и каналов одной кнопкой, включая новые. Исключения — в профиле чата.</p></div>
-   <div class="card glass tall rv d1"><span class="spot"></span><div class="art" style="height:300px;align-items:flex-start"><div class="code"><u>// плагин: команда .flip</u>
+   <div class="card glass span2 rv"><span class="spot"></span><div class="art"><div class="mute"><span class="bell"><i></i></span><span class="bell"><i></i></span><span class="bell"><i></i></span><b>DEDSEC</b></div></div><h4 data-i="bento.cards.0.0"></h4><p data-i="bento.cards.0.1"></p></div>
+   <div class="card glass tall rv d1"><span class="spot"></span><div class="art"><div class="code"><u data-i="bento.code"></u>
 <b>AstraGram</b>.onSend(<em>msg</em> =&gt; {
   if (<em>msg</em>.text.startsWith(<em>".flip"</em>))
     <em>msg</em>.text = <em>msg</em>.text
       .slice(5).split(<em>""</em>)
       .reverse().join(<em>""</em>)
-})</div></div><h4>Плагины на JavaScript</h4><p>Свои команды и обработчики сообщений. Перед установкой приложение предупреждает: плагин видит ваши сообщения.</p></div>
-   <div class="card glass rv d2"><span class="spot"></span><div class="art"><div class="adx"><i></i><i></i><i></i></div></div><h4>Без рекламы</h4><p>В каналах нет рекламных постов и похожих каналов.</p></div>
-   <div class="card glass rv"><span class="spot"></span><div class="art"><div class="wave"><i style="animation-delay:0s"></i><i style="animation-delay:.1s"></i><i style="animation-delay:.2s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.4s"></i><i style="animation-delay:.5s"></i><i style="animation-delay:.6s"></i><i style="animation-delay:.7s"></i></div></div><h4>Уведомления без push</h4><p>Сообщения приходят, пока AstraGram держит соединение в фоне.</p></div>
-   <div class="card glass rv d1"><span class="spot"></span><div class="art"><div class="chips"><span>/скидк[аи]/</span><span>спам</span><span>#реклама</span><span>крипт.*</span></div></div><h4>Фильтры</h4><p>Скрывать сообщения по словам и регулярным выражениям.</p></div>
-   <div class="card glass span2 rv d2"><span class="spot"></span><div class="art"><div class="chips"><span>🔖 Закладки</span><span>📝 Шаблоны</span><span>🔔 Уведомления по словам</span><span>🆔 ID в профиле</span><span>⏱ Секунды во времени</span><span>📤 Экспорт настроек</span></div></div><h4>Мелочи, которые решают</h4><p>Закладки, шаблоны ответов, детали сообщения, режим стримера, скриншоты и копирование без запретов.</p></div>
+})</div></div><h4 data-i="bento.cards.1.0"></h4><p data-i="bento.cards.1.1"></p></div>
+   <div class="card glass rv d2"><span class="spot"></span><div class="art"><div class="adx"><i></i><i data-ad=""></i><i></i></div></div><h4 data-i="bento.cards.2.0"></h4><p data-i="bento.cards.2.1"></p></div>
+   <div class="card glass rv"><span class="spot"></span><div class="art"><div class="wave"><i style="animation-delay:0.0s"></i> <i style="animation-delay:0.1s"></i> <i style="animation-delay:0.2s"></i> <i style="animation-delay:0.3s"></i> <i style="animation-delay:0.4s"></i> <i style="animation-delay:0.5s"></i> <i style="animation-delay:0.6s"></i> <i style="animation-delay:0.7s"></i></div></div><h4 data-i="bento.cards.3.0"></h4><p data-i="bento.cards.3.1"></p></div>
+   <div class="card glass rv d1"><span class="spot"></span><div class="art"><div class="chips" id="chipsF"></div></div><h4 data-i="bento.cards.4.0"></h4><p data-i="bento.cards.4.1"></p></div>
+   <div class="card glass span2 rv d2"><span class="spot"></span><div class="art"><div class="chips" id="chipsM"></div></div><h4 data-i="bento.cards.5.0"></h4><p data-i="bento.cards.5.1"></p></div>
   </div>
  </div></section>
 
  <!-- TRUST -->
  <section id="trust"><div class="trust">
-  <div class="eyebrow rv">Открытый код</div>
-  <h2 class="h2 rv d1">Не верь на слово.<br><span class="grad">Проверь сам.</span></h2>
+  <div class="eyebrow rv" data-i="trust.eyebrow"></div>
+  <h2 class="h2 rv d1" data-i="trust.h2"></h2>
   <div class="trust-grid">
    <div class="term glass rv"><div class="bar"><i></i><i></i><i></i><span>~/astragram</span></div><pre id="term"></pre></div>
    <div class="pillars">
-    <div class="pillar glass rv d1"><div class="ix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg></div><h4>Код открыт. Весь.</h4><p>Исходники лежат на <a href="https://github.com/dedsec-reth0/astragram">GitHub</a> под лицензией GPL-2.0. Основа — открытый код Telegram-iOS.</p></div>
-    <div class="pillar glass rv d2"><div class="ix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 22V12"/><path d="M21 7l-9 5-9-5"/></svg></div><h4>Собирает GitHub, не мы</h4><p>Каждая сборка идёт на GitHub Actions — её журнал видно всем. Релиз помечен тегом на коммит, из которого собран.</p></div>
-    <div class="pillar glass rv d3"><div class="ix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L20 3"/><path d="M17 6l3 3"/><path d="M15 8l2 2"/></svg></div><h4>Ключи API — твои</h4><p>При первом запуске ты вводишь свои API ID и Hash с my.telegram.org.</p></div>
+    <div class="pillar glass rv d1"><div class="ix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg></div><h4 data-i="trust.p.0.0"></h4><p data-i="trust.p.0.1"></p></div>
+    <div class="pillar glass rv d2"><div class="ix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 22V12"/><path d="M21 7l-9 5-9-5"/></svg></div><h4 data-i="trust.p.1.0"></h4><p data-i="trust.p.1.1"></p></div>
+    <div class="pillar glass rv d3"><div class="ix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L20 3"/><path d="M17 6l3 3"/><path d="M15 8l2 2"/></svg></div><h4 data-i="trust.p.2.0"></h4><p data-i="trust.p.2.1"></p></div>
    </div>
   </div>
  </div></section>
@@ -468,41 +489,73 @@ footer .fl{display:flex;gap:18px;flex-wrap:wrap}
  <!-- CTA -->
  <section class="cta-sec" id="get">
   <div>
-   <div class="eyebrow rv">Бесплатно · iOS 15+</div>
-   <h2 class="rv d1" style="margin-top:18px">Поставь<br><span class="grad">за минуту.</span></h2>
+   <div class="eyebrow rv" data-i="cta.eyebrow"></div>
+   <h2 class="rv d1" style="margin-top:18px" data-i="cta.h2"></h2>
    <div class="steps">
-    <div class="step glass rv d1"><b>1</b>Установи AltStore или SideStore</div>
-    <div class="step glass rv d2"><b>2</b>Добавь источник AstraGram</div>
-    <div class="step glass rv d3"><b>3</b>Нажми Free — и готово</div>
+    <div class="step glass rv d1"><b>1</b><span data-i="cta.steps.0"></span></div>
+    <div class="step glass rv d2"><b>2</b><span data-i="cta.steps.1"></span></div>
+    <div class="step glass rv d3"><b>3</b><span data-i="cta.steps.2"></span></div>
    </div>
-   <div class="row rv d3" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:34px">
-    <a class="btn white mag" href="install/#altstore">Открыть в AltStore</a>
-    <a class="btn glass mag" href="install/#ipa">Скачать IPA</a>
+   <div class="rv d3" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:34px">
+    <a class="btn white mag" href="install/#altstore" data-i="cta.alt"></a>
+    <a class="btn glass mag" href="install/#ipa" data-i="cta.ipa"></a>
    </div>
-   <div class="rv d4" style="margin-top:22px;font-size:14px;color:var(--faint)" id="ver">Последняя сборка — на GitHub</div>
+   <div class="rv d4" style="margin-top:22px;font-size:14px;color:var(--faint)" id="ver"></div>
   </div>
  </section>
 </main>
 
 <footer>
- <div>AstraGram — неофициальный клиент Telegram. С Telegram не связан; название и логотип Telegram принадлежат их владельцу.<br>Push-уведомления в сборках из AltStore не приходят; режим призрака не скрывает подключение от сервера Telegram.</div>
- <div class="fl"><a href="https://github.com/dedsec-reth0/astragram">GitHub</a><a href="https://t.me/astragram_news">Канал в Telegram</a><a href="install/">Установка</a></div>
+ <div data-i="foot.text"></div>
+ <div class="fl"><a href="https://github.com/dedsec-reth0/astragram">GitHub</a><a href="https://t.me/astragram_news" data-i="foot.channel"></a><a href="install/" data-i="foot.install"></a></div>
 </footer>
 
+<script src="i18n.js"></script>
 <script>
-/* ================= content helpers ================= */
+/* ================= i18n ================= */
+const LANGS=['ru','en','uk','es','pt','de','fr','tr'];
+let LANG='ru',D=I18N.ru;
+function pick(){
+ const q=new URLSearchParams(location.search).get('lang');if(q&&I18N[q])return q;
+ try{const s=localStorage.getItem('astragram.lang');if(s&&I18N[s])return s}catch(e){}
+ const nav=(navigator.languages||[navigator.language||'en']).map(l=>String(l).toLowerCase().slice(0,2));
+ for(const l of nav){if(I18N[l])return l;if(l==='be'||l==='kk')return 'ru'}
+ return 'en'}
+function get(path){return path.split('.').reduce((o,k)=>o==null?o:o[k],D)}
+const avatar=(l,c)=>`<div class="av" style="background:linear-gradient(160deg,${c[0]},${c[1]})">${l}</div>`;
+function applyLang(l){
+ LANG=l;D=I18N[l];document.documentElement.lang=l;document.title=D.meta.title;
+ const md=document.querySelector('meta[name=description]');if(md)md.content=D.meta.desc;
+ document.querySelectorAll('[data-i]').forEach(el=>{const v=get(el.dataset.i);if(v!=null)el.innerHTML=v});
+ document.querySelectorAll('[data-p]').forEach(el=>{const v=el.dataset.p.split('.').reduce((o,k)=>o&&o[k],D.people);if(v!=null)el.textContent=v});
+ document.querySelectorAll('[data-ad]').forEach(el=>el.dataset.ad=D.bento.ad);
+ // manifesto: *word* marks highlighted words
+ let on=false;document.getElementById('mf').innerHTML=D.mf.split(' ').map(w=>{let st=on;if(w.startsWith('*')){st=true;on=true}const hl=on;if(w.replace(/[.,!?»“”"’]+$/,'').endsWith('*')||w.endsWith('*'))on=false;return `<span class="w${hl?' hl':''}">${w.replace(/\*/g,'')}</span>`}).join(' ');
+ words=[...document.querySelectorAll('#mf .w')];
+ // phone rows
+ const P=D.people;
+ const locked=[[P.anya,['#ff7eb3','#ff5c8a'],1,'23:41'],[null,null,0,'23:20',P.astra],[P.bank,['#fde047','#f59e0b'],1,'22:10'],[P.family,['#5eead4','#22c55e'],0,'21:58',P.family[2]],[P.work,['#7dd3fc','#3b82f6'],0,'21:47',P.work[2]],[P.mike,['#c4b5fd','#8b5cf6'],1,'20:15'],[P.study,['#f0abfc','#d946ef'],0,'18:02',P.study[2]]];
+ document.getElementById('rowsLocked').innerHTML=locked.map(r=>`<div class="crow">${r[0]?avatar(r[0][1],r[1]):'<img class="av" src="icon.png" style="border-radius:50%">'}<div class="tx"><div class="nm">${r[2]?'🔒 ':''}${r[0]?r[0][0]:'AstraGram'}</div><div class="pv">${r[2]?'<span class="lockbar" style="width:140px"></span> <span class="lockbar" style="width:60px"></span>':r[4]}</div></div><div class="rt">${r[3]}</div></div>`).join('');
+ const streak=[[P.anya,['#ff7eb3','#ff5c8a'],'🔥 42'],[P.alex,['#fdba74','#f97316'],'🔥 9'],[P.mike,['#c4b5fd','#8b5cf6'],'✨ 2']];
+ document.getElementById('rowsStreak').innerHTML=streak.map(r=>`<div class="crow">${avatar(r[0][1],r[1])}<div class="tx"><div class="nm">${r[0][0]}</div><div class="pv">${D.ui.wrote}</div></div><div class="rt" style="color:#fff;font-size:15px;font-weight:600;margin-top:0;align-self:center">${r[2]}</div></div>`).join('');
+ document.getElementById('aiSrc').textContent=l==='en'?'Hey! Treffen wir uns morgen noch am Bahnhof?':'Hey! Are we still meeting tomorrow at the station?';
+ document.getElementById('chipsF').innerHTML=D.bento.filters.map(c=>`<span>${c}</span>`).join('');
+ document.getElementById('chipsM').innerHTML=D.bento.chips.map(c=>`<span>${c}</span>`).join('');
+ document.getElementById('langCur').textContent=D.short;
+ document.querySelectorAll('#langMenu button').forEach(b=>b.classList.toggle('on',b.dataset.l===l));
+ if(window.onLang)window.onLang();
+}
+let words=[];
 (function(){
- const WAVE=Array.from({length:22},(_,i)=>`<i style="display:block;width:3px;border-radius:2px;background:rgba(255,255,255,.75);height:${6+Math.round(Math.abs(Math.sin(i*1.7))*18)}px"></i>`).join('');
- const av=(l,c)=>`<div class="av" style="background:linear-gradient(160deg,${c[0]},${c[1]})">${l}</div>`;
- const locked=[['Аня','А',['#ff7eb3','#ff5c8a'],1,'23:41'],['AstraGram','',null,0,'23:20','Обновление уже в AltStore'],['Банк','Б',['#fde047','#f59e0b'],1,'22:10'],['Семья ❤️','С',['#5eead4','#22c55e'],0,'21:58','Мама: ты поел?'],['Работа','Р',['#7dd3fc','#3b82f6'],0,'21:47','Лена: отчёт до утра, ок?'],['Миша','М',['#c4b5fd','#8b5cf6'],1,'20:15'],['Учёба','У',['#f0abfc','#d946ef'],0,'18:02','Катя: конспект.pdf']];
- const ROWS_LOCKED=locked.map(r=>`<div class="crow">${r[2]?av(r[1],r[2]):'<img class="av" src="icon.png" style="border-radius:50%">'}<div class="tx"><div class="nm">${r[3]?'🔒 ':''}${r[0]}</div><div class="pv">${r[3]?'<span class="lockbar" style="width:140px"></span> <span class="lockbar" style="width:60px"></span>':r[5]}</div></div><div class="rt">${r[4]}</div></div>`).join('');
- const streak=[['Аня','А',['#ff7eb3','#ff5c8a'],'🔥 42'],['Лёха','Л',['#fdba74','#f97316'],'🔥 9'],['Миша','М',['#c4b5fd','#8b5cf6'],'✨ 2']];
- const ROWS_STREAK=streak.map(r=>`<div class="crow">${av(r[1],r[2])}<div class="tx"><div class="nm">${r[0]}</div><div class="pv">написали сегодня</div></div><div class="rt" style="color:#fff;font-size:15px;font-weight:600;margin-top:0;align-self:center">${r[3]}</div></div>`).join('');
- const s=document.getElementById('screen');
- s.innerHTML=s.innerHTML.replace('${WAVE}',WAVE).replace('${ROWS_LOCKED}',ROWS_LOCKED).replace('${ROWS_STREAK}',ROWS_STREAK);
- // manifesto words
- const mf=document.getElementById('mf');const HL=['убрали','мешает.','«в','сети»','«прочитано».','остаётся','исчезает.','на','виду.'];
- mf.innerHTML=mf.textContent.split(' ').map(w=>`<span class="w${HL.includes(w)?' hl':''}">${w}</span>`).join(' ');
+ document.getElementById('waveBox').innerHTML=Array.from({length:22},(_,i)=>`<i style="display:block;width:3px;border-radius:2px;background:rgba(255,255,255,.75);height:${6+Math.round(Math.abs(Math.sin(i*1.7))*18)}px"></i>`).join('');
+ const menu=document.getElementById('langMenu'),btn=document.getElementById('langBtn');
+ menu.innerHTML=LANGS.map(l=>`<button role="menuitem" data-l="${l}"><b>${I18N[l].short}</b>${I18N[l].name}</button>`).join('');
+ const close=()=>{menu.classList.remove('open');btn.setAttribute('aria-expanded','false')};
+ btn.addEventListener('click',e=>{e.stopPropagation();const o=menu.classList.toggle('open');btn.setAttribute('aria-expanded',o?'true':'false')});
+ menu.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;try{localStorage.setItem('astragram.lang',b.dataset.l)}catch(_){}
+  applyLang(b.dataset.l);const u=new URL(location.href);u.searchParams.set('lang',b.dataset.l);history.replaceState(null,'',u);close()});
+ document.addEventListener('click',close);
+ applyLang(pick());
 })();
 
 /* ================= WebGL liquid chrome ================= */
@@ -599,6 +652,7 @@ const GL=(function(){
  }};
 })();
 
+let relInfo=null;
 /* ================= scroll timeline ================= */
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v)),lerp=(a,b,k)=>a+(b-a)*k;
@@ -623,7 +677,6 @@ addEventListener('pointermove',e=>{mouse.x=e.clientX/innerWidth*2-1;mouse.y=-(e.
 if(window.DeviceOrientationEvent&&/iPhone|iPad|Android/.test(navigator.userAgent)){addEventListener('deviceorientation',e=>{if(e.gamma==null)return;mouse.x=clamp(e.gamma/30,-1,1);mouse.y=clamp((45-e.beta)/30,-1,1)},{passive:true})}
 
 const secHero=$('#hero'),secMf=$('#manifesto'),secF=$('#features'),secMore=$('#more'),secTrust=$('#trust'),secGet=$('#get');
-const words=$$('#mf .w');
 const feats=$$('.feat'),scrs=$$('.scr'),bars=$$('#prog b'),phone=$('#phone'),glare=$('#glare');
 let activeF=-1;
 function target(){
@@ -667,7 +720,7 @@ function updateDOM(pm,pf,t){
  if(idx===0){const on=lt>1.0;$('#ghostStatus').textContent=on?'был(а) недавно':'в сети';$('#ghostBtn').style.background=on?'#fff':'';$('#ghostBtn').style.filter=on?'grayscale(1) invert(1)':'';$('#ghostToast').style.opacity=on&&lt<3.2?1:0}
  if(idx===2){const k=(lt%3)/3;const fid=$('#faceid');fid.style.transform=`scale(${k<.15?lerp(.8,1,k/.15):1})`;fid.style.opacity=k<.85?1:1-(k-.85)/.15}
  if(idx===3){$('#streakN').textContent=Math.min(42,Math.floor(lt*28));$('#flame').style.transform=`scale(${1+.06*Math.sin(t*6)})`}
- if(idx===4){const full='Привет! Мы всё ещё встречаемся завтра на вокзале?';$('#aiText').textContent=full.slice(0,Math.floor(clamp((lt-.4)/1.6)*full.length))}
+ if(idx===4){const full=D.ui.aiOut;$('#aiText').textContent=full.slice(0,Math.floor(clamp((lt-.4)/1.6)*full.length))}
  if(idx===5){$$('.ios-sw[data-sw]').forEach(el=>el.classList.toggle('on',lt>.5+(+el.dataset.sw)*.45));['mat0','mat1','mat2'].forEach((id,i)=>{$('#'+id).style.boxShadow=(Math.floor(lt/1.2)%3===i)?'inset 0 0 0 2px #fff':'inset 0 0 0 1px rgba(255,255,255,.1)'})}
 }
 // fit 390px screen design into the phone screen
@@ -717,19 +770,22 @@ if(matchMedia('(pointer:fine)').matches){
   ['','g',d.sha],
   ['$ ','c','gh run list -w "Build AstraGram" -L 1'],
   ['','ok','✓ Build AstraGram · master · '+d.short],
-  ['','','# релиз собран из этого коммита — проверь сам'],
+  ['','',D.trust.note],
  ];
  function run(d){const L=lines(d);let i=0,j=0,out='';
   (function step(){if(i>=L.length){pre.innerHTML=out+'<span class="caret"></span>';return}
    const [pfx,cls,txt]=L[i];const isCmd=cls==='c';
    if(isCmd){j++;const part=txt.slice(0,j);pre.innerHTML=out+pfx+`<span class="c">${part}</span><span class="caret"></span>`;if(j>=txt.length){out+=pfx+`<span class="c">${txt}</span>\n`;i++;j=0;setTimeout(step,260)}else setTimeout(step,reduce?0:22)}
    else{out+=`<span class="${cls}">${txt}</span>\n`;pre.innerHTML=out+'<span class="caret"></span>';i++;setTimeout(step,reduce?0:140)}})()}
+ window.showVer=function(){const v=$('#ver');const j=relInfo;const m=j&&(j.name||'').match(/([\d.]+).*\((\d+)\)/);v.textContent=m?D.cta.ver.replace('{v}',m[1]).replace('{b}',m[2]).replace('{d}',new Date(j.published_at).toLocaleDateString(LANG==='uk'?'uk-UA':LANG,{day:'numeric',month:'long'})):D.cta.verFb};
+ window.onLang=showVer;showVer();
  const fallback={name:'AstraGram 1.0.37 Alpha (103820)',tag:'v13.2-103820',sha:'92e7e6474fb0e046017bd4c8121e2a8b3b2ca7d8',short:'92e7e64'};
  let data=fallback;
  fetch('https://api.github.com/repos/dedsec-reth0/astragram/releases/latest').then(r=>r.ok?r.json():null).then(j=>{
   if(j&&j.tag_name){const sha=/^[0-9a-f]{40}$/.test(j.target_commitish)?j.target_commitish:fallback.sha;
    data={name:j.name,tag:j.tag_name,sha,short:sha.slice(0,7)};
-   const v=$('#ver');const m=(j.name||'').match(/([\d.]+).*\((\d+)\)/);if(m)v.textContent=`Последняя сборка — ${m[1]} (${m[2]}), ${new Date(j.published_at).toLocaleDateString('ru-RU',{day:'numeric',month:'long'})}`}
+   relInfo=j;showVer();
+  }
  }).catch(()=>{});
  new IntersectionObserver((es,o)=>{if(es[0].isIntersecting&&!started){started=true;o.disconnect();setTimeout(()=>run(data),400)}},{threshold:.3}).observe(pre);
 })();
