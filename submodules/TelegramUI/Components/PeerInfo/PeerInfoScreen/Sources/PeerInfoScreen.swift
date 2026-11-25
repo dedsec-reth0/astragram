@@ -5836,12 +5836,17 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 } else {
                     wasAdded = true
                     sectionNode = PeerInfoScreenItemSectionContainerNode()
+                    // AstraGram: on a colored profile the editing cards are the same glass as the others; without it
+                    // their corners were drawn in the theme's black.
+                    if let tint = self.astraFlowTint {
+                        sectionNode.astraTint = self.astraCardColor(tint)
+                    }
                     self.editingSections[sectionId] = sectionNode
                     self.scrollNode.insertSubnode(sectionNode, belowSubnode: self.paneContainerNode)
                 }
                 
                 let sectionWidth = layout.size.width - insets.left - insets.right
-                let sectionHeight = sectionNode.update(context: self.context, width: sectionWidth, safeInsets: UIEdgeInsets(), hasCorners: !insets.left.isZero, presentationData: self.presentationData, items: sectionItems, transition: transition)
+                let sectionHeight = sectionNode.update(context: self.context, width: sectionWidth, safeInsets: UIEdgeInsets(), hasCorners: !insets.left.isZero, presentationData: self.astraSectionPresentationData, items: sectionItems, transition: transition)
                 let sectionFrame = CGRect(origin: CGPoint(x: insets.left, y: contentHeight), size: CGSize(width: sectionWidth, height: sectionHeight))
                 
                 if wasAdded {
@@ -6154,6 +6159,10 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             for (_, section) in self.regularSections {
                 section.astraTint = cardColor
             }
+            for (_, section) in self.editingSections {
+                section.astraTint = cardColor
+            }
+            self.headerNode.editingContentNode.astraCardColor = cardColor
         }
         if self.paneContainerNode.astraTint != color {
             self.paneContainerNode.astraTint = color

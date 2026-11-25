@@ -18,6 +18,14 @@ final class PeerInfoHeaderEditingContentNode: ASDisplayNode {
     let avatarButtonNode: HighlightableButtonNode
     
     var itemNodes: [PeerInfoHeaderTextFieldNodeKey: PeerInfoHeaderTextFieldNode] = [:]
+    /// AstraGram: the cards' glass color on a colored profile (nil: the theme's).
+    var astraCardColor: UIColor? {
+        didSet {
+            for (_, itemNode) in self.itemNodes {
+                itemNode.astraCardColor = self.astraCardColor
+            }
+        }
+    }
     
     init(context: AccountContext, requestUpdateLayout: @escaping () -> Void) {
         self.context = context
@@ -166,6 +174,7 @@ final class PeerInfoHeaderEditingContentNode: ASDisplayNode {
                 } else {
                     itemNode = PeerInfoHeaderSingleLineTextFieldNode()
                 }
+                itemNode.astraCardColor = self.astraCardColor
                 self.itemNodes[key] = itemNode
                 self.addSubnode(itemNode)
             }

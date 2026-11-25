@@ -773,7 +773,31 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         expandBackgroundFrame.origin.x -= 50.0
         expandBackgroundFrame.size.width += 50.0
         self.expandBackgroundNode.frame = expandBackgroundFrame
-        self.expandBackgroundNode.image = generateExpandBackground(size: expandBackgroundFrame.size, color: presentationData.theme.list.itemBlocksBackgroundColor)
+        // AstraGram: the text fades out under "more" through a mask, not under a patch of the card's color: on a
+        // see-through card (a colored profile) that patch showed as a dark block.
+        self.expandBackgroundNode.image = nil
+        if !self.expandBackgroundNode.isHidden && textFrame.width > 1.0 && textFrame.height > 1.0 {
+            let fadeRect = expandBackgroundFrame.offsetBy(dx: -textFrame.minX, dy: -textFrame.minY)
+            let mask = CALayer()
+            mask.frame = CGRect(origin: .zero, size: textFrame.size)
+            mask.contents = generateImage(textFrame.size, rotatedContext: { size, context in
+                context.clear(CGRect(origin: .zero, size: size))
+                context.setFillColor(UIColor.white.cgColor)
+                context.fill(CGRect(origin: .zero, size: size))
+                context.clear(fadeRect)
+                let colors: [CGColor] = [UIColor.white.cgColor, UIColor.white.withAlphaComponent(0.0).cgColor]
+                var locations: [CGFloat] = [0.0, 1.0]
+                if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: &locations) {
+                    context.saveGState()
+                    context.clip(to: CGRect(x: fadeRect.minX, y: fadeRect.minY, width: 40.0, height: fadeRect.height))
+                    context.drawLinearGradient(gradient, start: CGPoint(x: fadeRect.minX, y: 0.0), end: CGPoint(x: fadeRect.minX + 40.0, y: 0.0), options: [])
+                    context.restoreGState()
+                }
+            })?.cgImage
+            self.textNode.layer.mask = mask
+        } else {
+            self.textNode.layer.mask = nil
+        }
         
         transition.updateFrame(node: self.labelNode, frame: labelFrame)
         transition.updateFrame(node: self.rightLabelNode, frame: rightLabelFrame)

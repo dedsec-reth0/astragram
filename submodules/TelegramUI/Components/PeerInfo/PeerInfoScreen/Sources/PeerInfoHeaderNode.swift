@@ -82,6 +82,8 @@ enum PeerInfoHeaderTextFieldNodeKey: Equatable {
 
 protocol PeerInfoHeaderTextFieldNode: ASDisplayNode {
     var text: String { get }
+    /// AstraGram: the card's color on a colored profile (nil: the theme's).
+    var astraCardColor: UIColor? { get set }
     
     func update(width: CGFloat, leftInset: CGFloat, rightInset: CGFloat, isSettings: Bool, hasPrevious: Bool, hasNext: Bool, placeholder: String, isEnabled: Bool, presentationData: PresentationData, updateText: String?) -> CGFloat
 }

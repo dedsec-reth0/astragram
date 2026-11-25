@@ -13,6 +13,13 @@ final class PeerInfoHeaderSingleLineTextFieldNode: ASDisplayNode, PeerInfoHeader
     private let clearButtonNode: HighlightableButtonNode
     private let topSeparator: ASDisplayNode
     private let maskNode: ASImageNode
+    var astraCardColor: UIColor? {
+        didSet {
+            if let theme = self.theme {
+                self.backgroundNode.backgroundColor = self.astraCardColor ?? theme.list.itemBlocksBackgroundColor
+            }
+        }
+    }
     
     private var theme: PresentationTheme?
     
@@ -106,7 +113,7 @@ final class PeerInfoHeaderSingleLineTextFieldNode: ASDisplayNode, PeerInfoHeader
         if self.theme !== presentationData.theme {
             self.theme = presentationData.theme
             
-            self.backgroundNode.backgroundColor = presentationData.theme.list.itemBlocksBackgroundColor
+            self.backgroundNode.backgroundColor = self.astraCardColor ?? presentationData.theme.list.itemBlocksBackgroundColor
             
             self.textNode.textField.textColor = presentationData.theme.list.itemPrimaryTextColor
             self.textNode.textField.keyboardAppearance = presentationData.theme.rootController.keyboardColor.keyboardAppearance
@@ -158,7 +165,19 @@ final class PeerInfoHeaderSingleLineTextFieldNode: ASDisplayNode, PeerInfoHeader
         let hasTopCorners = hasCorners && !hasPrevious
         let hasBottomCorners = hasCorners && !hasNext
         
-        self.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(presentationData.theme, top: hasTopCorners, bottom: hasBottomCorners, glass: true) : nil
+        // AstraGram: rounded by the card's own corners, not by a patch of the page's color laid over them (that patch
+        // showed as black squares on a colored profile).
+        self.maskNode.image = nil
+        var astraCorners: CACornerMask = []
+        if hasTopCorners {
+            astraCorners.formUnion([.layerMinXMinYCorner, .layerMaxXMinYCorner])
+        }
+        if hasBottomCorners {
+            astraCorners.formUnion([.layerMinXMaxYCorner, .layerMaxXMaxYCorner])
+        }
+        self.backgroundNode.layer.cornerRadius = astraCorners.isEmpty ? 0.0 : 26.0
+        self.backgroundNode.layer.cornerCurve = .continuous
+        self.backgroundNode.layer.maskedCorners = astraCorners
         self.maskNode.frame = CGRect(origin: CGPoint(x: leftInset, y: 0.0), size: CGSize(width: width - leftInset - rightInset, height: height))
         
         self.textNode.isUserInteractionEnabled = isEnabled
