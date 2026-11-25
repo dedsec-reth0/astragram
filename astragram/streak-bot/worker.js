@@ -10,9 +10,9 @@
 const MAX_PAIRS = 300;
 const STALE_DAYS = 30;
 
-// The bot's admin: their private chat is the control panel and the support inbox. A plain Telegram user id (not a
-// secret): messaging someone needs them to have started the bot.
-const ADMIN_ID = 887825713;
+// The bot's admin: their private chat is the control panel and the support inbox. Read from the ADMIN_ID Worker
+// secret at each entry (set below), so the id is not kept in the source. 0 until set: admin features stay off.
+let ADMIN_ID = 0;
 // How many messages one invocation sends, kept well under the Workers subrequest limit and the free plan's 50 D1
 // queries per invocation (a drain makes a few queries per batch, not per message).
 const BROADCAST_BATCH = 20;
@@ -1543,6 +1543,7 @@ async function handleSetup(url, env) {
 
 export default {
   async fetch(request, env) {
+    ADMIN_ID = Number(env.ADMIN_ID) || 0;
     const url = new URL(request.url);
     if (request.method === 'POST' && url.pathname === '/tg') return handleTelegram(request, env);
     if (request.method === 'GET' && url.pathname === '/api/status') return handleStatus(env);
@@ -1561,6 +1562,7 @@ export default {
     return new Response('not found', { status: 404 });
   },
   async scheduled(event, env, ctx) {
+    ADMIN_ID = Number(env.ADMIN_ID) || 0;
     ctx.waitUntil((async () => {
       // Every minute: move the broadcast queue along. Reminders and cleanup stay hourly (at minute 5, as before).
       await drainBroadcast(env);
