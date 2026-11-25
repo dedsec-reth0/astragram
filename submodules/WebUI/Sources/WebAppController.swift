@@ -3866,7 +3866,9 @@ public final class WebAppController: ViewController, AttachmentContainable {
         if let backgroundColor = self.controllerNode.headerColor, let textColor = self.controllerNode.headerPrimaryTextColor {
             navigationBarPresentationData = NavigationBarPresentationData(
                 theme: NavigationBarTheme(
-                    overallDarkAppearance: false,
+                    // AstraGram: the glass buttons take light or dark from this, so it follows the bot's header colour;
+                    // a dark header under a light app theme drew white buttons with white icons.
+                    overallDarkAppearance: backgroundColor.lightness < 0.5,
                     buttonColor: textColor,
                     disabledButtonColor: textColor,
                     primaryTextColor: textColor,
