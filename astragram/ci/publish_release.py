@@ -32,9 +32,11 @@ SOURCE_TAG = 'sidestore-source'
 SOURCE_IDENTIFIER = 'com.github.dedsec-reth0.ayugram'
 BUNDLE_ID = 'ph.telegra.Telegraph'
 MAX_NEWS = 5
-# The version people see: 1.0.1, 1.0.2, ... one step per build after MARKETING_BASE. The app's own version
-# (CFBundleShortVersionString, 13.2) and the build number stay as they are, so AltStore keeps seeing every build as an
-# update; AltStore shows `marketingVersion` instead. The same base is in AstraGramSettingsController.swift.
+# The version people see: 1.0.1, 1.0.2, ... one step per build after MARKETING_BASE, shown via `marketingVersion`.
+# Classic AltStore/AltServer decides "update available" by the `version` string, so every build must ship a distinct
+# one: CFBundleShortVersionString and the source's `version` are both "13.2.<build>" (see Telegram/BUILD VersionInfoPlist
+# and release_versions below). A constant "13.2" made every build look identical and no update was ever offered. The
+# same marketing base is in AstraGramSettingsController.swift.
 MARKETING_PREFIX = '1.0'
 MARKETING_BASE = 103783
 
@@ -167,7 +169,10 @@ def release_versions(repo, known):
             if len(ipas) == 1:
                 description += '\n\nЭта сборка с расширениями приложения: ей нужно 7 App ID.'
         versions.append({
-            'version': version,
+            # Must equal the IPA's CFBundleShortVersionString (version.build, e.g. 13.2.103825). Classic AltStore
+            # compares this string to the installed app's to decide whether an update is available; a constant "13.2"
+            # for every build is why no update was ever shown. See Telegram/BUILD VersionInfoPlist.
+            'version': '{}.{}'.format(version, build),
             'buildVersion': build,
             'marketingVersion': marketing_version(build),
             'date': previous.get('date') or release.get('published_at'),

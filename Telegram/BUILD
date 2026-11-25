@@ -608,6 +608,11 @@ genrule(
     name = "VersionInfoPlist",
     srcs = ["//:versions.json"],
     outs = ["VersionInfoPlist.plist"],
+    # CFBundleShortVersionString carries the build number (e.g. 13.2.103825), not a constant "13.2", so it grows with
+    # every build. Classic AltStore/AltServer decides "update available" by comparing this string against the installed
+    # app's; a constant made every build look identical and no update was ever offered. Make.py always passes
+    # --define=buildNumber, so $(buildNumber) is defined here. All extensions share this plist, so their versions match
+    # the host's (iOS refuses to install an app whose extensions' versions differ).
     cmd = """
         version=$$(python3 -c "import json; print(json.load(open('$(location //:versions.json)'))['app'])")
         cat > $@ <<PLIST
@@ -616,7 +621,7 @@ genrule(
 <plist version="1.0">
 <dict>
     <key>CFBundleShortVersionString</key>
-    <string>$$version</string>
+    <string>$$version.$(buildNumber)</string>
 </dict>
 </plist>
 PLIST
