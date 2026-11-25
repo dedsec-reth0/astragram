@@ -749,12 +749,13 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.button(id: 117, section: .onlineExceptions, title: strings.restartApp, label: "", kind: .restartApp))
     entries.append(.footer(id: 118, section: .onlineExceptions, text: strings.restartFooter))
     entries.append(.reset(strings.resetSettings))
-    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
     let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
-    // The version people see: one step per build after 103783 (as in astragram/ci/publish_release.py).
+    // The version people see: one step per build after 103783 (as in astragram/ci/publish_release.py). The raw
+    // CFBundleShortVersionString is now "13.2.<build>" (so AltStore sees each build as an update), which would just
+    // repeat the build number here, so only the marketing version and the build number are shown.
     let astraBuildNumber = Int(build) ?? 0
     let astraMarketingVersion = astraBuildNumber > 103783 ? "1.0.\(astraBuildNumber - 103783)" : "1.0.0"
-    entries.append(.version("AstraGram \(astraMarketingVersion) Alpha · \(version) (\(build))"))
+    entries.append(.version("AstraGram \(astraMarketingVersion) Alpha (\(build))"))
 
     return entries
 }
