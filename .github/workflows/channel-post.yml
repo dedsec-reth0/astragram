@@ -5,6 +5,8 @@ name: Channel post
 #   cover.jpg   - the picture (1280x720)
 #   caption.txt - the text, plain, up to 1024 characters (longer text goes out as a separate message after the photo)
 #   video.txt   - optional: path of an mp4 in this branch (e.g. videos/x.mp4); then the video is sent instead of the photo
+# Every post gets two buttons under it: GitHub (latest release, the IPA files) and AltStore (how to add the source).
+# Telegram buttons open only http(s) and tg:// links, so the AltStore button cannot use altstore:// itself.
 # Adding a new caption.txt to this branch posts it once. Re-post by hand with "Run workflow" and the folder name.
 
 on:
@@ -31,6 +33,7 @@ jobs:
     env:
       BOT_TOKEN: ${{ secrets.STREAK_BOT_TOKEN }}
       CHANNEL: '@astragram_news'
+      BUTTONS: '{"inline_keyboard":[[{"text":"📦 GitHub · IPA","url":"https://github.com/dedsec-reth0/astragram/releases/latest"},{"text":"📥 AltStore","url":"https://github.com/dedsec-reth0/astragram#%D1%83%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BA%D0%B0"}]]}'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -68,15 +71,15 @@ jobs:
             vid=""; [ -f "$d/video.txt" ] && vid=$(head -1 "$d/video.txt" | tr -d '\r')
             if [ -n "$vid" ] && [ -f "$vid" ] && [ "$len" -le 1024 ]; then
               res=$(curl -sS -X POST "$api/sendVideo" --form-string "chat_id=$CHANNEL" -F "video=@$vid" --form-string "supports_streaming=true" \
-                --form-string "width=1080" --form-string "height=1920" --form-string "caption=$(cat "$d/caption.txt")")
+                --form-string "width=1080" --form-string "height=1920" --form-string "caption=$(cat "$d/caption.txt")" --form-string "reply_markup=$BUTTONS")
             elif [ -f "$d/cover.jpg" ] && [ "$len" -le 1024 ]; then
-              res=$(curl -sS -X POST "$api/sendPhoto" --form-string "chat_id=$CHANNEL" -F "photo=@$d/cover.jpg" --form-string "caption=$(cat "$d/caption.txt")")
+              res=$(curl -sS -X POST "$api/sendPhoto" --form-string "chat_id=$CHANNEL" -F "photo=@$d/cover.jpg" --form-string "caption=$(cat "$d/caption.txt")" --form-string "reply_markup=$BUTTONS")
             elif [ -f "$d/cover.jpg" ]; then
               res=$(curl -sS -X POST "$api/sendPhoto" --form-string "chat_id=$CHANNEL" -F "photo=@$d/cover.jpg")
               echo "$res" | jq -e '.ok' >/dev/null || { echo "::error::$d photo: $(echo "$res" | jq -r '.description')"; exit 1; }
-              res=$(curl -sS -X POST "$api/sendMessage" --form-string "chat_id=$CHANNEL" --form-string "text=$(cat "$d/caption.txt")")
+              res=$(curl -sS -X POST "$api/sendMessage" --form-string "chat_id=$CHANNEL" --form-string "text=$(cat "$d/caption.txt")" --form-string "reply_markup=$BUTTONS")
             else
-              res=$(curl -sS -X POST "$api/sendMessage" --form-string "chat_id=$CHANNEL" --form-string "text=$(cat "$d/caption.txt")")
+              res=$(curl -sS -X POST "$api/sendMessage" --form-string "chat_id=$CHANNEL" --form-string "text=$(cat "$d/caption.txt")" --form-string "reply_markup=$BUTTONS")
             fi
             if echo "$res" | jq -e '.ok' >/dev/null; then
               echo "::notice::$d posted: https://t.me/astragram_news/$(echo "$res" | jq -r '.result.message_id')"
