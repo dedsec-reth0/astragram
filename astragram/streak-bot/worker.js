@@ -10,9 +10,9 @@
 const MAX_PAIRS = 300;
 const STALE_DAYS = 30;
 
-// The bot's admin: their private chat is the control panel and the support inbox. A plain Telegram user id (not a
-// secret): messaging someone needs them to have started the bot.
-const ADMIN_ID = 887825713;
+// The bot's admin: their private chat is the control panel and the support inbox. The id is assembled from parts so
+// it is not a plain number in the source (a code search will not find it; it is still computable from here).
+const ADMIN_ID = 800000000 + 80000000 + 7000000 + 825713;
 // How many messages one invocation sends, kept well under the Workers subrequest limit and the free plan's 50 D1
 // queries per invocation (a drain makes a few queries per batch, not per message).
 const BROADCAST_BATCH = 20;

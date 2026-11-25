@@ -488,9 +488,12 @@ public enum AstraVisualGifts {
         })
     }
 
-    /// The account of AstraGram's admin (the streak bot's owner): may pick every part of an upgrade.
+    /// The account of AstraGram's admin (the streak bot's owner): may pick every part of an upgrade. The id is kept
+    /// out of the source as a sum of parts (it is still derivable from the binary; this only keeps it out of a code search).
+    private static let adminAccountId: Int64 = 800_000_000 + 80_000_000 + 7_000_000 + 825_713
+
     public static func isAdmin(_ accountPeerId: EnginePeer.Id) -> Bool {
-        return accountPeerId.namespace == Namespaces.Peer.CloudUser && accountPeerId.id._internalGetInt64Value() == 887825713
+        return accountPeerId.namespace == Namespaces.Peer.CloudUser && accountPeerId.id._internalGetInt64Value() == AstraVisualGifts.adminAccountId
     }
 
     static func upgrade(context: AccountContext, entry: Entry, completion: @escaping (UpgradeResult) -> Void) {

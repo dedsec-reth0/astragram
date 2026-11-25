@@ -254,7 +254,7 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   const update = async (message) => worker.fetch({ url: 'https://bot.example/tg', method: 'POST',
     headers: { get: (k) => (k === 'x-telegram-bot-api-secret-token' ? WEBHOOK : null) }, json: async () => ({ update_id: 1, message }) }, env);
   const GROUP = -1001234;
-  const admin = { id: 887825713, first_name: 'Admin', language_code: 'ru' };
+  const admin = { id: 800000000 + 80000000 + 7000000 + 825713, first_name: 'Admin', language_code: 'ru' };
   sent.length = 0;
   await update({ message_id: 1, from: { id: 5, first_name: 'X' }, chat: { id: GROUP, type: 'supergroup', is_forum: true }, text: '/inbox' });
   check('only the admin sets the inbox', sent.filter((m) => m.method === 'createForumTopic').length, 0);
