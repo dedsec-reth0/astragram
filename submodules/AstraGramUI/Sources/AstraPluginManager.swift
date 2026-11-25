@@ -188,6 +188,12 @@ public final class AstraPluginManager {
         let message: String
     }
 
+    /// The `@id` of a plugin's source, if it has one.
+    public static func pluginId(of source: String) -> String? {
+        let id = AstraPluginManager.parseHeader(source)["id"]
+        return (id?.isEmpty ?? true) ? nil : id
+    }
+
     private static func parseHeader(_ source: String) -> [String: String] {
         var result: [String: String] = [:]
         for line in source.components(separatedBy: .newlines).prefix(40) {
@@ -222,8 +228,16 @@ public final class AstraPluginManager {
         return nil
     }
 
+    /// Nil when the call threw or was stopped by the time limit: JavaScriptCore then returns `undefined`, not nil, so
+    /// the exception the context's handler records is what tells a failed call from one that returned nothing.
     private static func call(_ function: JSValue, _ arguments: [Any]) -> JSValue? {
+        let context: JSContext? = function.context
+        context?.exception = nil
         let result: JSValue? = function.call(withArguments: arguments)
+        if context?.exception != nil {
+            context?.exception = nil
+            return nil
+        }
         return result
     }
 
@@ -286,7 +300,9 @@ public final class AstraPluginManager {
         guard let plugin = AstraPluginManager.property(context.globalObject, "plugin") else {
             return .failure(LoadError(message: "plugin object is missing"))
         }
-        context.exceptionHandler = { _, exception in
+        context.exceptionHandler = { ctx, exception in
+            // Recorded so call() can tell a thrown or timed-out call from one that returned `undefined`.
+            ctx?.exception = exception
             let exceptionValue: JSValue? = exception
             #if DEBUG
             NSLog("[AstraPlugin \(id)] error: \(exceptionValue.flatMap { AstraPluginManager.string($0) } ?? "")")
@@ -343,11 +359,20 @@ public final class AstraPluginManager {
             if let name = parts.first.map(String.init), !name.isEmpty {
                 let args = parts.count > 1 ? String(parts[1]) : ""
                 for loaded in self.loaded {
-                    guard let commands = AstraPluginManager.property(loaded.plugin, "commands"), let command = AstraPluginManager.property(commands, name), command.isObject else {
+                    // Only the plugin's own commands: ".toString" or ".constructor" must not reach Object.prototype.
+                    guard let commands = AstraPluginManager.property(loaded.plugin, "commands"), commands.isObject else {
+                        continue
+                    }
+                    let ownCheck: JSValue? = loaded.context.evaluateScript("(function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); })")
+                    guard let isOwn = ownCheck.flatMap({ AstraPluginManager.call($0, [commands, name]) }), isOwn.toBool() else {
+                        continue
+                    }
+                    guard let command = AstraPluginManager.property(commands, name), command.isObject else {
                         continue
                     }
                     guard let result = AstraPluginManager.call(command, [args, self.chatObject(peerId, in: loaded.context)]) else {
-                        return .drop
+                        // The command failed (threw or timed out): the user's text goes out as written, not lost.
+                        return nil
                     }
                     if result.isString, let resultText = AstraPluginManager.string(result), !resultText.isEmpty {
                         return .send(resultText)

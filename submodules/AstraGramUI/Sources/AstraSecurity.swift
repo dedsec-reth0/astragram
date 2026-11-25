@@ -48,9 +48,20 @@ public enum AstraChatLock {
         AstraChatLock.unlocked.insert(peerId)
     }
 
+    /// Whether a locked chat or the locked settings were opened since the last relock.
+    static var hasUnlocked: Bool {
+        return !AstraChatLock.unlocked.isEmpty || AstraChatLock.settingsUnlocked
+    }
+
     public static func relock() {
         AstraChatLock.unlocked.removeAll()
         AstraChatLock.settingsUnlocked = false
+    }
+}
+
+private final class AstraLockCoverTarget: NSObject {
+    @objc func tapped() {
+        AstraSecurityRuntime.reauthenticate()
     }
 }
 
@@ -59,6 +70,13 @@ public enum AstraSecurityRuntime {
     private static var isStarted = false
     private static var lastHandledPasteboardChange: Int = -1
     private static let coverTag = 0x4153_5452
+    private static let lockTag = 0x4153_4C4B
+    /// A locked chat or the settings were open when the app left the screen: they stay covered until Face ID.
+    private static var pendingReauth = false
+    private static var isAuthenticating = false
+    /// Face ID is asked by itself once per return; after a failed try only a tap on the cover asks again (the Face ID
+    /// sheet itself makes the app inactive and active again, which would otherwise ask in a loop).
+    private static var autoPrompt = true
 
     public static func start() {
         if AstraSecurityRuntime.isStarted {
@@ -69,6 +87,13 @@ public enum AstraSecurityRuntime {
         let center = NotificationCenter.default
         // Locked chats and settings are locked again once the app has left the screen.
         let _ = center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main, using: { _ in
+            // A locked chat (or the settings) still on screen is covered now, so the next person to open the app sees
+            // nothing of it before Face ID.
+            if AstraChatLock.hasUnlocked {
+                AstraSecurityRuntime.pendingReauth = true
+                AstraSecurityRuntime.autoPrompt = true
+                AstraSecurityRuntime.setLockCoverVisible(true)
+            }
             AstraChatLock.relock()
         })
         // The app switcher shows a picture of the app taken when it stops being active: the cover is on it.
@@ -80,11 +105,60 @@ public enum AstraSecurityRuntime {
         for name in [UIApplication.didBecomeActiveNotification, UIScene.didActivateNotification] {
             let _ = center.addObserver(forName: name, object: nil, queue: .main, using: { _ in
                 AstraSecurityRuntime.setCoverVisible(false)
+                if AstraSecurityRuntime.pendingReauth && AstraSecurityRuntime.autoPrompt {
+                    AstraSecurityRuntime.reauthenticate()
+                }
             })
         }
         let _ = center.addObserver(forName: UIPasteboard.changedNotification, object: nil, queue: .main, using: { _ in
             AstraSecurityRuntime.pasteboardChanged()
         })
+    }
+
+    fileprivate static func reauthenticate() {
+        guard AstraSecurityRuntime.pendingReauth, !AstraSecurityRuntime.isAuthenticating else {
+            return
+        }
+        AstraSecurityRuntime.isAuthenticating = true
+        AstraSecurityRuntime.autoPrompt = false
+        let isRussian = (Locale.preferredLanguages.first ?? "").lowercased().hasPrefix("ru")
+        AstraBiometrics.authenticate(reason: isRussian ? "Разблокировать чат" : "Unlock the chat", completion: { success in
+            AstraSecurityRuntime.isAuthenticating = false
+            if success {
+                AstraSecurityRuntime.pendingReauth = false
+                AstraSecurityRuntime.setLockCoverVisible(false)
+            }
+        })
+    }
+
+    private static let lockTarget = AstraLockCoverTarget()
+
+    private static func setLockCoverVisible(_ visible: Bool) {
+        for window in AstraSecurityRuntime.windows {
+            let existing = window.viewWithTag(AstraSecurityRuntime.lockTag)
+            if visible {
+                if let existing {
+                    window.bringSubviewToFront(existing)
+                    continue
+                }
+                let cover = UIVisualEffectView(effect: UIBlurEffect(style: .systemThickMaterialDark))
+                cover.tag = AstraSecurityRuntime.lockTag
+                cover.frame = window.bounds
+                cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                let isRussian = (Locale.preferredLanguages.first ?? "").lowercased().hasPrefix("ru")
+                let button = UIButton(type: .system)
+                button.setImage(UIImage(systemName: "lock.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 34.0, weight: .semibold)), for: .normal)
+                button.setTitle(isRussian ? "  Нажмите, чтобы разблокировать" : "  Tap to unlock", for: .normal)
+                button.tintColor = .white
+                button.frame = cover.bounds
+                button.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                button.addTarget(AstraSecurityRuntime.lockTarget, action: #selector(AstraLockCoverTarget.tapped), for: .touchUpInside)
+                cover.contentView.addSubview(button)
+                window.addSubview(cover)
+            } else if let existing {
+                existing.removeFromSuperview()
+            }
+        }
     }
 
     private static var windows: [UIWindow] {

@@ -124,6 +124,8 @@ enum ChatListNodeEntry: Comparable, Identifiable {
         var storyState: ChatListNodeState.StoryState?
         var requiresPremiumForMessaging: Bool
         var displayAsTopicList: Bool
+        /// AstraGram: the AstraGram badge and the streak count come from outside the peer; a new revision redraws the row.
+        var astraRevision: Int = AstraMarks.revision
         
         init(
             index: EngineChatList.Item.Index,
@@ -314,6 +316,9 @@ enum ChatListNodeEntry: Comparable, Identifiable {
                 return false
             }
             if lhs.displayAsTopicList != rhs.displayAsTopicList {
+                return false
+            }
+            if lhs.astraRevision != rhs.astraRevision {
                 return false
             }
             return true

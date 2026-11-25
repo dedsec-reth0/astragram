@@ -137,6 +137,12 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// backend-agnostic geometry query for anchoring UI to the cursor.
     func currentCaretRect() -> CGRect?
 
+    /// AstraGram: the text's line rects in `asNode`'s space (empty where the backend cannot tell).
+    func astraTextLineRects() -> [CGRect]
+
+    /// AstraGram: each word's rects (one per line it spans) in `asNode`'s space, in reading order.
+    func astraTextWordRects() -> [[CGRect]]
+
     /// The editor's attributed content. Reads return the current text; writes replace it
     /// (the host rebuilds the attributed string after edits/state changes). Forwards to the
     /// composed editor today; a future backend implements it natively.
@@ -450,6 +456,14 @@ public protocol ChatRichTextInputNode: AnyObject {
 }
 
 public extension ChatRichTextInputNode {
+    func astraTextLineRects() -> [CGRect] {
+        return []
+    }
+
+    func astraTextWordRects() -> [[CGRect]] {
+        return []
+    }
+
     var inputContentIsEmpty: Bool {
         return (self.attributedText?.length ?? 0) == 0
     }
@@ -778,6 +792,46 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
         // selectionRects are in the text view's (scrolling) coordinate space; convert up to
         // this node's space so the caller never depends on the editor being a scroll view.
         return textView.convert(rect, to: self.view)
+    }
+
+    /// AstraGram: the rects of the text's lines in this node's space, for the shimmer over a message being translated.
+    public func astraTextWordRects() -> [[CGRect]] {
+        let textView = self.textInputNodeImpl.textView
+        guard let text = textView.text, !text.isEmpty else {
+            return []
+        }
+        let beginning = textView.beginningOfDocument
+        var result: [[CGRect]] = []
+        (text as NSString).enumerateSubstrings(in: NSRange(location: 0, length: (text as NSString).length), options: .byWords) { _, range, _, _ in
+            guard let start = textView.position(from: beginning, offset: range.location), let end = textView.position(from: start, offset: range.length), let textRange = textView.textRange(from: start, to: end) else {
+                return
+            }
+            let rects = textView.selectionRects(for: textRange).compactMap { selectionRect -> CGRect? in
+                let rect = selectionRect.rect
+                guard rect.width > 0.5, rect.height > 1.0, rect.origin.x.isFinite, rect.origin.y.isFinite else {
+                    return nil
+                }
+                return textView.convert(rect, to: self.view)
+            }
+            if !rects.isEmpty {
+                result.append(rects)
+            }
+        }
+        return result
+    }
+
+    public func astraTextLineRects() -> [CGRect] {
+        let textView = self.textInputNodeImpl.textView
+        guard let range = textView.textRange(from: textView.beginningOfDocument, to: textView.endOfDocument) else {
+            return []
+        }
+        return textView.selectionRects(for: range).compactMap { selectionRect -> CGRect? in
+            let rect = selectionRect.rect
+            guard rect.width > 1.0, rect.height > 1.0, rect.origin.x.isFinite, rect.origin.y.isFinite else {
+                return nil
+            }
+            return textView.convert(rect, to: self.view)
+        }
     }
 
     func currentCaretRect() -> CGRect? {

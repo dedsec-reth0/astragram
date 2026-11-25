@@ -311,6 +311,8 @@ public struct ChatListNodeState: Equatable {
     public var selectedPeerMap: [EnginePeer.Id: EnginePeer]
     public var selectedThreadIds: Set<Int64>
     public var archiveStoryState: StoryState?
+    /// AstraGram: `AstraMarks.revision`, so the rows redraw when the AstraGram badge or a streak count changes.
+    public var astraRevision: Int = 0
     
     public init(
         presentationData: ChatListPresentationData,
@@ -385,6 +387,9 @@ public struct ChatListNodeState: Equatable {
             return false
         }
         if lhs.archiveStoryState != rhs.archiveStoryState {
+            return false
+        }
+        if lhs.astraRevision != rhs.astraRevision {
             return false
         }
         return true
@@ -1340,6 +1345,7 @@ public final class ChatListNode: ListViewImpl {
     }
     private let chatListLocation = ValuePromise<ChatListNodeLocation>()
     private let chatListDisposable = MetaDisposable()
+    private var astraMarksDisposable: Disposable?
     private var activityStatusesDisposable: Disposable?
     
     private let scrollToTopOptionPromise = Promise<ChatListGlobalScrollOption>(.none)
@@ -2797,6 +2803,14 @@ public final class ChatListNode: ListViewImpl {
         self.interaction = nodeInteraction
         
         self.chatListDisposable.set(appliedTransition.startStrict())
+        // AstraGram: the badge list and streak counts arrive later than the chats; the rows redraw when they change.
+        self.astraMarksDisposable = (AstraMarks.updates |> deliverOnMainQueue).startStrict(next: { [weak self] revision in
+            self?.updateState { state in
+                var state = state
+                state.astraRevision = revision
+                return state
+            }
+        })
         
         let initialLocation: ChatListNodeLocation
         switch mode {
@@ -3249,6 +3263,7 @@ public final class ChatListNode: ListViewImpl {
     
     deinit {
         self.chatListDisposable.dispose()
+        self.astraMarksDisposable?.dispose()
         self.activityStatusesDisposable?.dispose()
         self.updatedFilterDisposable.dispose()
         self.pollFilterUpdatesDisposable?.dispose()

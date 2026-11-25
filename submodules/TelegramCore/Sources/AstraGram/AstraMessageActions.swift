@@ -46,7 +46,8 @@ public enum AstraMessageActions {
         return _internal_applyMaxReadIndexInteractively(postbox: account.postbox, stateManager: stateManager, index: index)
         |> afterCompleted {
             if AstraGramSettings.current.hideReadReceipts {
-                AstraGhostMode.pushReadStateOnce(account: account, peerId: index.id.peerId)
+                // Only up to `index`: the local read mark is often further and must not be sent.
+                AstraGhostMode.pushReadReceipt(account: account, index: index)
             }
         }
     }
@@ -88,9 +89,14 @@ public enum AstraMessageActions {
         }
     }
 
-    /// The newest `limit` messages of a chat, oldest first (for chat export, statistics and AI summaries).
-    public static func recentMessages(account: Account, peerId: PeerId, limit: Int) -> Signal<[Message], NoError> {
+    /// The newest `limit` messages of a chat, oldest first (for chat export, statistics and AI summaries). With
+    /// `threadId` (a forum topic or a Saved Messages sub-chat) only that thread's messages, not the whole peer's.
+    public static func recentMessages(account: Account, peerId: PeerId, threadId: Int64? = nil, limit: Int) -> Signal<[Message], NoError> {
         return account.postbox.transaction { transaction -> [Message] in
+            if let threadId = threadId {
+                let messages = transaction.getMessagesWithThreadId(peerId: peerId, namespace: Namespaces.Message.Cloud, threadId: threadId, from: MessageIndex.upperBound(peerId: peerId, namespace: Namespaces.Message.Cloud), includeFrom: false, to: MessageIndex.lowerBound(peerId: peerId, namespace: Namespaces.Message.Cloud), limit: limit)
+                return messages.sorted(by: { $0.index < $1.index })
+            }
             var messages: [Message] = []
             transaction.scanTopMessages(peerId: peerId, namespace: Namespaces.Message.Cloud, limit: limit, { message in
                 messages.append(message)

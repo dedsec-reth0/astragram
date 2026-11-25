@@ -1,5 +1,6 @@
 import Foundation
 import Postbox
+internal import TelegramApi
 import SwiftSignalKit
 
 /// Ghost mode decisions that are not a single settings flag.
@@ -22,15 +23,17 @@ import SwiftSignalKit
 public enum AstraGhostMode {
     private static let readAllowances = Atomic<Set<PeerId>>(value: Set())
 
-    private static let onlinePipe = ValuePipe<Void>()
+    /// The network of the account whose activity it was (nil: not known, every account answers).
+    private static let onlinePipe = ValuePipe<ObjectIdentifier?>()
 
-    /// Parts of the names of the requests after which the server shows the account online.
-    private static let onlineRequestParts: [String] = [
-        "messages.send", "messages.forward", "messages.read", "channels.read", "messages.startBot",
-        "messages.setTyping", "messages.setEncryptedTyping", "messages.editMessage", "messages.deleteMessages",
-        "channels.deleteMessages", "messages.getBotCallbackAnswer", "stories.send", "stories.readStories",
-        "stories.incrementStoryViews"
-    ]
+    /// Requests that only read: the server does not show the account online for them. Every other request (sending,
+    /// reading a chat, reacting, voting, reading mentions or reactions, editing, joining, viewing stories...) is
+    /// answered with "offline" while the online status is hidden. A list of the requests that show the account online
+    /// always missed some, so it is the other way round: what is not known to be a read counts as activity.
+    private static let readOnlyMethodPrefixes: [String] = ["get", "search", "check", "resolve", "export", "fetch", "received"]
+    private static let readOnlyNamespaces: [String] = ["help.", "langpack.", "updates.", "upload.", "auth.", "payments.get", "stats."]
+    /// Reads that the server still counts as activity.
+    private static let activeReads: [String] = ["messages.getMessagesViews", "messages.getBotCallbackAnswer", "stories.incrementStoryViews"]
 
     /// Whether the server shows the account online once the request named `name` is done.
     static func requestMarksOnline(_ name: String) -> Bool {
@@ -38,25 +41,47 @@ public enum AstraGhostMode {
         if name.contains("updateStatus") {
             return false
         }
-        for part in AstraGhostMode.onlineRequestParts {
-            if name.contains(part) {
-                return true
-            }
+        for active in AstraGhostMode.activeReads where name.hasPrefix(active) {
+            return true
         }
-        return false
+        for namespace in AstraGhostMode.readOnlyNamespaces where name.hasPrefix(namespace) {
+            return false
+        }
+        guard let dot = name.lastIndex(of: ".") else {
+            // Service messages (ping, msgs_ack, invokeWithLayer, initConnection...) are not activity.
+            return false
+        }
+        let method = name[name.index(after: dot)...].lowercased()
+        for prefix in AstraGhostMode.readOnlyMethodPrefixes where method.hasPrefix(prefix) {
+            return false
+        }
+        return true
     }
 
     /// Something has just made the server show the account online. With the online status hidden, the presence
     /// manager of every account answers with `account.updateStatus(offline: true)`.
     public static func markAsOnline() {
+        AstraGhostMode.markAsOnline(networkId: nil)
+    }
+
+    /// The same for the account that uses `networkId`: only that account answers, so activity in one account does not
+    /// send "offline" for the others (which would end their real "online" on their other devices).
+    static func markAsOnline(networkId: ObjectIdentifier?) {
         if !AstraGramSettings.current.hideOnlineStatus {
             return
         }
-        AstraGhostMode.onlinePipe.putNext(Void())
+        AstraGhostMode.onlinePipe.putNext(networkId)
     }
 
-    static func markedAsOnline() -> Signal<Void, NoError> {
+    static func markedAsOnline(network: Network) -> Signal<Void, NoError> {
+        let id = ObjectIdentifier(network)
         return AstraGhostMode.onlinePipe.signal()
+        |> filter { networkId in
+            return networkId == nil || networkId == id
+        }
+        |> map { _ -> Void in
+            return Void()
+        }
     }
 
     /// Fires when the server reports the account itself as online, whatever caused it (this device or another).
@@ -116,7 +141,19 @@ public enum AstraGhostMode {
             for (namespace, currentState) in currentReadState.states where namespace == Namespaces.Message.Cloud {
                 if case let .idBased(localMaxIncomingReadId, _, _, localCount, localMarkedUnread) = currentState, localReadMarkIsAheadOfServer(localMaxIncomingReadId: localMaxIncomingReadId, serverMaxIncomingReadId: serverMaxIncomingReadId, serverCount: serverCount, serverMarkedUnread: serverMarkedUnread) {
                     var updatedStates = states
-                    updatedStates[Namespaces.Message.Cloud] = .idBased(maxIncomingReadId: localMaxIncomingReadId, maxOutgoingReadId: maxOutgoingReadId, maxKnownId: maxKnownId, count: localCount, markedUnread: localMarkedUnread)
+                    // When the messages past the local read mark are not all stored (an account reset or a chat list
+                    // hole fill stores only the top message), the local count misses the ones in the hole, and Postbox
+                    // will not count them later either, since they sit below the new maxKnownId. The server's count is
+                    // used then: it can be too high (it includes messages read in ghost mode), but it never hides new
+                    // messages.
+                    var keptCount = localCount
+                    if maxKnownId > localMaxIncomingReadId {
+                        let holes = transaction.getHoles(peerId: peerId, namespace: Namespaces.Message.Cloud)
+                        if holes.intersects(integersIn: Int(localMaxIncomingReadId + 1) ... Int(maxKnownId)) {
+                            keptCount = max(localCount, serverCount)
+                        }
+                    }
+                    updatedStates[Namespaces.Message.Cloud] = .idBased(maxIncomingReadId: localMaxIncomingReadId, maxOutgoingReadId: maxOutgoingReadId, maxKnownId: maxKnownId, count: keptCount, markedUnread: localMarkedUnread)
                     result[peerId] = updatedStates
                 }
             }
@@ -149,7 +186,8 @@ public enum AstraGhostMode {
     }
 
     static func pushReadStateOnce(account: Account, peerId: PeerId) {
-        guard peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup || peerId.namespace == Namespaces.Peer.CloudChannel else {
+        // A secret chat is included: its push sends readEncryptedHistory once the allowance is granted.
+        guard peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup || peerId.namespace == Namespaces.Peer.CloudChannel || peerId.namespace == Namespaces.Peer.SecretChat else {
             return
         }
         guard let stateManager = account.stateManager else {
@@ -172,5 +210,50 @@ public enum AstraGhostMode {
                 return current
             }
         })
+    }
+
+    /// "Read until here" in ghost mode: sends a read receipt up to `index` only. Pushing the local read state instead
+    /// would send the local mark, which is usually further (the chat is marked read locally as it is scrolled), and
+    /// would show the sender more messages as read than the user chose. The local state is not pushed, so no allowance
+    /// is needed; Network.request marks this account (only) as online for the request.
+    static func pushReadReceipt(account: Account, index: MessageIndex) {
+        let peerId = index.id.peerId
+        guard index.id.namespace == Namespaces.Message.Cloud, peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup || peerId.namespace == Namespaces.Peer.CloudChannel else {
+            return
+        }
+        guard let stateManager = account.stateManager else {
+            return
+        }
+        let network = account.network
+        let maxId = index.id.id
+        let _ = (account.postbox.transaction { transaction -> Api.InputPeer? in
+            return transaction.getPeer(peerId).flatMap { apiInputPeer($0) }
+        }
+        |> mapToSignal { inputPeer -> Signal<Void, NoError> in
+            guard let inputPeer = inputPeer else {
+                return .complete()
+            }
+            if case let .inputPeerChannel(data) = inputPeer {
+                return network.request(Api.functions.channels.readHistory(channel: .inputChannel(.init(channelId: data.channelId, accessHash: data.accessHash)), maxId: maxId))
+                |> `catch` { _ -> Signal<Api.Bool, NoError> in
+                    return .complete()
+                }
+                |> map { _ -> Void in
+                    return Void()
+                }
+            } else {
+                return network.request(Api.functions.messages.readHistory(peer: inputPeer, maxId: maxId))
+                |> map(Optional.init)
+                |> `catch` { _ -> Signal<Api.messages.AffectedMessages?, NoError> in
+                    return .single(nil)
+                }
+                |> mapToSignal { result -> Signal<Void, NoError> in
+                    if case let .affectedMessages(data)? = result {
+                        stateManager.addUpdateGroups([.updatePts(pts: data.pts, ptsCount: data.ptsCount)])
+                    }
+                    return .complete()
+                }
+            }
+        }).start()
     }
 }

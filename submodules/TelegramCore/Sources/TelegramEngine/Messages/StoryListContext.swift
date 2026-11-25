@@ -490,7 +490,9 @@ public final class StorySubscriptionsContext {
                                 
                                 transaction.setStoryItems(peerId: peerId, items: updatedPeerEntries)
                                 transaction.setPeerStoryState(peerId: peerId, state: Stories.PeerState(
-                                    maxReadId: maxReadId ?? 0
+                                    // AstraGram: the local mark is kept when ahead (stories seen in ghost mode are not
+                                    // reported, so the server's mark stays behind).
+                                    maxReadId: max(transaction.getPeerStoryState(peerId: peerId)?.entry.get(Stories.PeerState.self)?.maxReadId ?? 0, maxReadId ?? 0)
                                 ).postboxRepresentation)
                             }
                         }
@@ -2997,7 +2999,9 @@ public final class PeerExpiringStoryListContext {
                                 }
 
                                 transaction.setPeerStoryState(peerId: peerId, state: Stories.PeerState(
-                                    maxReadId: maxReadId ?? 0
+                                    // AstraGram: the local mark is kept when ahead (stories seen in ghost mode are not
+                                    // reported, so the server's mark stays behind).
+                                    maxReadId: max(transaction.getPeerStoryState(peerId: peerId)?.entry.get(Stories.PeerState.self)?.maxReadId ?? 0, maxReadId ?? 0)
                                 ).postboxRepresentation)
                             }
 

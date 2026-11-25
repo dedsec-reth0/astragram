@@ -20,45 +20,45 @@ public struct AstraStrings {
     // Ghost mode
     public var ghostHeader: String { t("РЕЖИМ ПРИЗРАКА", "GHOST MODE") }
     public var ghostMode: String { t("Режим призрака", "Ghost Mode") }
-    public var ghostFooter: String { t("Режим призрака включает все переключатели ниже сразу. Telegram может показать вас «в сети», когда вы отправляете сообщение: сервер отмечает активность сам.", "Ghost Mode turns on every switch below at once. Telegram may still show you online when you send a message: the server records that activity itself.") }
-    public var hideOnline: String { t("Не отправлять «в сети»", "Don't send online status") }
-    public var hideRead: String { t("Не отправлять прочтение", "Don't send read receipts") }
-    public var hideStories: String { t("Не отмечать просмотр историй", "Don't mark stories as viewed") }
-    public var hideTyping: String { t("Не отправлять «печатает»", "Don't send typing status") }
-    public var hideContents: String { t("Не отмечать прослушивание голосовых и кружков", "Don't mark voice and video messages as played") }
-    public var markReadAfterSend: String { t("Прочитать при отправке ответа", "Mark as read when replying") }
-    public var markReadAfterSendFooter: String { t("Когда вы отправляете сообщение в чат, его входящие сообщения отмечаются прочитанными у собеседника, даже если прочтение скрыто. Не работает вместе с «Отправлять через отложку»: прочтение показало бы вас «в сети».", "When you send a message to a chat, its incoming messages are marked as read for the other side, even with read receipts hidden. Not used with \"Send via schedule\": reading would show you online.") }
+    public var ghostFooter: String { t("Включает все переключатели ниже. Быстро включить режим можно кнопкой с призраком над списком чатов.", "Turns on all the switches below. The ghost button above the chat list turns it on and off too.") }
+    public var hideOnline: String { t("Не отправлять «в сети»", "Hide Online Status") }
+    public var hideRead: String { t("Не отправлять прочтение", "Hide Read Receipts") }
+    public var hideStories: String { t("Не отмечать просмотр историй", "Hide Story Views") }
+    public var hideTyping: String { t("Не отправлять «печатает»", "Hide Typing") }
+    public var hideContents: String { t("Не отмечать голосовые и кружки", "Don't Mark Voice as Played") }
+    public var markReadAfterSend: String { t("Читать при ответе", "Read When Replying") }
+    public var markReadAfterSendFooter: String { t("Чат отмечается прочитанным, когда вы в него пишете.", "A chat is marked as read when you write to it.") }
 
     // Anti-delete
     public var antiDeleteHeader: String { t("ИСТОРИЯ СООБЩЕНИЙ", "MESSAGE HISTORY") }
-    public var saveDeleted: String { t("Сохранять удалённые сообщения", "Save deleted messages") }
-    public var keepDeletedInChat: String { t("Оставлять удалённые в чате", "Keep deleted messages in chat") }
-    public var saveInChannels: String { t("Сохранять и в каналах", "Also in channels") }
-    public var saveEdits: String { t("Сохранять историю правок", "Save edit history") }
-    public var keepSelfDestructing: String { t("Не сжигать одноразовые медиа", "Keep self-destructing media") }
+    public var saveDeleted: String { t("Сохранять удалённые сообщения", "Save Deleted Messages") }
+    public var keepDeletedInChat: String { t("Показывать удалённые в чате", "Keep Deleted in Chat") }
+    public var saveInChannels: String { t("Сохранять и в каналах", "Also in Channels") }
+    public var saveEdits: String { t("Сохранять историю правок", "Save Edit History") }
+    public var keepSelfDestructing: String { t("Не сжигать одноразовые медиа", "Keep View-Once Media") }
     public var deletedMessages: String { t("Удалённые сообщения", "Deleted Messages") }
-    public var antiDeleteFooter: String { t("Сохраняются сообщения, которые удалили другие участники или сервер. Ваши удаления с этого устройства работают как обычно (удаления с других ваших устройств приходят от сервера и тоже сохраняются). Одноразовые фото, видео и голосовые после просмотра остаются в чате и открываются снова (у отправителя они отмечаются просмотренными, как обычно). Данные хранятся только на этом устройстве, в локальной базе SQLite.", "Messages deleted by other people or by the server are saved. Your deletions made on this device work as usual (deletions from your other devices come from the server and are saved too). View-once and self-destructing photos, videos and voice messages stay in the chat after you open them (for the sender they look viewed as usual). The data stays on this device, in a local SQLite database.") }
-    public var storageUsage: String { t("Размер базы", "Database size") }
+    public var antiDeleteFooter: String { t("Удалённые собеседниками сообщения и одноразовые медиа остаются у вас. Хранятся только на этом устройстве.", "Messages others delete and view-once media stay with you. Stored only on this device.") }
+    public var storageUsage: String { t("Размер базы", "Database Size") }
     public var clearHistory: String { t("Очистить сохранённую историю", "Clear Saved History") }
     public var clearHistoryConfirm: String { t("Удалить все сохранённые удалённые сообщения и версии правок?", "Delete all saved deleted messages and edit versions?") }
     public var clearDeletedConfirm: String { t("Удалить эти сохранённые удалённые сообщения? Восстановить их будет нельзя.", "Delete these saved deleted messages? They cannot be restored.") }
     public var clearHistoryDone: String { t("Сохранённая история очищена", "Saved history cleared") }
 
     // Appearance
-    public var appearanceHeader: String { t("ВНЕШНИЙ ВИД И ЧАТЫ", "APPEARANCE AND CHATS") }
-    public var deletedMark: String { t("Метка удалённого", "Deleted mark") }
-    public var editedMark: String { t("Метка изменённого", "Edited mark") }
+    public var appearanceHeader: String { t("ИНТЕРФЕЙС", "INTERFACE") }
+    public var deletedMark: String { t("Метка удалённого", "Deleted Mark") }
+    public var editedMark: String { t("Метка изменённого", "Edited Mark") }
     public var editedMarkPlaceholder: String { t("стандартная", "default") }
-    public var showSeconds: String { t("Секунды во времени сообщений", "Seconds in message time") }
-    public var showPeerId: String { t("Показывать ID в профиле", "Show ID in profiles") }
-    public var hideSponsored: String { t("Скрыть рекламу в каналах", "Hide sponsored messages") }
-    public var hideStoriesInList: String { t("Скрыть истории над чатами", "Hide stories above chats") }
-    public var confirmSticker: String { t("Подтверждать отправку стикеров", "Confirm sending stickers") }
+    public var showSeconds: String { t("Секунды во времени сообщений", "Seconds in Message Time") }
+    public var showPeerId: String { t("Показывать ID в профиле", "Show ID in Profiles") }
+    public var hideSponsored: String { t("Скрыть рекламу в каналах", "Hide Sponsored Messages") }
+    public var hideStoriesInList: String { t("Скрыть истории над чатами", "Hide Stories Above Chats") }
+    public var confirmSticker: String { t("Подтверждать отправку стикеров", "Confirm Sending Stickers") }
     public var confirmStickerQuestion: String { t("Отправить стикер?", "Send this sticker?") }
     public var confirmGifQuestion: String { t("Отправить GIF?", "Send this GIF?") }
     public var send: String { t("Отправить", "Send") }
-    public var haptics: String { t("Тактильный отклик", "Haptic feedback") }
-    public var appearanceFooter: String { t("Темы, цвета, шрифты, пузыри сообщений и иконки приложения настраиваются в разделе «Оформление».", "Themes, colors, fonts, message bubbles and app icons are in the Appearance section.") }
+    public var haptics: String { t("Тактильный отклик", "Haptic Feedback") }
+    public var appearanceFooter: String { t("Темы, шрифты и иконки — в разделе «Оформление» Telegram.", "Themes, fonts and icons are in Telegram's Appearance settings.") }
     public var openAppearance: String { t("Оформление и темы", "Appearance and Themes") }
 
     // Filters
@@ -67,17 +67,18 @@ public struct AstraStrings {
     public var filtersEnabled: String { t("Включить фильтры", "Enable filters") }
     public var addFilter: String { t("Добавить фильтр", "Add Filter") }
     public var filterPlaceholder: String { t("слово или /регулярное выражение/", "word or /regular expression/") }
-    public var filtersFooter: String { t("Сообщения, содержащие слово из списка (без учёта регистра) или подходящие под регулярное выражение в косых чертах, скрываются в чатах. Нажмите на фильтр, чтобы удалить его.", "Messages containing a word from the list (case-insensitive) or matching a regular expression written between slashes are hidden in chats. Tap a filter to delete it.") }
+    public var filtersFooter: String { t("Сообщения со словом из списка или подходящие под /регулярное выражение/ скрываются.", "Messages with a listed word or matching a /regular expression/ are hidden.") }
     public var invalidRegex: String { t("Неверное регулярное выражение", "Invalid regular expression") }
 
     // Translator
     public var translatorHeader: String { t("ПЕРЕВОДЧИК", "TRANSLATOR") }
     public var translatorSettings: String { t("Язык и перевод", "Language and Translation") }
-    public var translatorFooter: String { t("Встроенный переводчик Telegram: кнопка «Перевести» в меню сообщения и перевод целых чатов.", "Telegram's built-in translator: the Translate button in the message menu and whole-chat translation.") }
+    public var translatorFooter: String { t("Кнопка «Перевести» в меню сообщения и перевод чатов.", "The Translate button in the message menu and chat translation.") }
 
     // About
     public var aboutHeader: String { t("О ПРИЛОЖЕНИИ", "ABOUT") }
     public var resetSettings: String { t("Сбросить настройки AstraGram", "Reset AstraGram Settings") }
+    public var resetConfirm: String { t("Все настройки AstraGram вернутся к стандартным. Ключ AI, чаты под Face ID и Face ID для настроек останутся.", "All AstraGram settings return to their defaults. The AI key, chats locked with Face ID and Face ID for these settings stay.") }
     public var resetDone: String { t("Настройки AstraGram сброшены", "AstraGram settings reset") }
 
     // Deleted messages screen
@@ -145,34 +146,36 @@ public struct AstraStrings {
     public var detailsPackOwner: String { t("ID автора набора", "Pack author ID") }
     public var detailsPack: String { t("Набор", "Pack") }
     public var detailsPhoto: String { t("Фото", "Photo") }
-    public var ghostButtonHint: String { t("Кнопка с призраком в шапке экрана «Чаты» включает и выключает весь режим призрака.", "The ghost button at the top of the Chats screen turns the whole Ghost Mode on and off.") }
-    public var markReadAfterReaction: String { t("Прочитать при реакции и голосовании", "Mark as read when reacting or voting") }
-    public var sendViaSchedule: String { t("Отправлять через отложку", "Send via schedule") }
-    public var sendViaScheduleFooter: String { t("Сообщения отправляются как отложенные на несколько секунд вперёд, поэтому отправка не показывает вас «в сети»: сообщение появится в чате через 12 секунд (с медиа — дольше). Без этого Telegram показывает вас «в сети» после каждого сообщения. Работает, когда включено «Не отправлять «в сети»»; тогда же не отправляется и «печатает…».", "Messages are sent as scheduled a few seconds ahead, so sending does not show you online: a message appears in the chat after 12 seconds (longer with media). Without it Telegram shows you online after every message. Works while \"Don't send online status\" is on; typing is not sent then either.") }
-    public var privacyHeader: String { t("ОГРАНИЧЕНИЯ И ПРИВАТНОСТЬ", "RESTRICTIONS AND PRIVACY") }
-    public var removeCopyRestrictions: String { t("Снять запрет копирования", "Remove copy restrictions") }
-    public var allowScreenshots: String { t("Разрешить скриншоты", "Allow screenshots") }
-    public var streamerMode: String { t("Режим стримера", "Streamer mode") }
-    public var privacyFooter: String { t("Снятие запрета позволяет копировать текст и сохранять медиа из защищённых чатов, а пересылка из них отправляет копию (медиа скачивается и загружается заново). Скриншоты секретных чатов и одноразовых медиа перестают блокироваться, собеседник не получает уведомления. Режим стримера скрывает окно приложения при записи экрана и трансляции.", "Removing restrictions lets you copy text and save media from protected chats, and forwarding from them sends a copy (media is downloaded and uploaded again). Screenshots of secret chats and self-destructing media are no longer blocked and the other side is not notified. Streamer mode hides the app window from screen recording and sharing.") }
+    public var ghostButtonHint: String { t("", "") }
+    public var markReadAfterReaction: String { t("Читать при реакции", "Read When Reacting") }
+    public var sendViaSchedule: String { t("Отправлять через отложку", "Send via Schedule") }
+    public var sendViaScheduleFooter: String { t("Сообщения уходят как отложенные через 12 секунд — так отправка не показывает вас «в сети».", "Messages are sent as scheduled in 12 seconds, so sending doesn't show you online.") }
+    public var privacyHeader: String { t("ОГРАНИЧЕНИЯ", "RESTRICTIONS") }
+    public var removeCopyRestrictions: String { t("Снять запрет копирования", "Remove Copy Restrictions") }
+    public var allowScreenshots: String { t("Разрешить скриншоты", "Allow Screenshots") }
+    public var streamerMode: String { t("Режим стримера", "Streamer Mode") }
+    public var privacyFooter: String { t("Позволяет копировать и сохранять из защищённых чатов и делать скриншоты без уведомления. Режим стримера скрывает приложение на записи экрана.", "Copy and save from protected chats and take screenshots without notice. Streamer Mode hides the app from screen recording.") }
     public var chatsHeader: String { t("ЧАТЫ", "CHATS") }
-    public var hideBlocked: String { t("Скрывать сообщения заблокированных", "Hide messages of blocked users") }
-    public var hideSimilarChannels: String { t("Скрывать похожие каналы", "Hide similar channels") }
-    public var hideFolderCounters: String { t("Скрывать счётчики на папках", "Hide folder unread counters") }
-    public var hideAllChatsFolder: String { t("Скрывать папку «Все чаты»", "Hide the \"All Chats\" folder") }
-    public var increaseRecentStickers: String { t("До 100 недавних стикеров", "Up to 100 recent stickers") }
-    public var showServiceTime: String { t("Время служебных сообщений", "Service message time") }
-    public var simpleReplies: String { t("Простые ответы и цитаты", "Simple replies and quotes") }
-    public var confirmMessageSend: String { t("Подтверждать отправку сообщений", "Confirm sending messages") }
-    public var unhideMessages: String { t("Показать скрытые сообщения", "Show hidden messages") }
+    public var hideBlocked: String { t("Скрывать сообщения заблокированных", "Hide Messages of Blocked Users") }
+    public var hideSimilarChannels: String { t("Скрывать похожие каналы", "Hide Similar Channels") }
+    public var hideFolderCounters: String { t("Скрывать счётчики на папках", "Hide Folder Unread Counters") }
+    public var hideAllChatsFolder: String { t("Скрывать папку «Все чаты»", "Hide the \"All Chats\" Folder") }
+    public var increaseRecentStickers: String { t("До 100 недавних стикеров", "Up to 100 Recent Stickers") }
+    public var showServiceTime: String { t("Время служебных сообщений", "Service Message Time") }
+    public var simpleReplies: String { t("Простые ответы и цитаты", "Simple Replies and Quotes") }
+    public var confirmMessageSend: String { t("Подтверждать отправку сообщений", "Confirm Sending Messages") }
+    public var unhideMessages: String { t("Показать скрытые сообщения", "Show Hidden Messages") }
     public var plugins: String { t("Плагины", "Plugins") }
     public var unhideMessagesDone: String { t("Скрытые сообщения снова видны (откройте чат заново)", "Hidden messages are visible again (reopen the chat)") }
-    public var pluginsFooter: String { t("Плагины на JavaScript меняют исходящие сообщения, реагируют на входящие и добавляют команды вида .команда. Устанавливайте только плагины, которым доверяете.", "JavaScript plugins change outgoing messages, react to incoming ones and add commands like .command. Install only plugins you trust.") }
+    public var pluginsFooter: String { t("Плагины на JavaScript меняют сообщения и добавляют команды. Ставьте только те, которым доверяете.", "JavaScript plugins change messages and add commands. Install only ones you trust.") }
     public var pluginsInstall: String { t("Установить из файла", "Install from File") }
     public var pluginsInstallFromClipboard: String { t("Установить из буфера обмена", "Install from Clipboard") }
     public var pluginsInstalled: String { t("УСТАНОВЛЕННЫЕ", "INSTALLED") }
     public var pluginsEmpty: String { t("Плагинов пока нет. Плагин — это файл .js с описанием в начале. Пример есть в документации AstraGram для iOS.", "No plugins yet. A plugin is a .js file with a header. See the AstraGram for iOS docs for an example.") }
     public var pluginsDelete: String { t("Удалить", "Delete") }
     public var pluginsInvalid: String { t("Не удалось загрузить плагин", "Could not load the plugin") }
+    public var pluginsNoSource: String { t("Буфер обмена пуст или iOS не дала его прочитать. Скопируйте код плагина и при запросе разрешите вставку.", "The clipboard is empty or iOS did not let AstraGram read it. Copy the plugin's code and allow pasting when asked.") }
+    public var pluginsNoHeader: String { t("Это не плагин AstraGram: в первых строках нет «// @id …». Пример — в разделе «Как писать плагины».", "This is not an AstraGram plugin: its first lines have no \"// @id …\". See Writing Plugins for an example.") }
     public var pluginsInstalledDone: String { t("Плагин установлен", "Plugin installed") }
     public var pluginsHelp: String { t("Как писать плагины", "Writing Plugins") }
     public var burnNow: String { t("Сжечь сейчас", "Burn Now") }
@@ -180,18 +183,18 @@ public struct AstraStrings {
     public var messageShot: String { t("Скриншот сообщения", "Message Shot") }
     public var registrationDate: String { t("Регистрация", "Registered") }
     public var localPremium: String { t("Локальный Premium", "Local Premium") }
-    public var showRegistrationDate: String { t("Дата регистрации в профиле", "Registration date in profiles") }
-    public var localPremiumFooter: String { t("Локальный Premium отображает ваш аккаунт как Premium только на этом устройстве: открываются функции интерфейса, но то, что проверяет сервер (большие файлы, премиум-стикеры для других), работать не будет.", "Local Premium shows your account as Premium on this device only: interface features unlock, but anything the server checks (large files, premium stickers for others) will not work.") }
+    public var showRegistrationDate: String { t("Дата регистрации", "Registration Date") }
+    public var localPremiumFooter: String { t("Premium только на этом устройстве: открывает функции интерфейса, но не серверные возможности.", "Premium on this device only: unlocks interface features, not server ones.") }
     public var apiCredentials: String { t("API ID и Hash", "API ID and Hash") }
     public var viewHeader: String { t("ВИД СООБЩЕНИЙ", "MESSAGES") }
-    public var wideMessages: String { t("Широкие сообщения", "Wide messages") }
-    public var channelBadge: String { t("Значок ◆ у пишущих от имени канала", "◆ badge for posting as a channel") }
-    public var checkForUpdates: String { t("Проверять обновления", "Check for updates") }
+    public var wideMessages: String { t("Широкие сообщения", "Wide Messages") }
+    public var channelBadge: String { t("Значок ◆ у постов от каналов", "◆ for Posts as Channel") }
+    public var checkForUpdates: String { t("Проверять обновления", "Check for Updates") }
     public var checkUpdatesNow: String { t("Проверить обновления сейчас", "Check for Updates Now") }
     public var notificationsHeader: String { t("УВЕДОМЛЕНИЯ", "NOTIFICATIONS") }
-    public var backgroundNotifications: String { t("Уведомления без push", "Notifications without push") }
-    public var keepAliveInBackground: String { t("Держать соединение в фоне", "Stay connected in background") }
-    public var backgroundNotificationsFooter: String { t("Push-уведомления Telegram не приходят в приложения, установленные через AltStore. «Держать соединение в фоне» не даёт iOS усыпить AstraGram (проигрывается тишина, музыке это не мешает), поэтому сообщения приходят и уведомляются сразу, но батарея расходуется быстрее. Без него AstraGram проверяет сообщения, только когда iOS сама его будит (раз в 15–60 минут или реже). Смахивание AstraGram из списка недавних приложений останавливает и то и другое.", "Telegram push notifications do not reach apps installed with AltStore. \"Stay connected in background\" keeps iOS from suspending AstraGram (it plays silence, music is not affected), so messages arrive and are notified at once, at the cost of battery. Without it AstraGram checks for messages only when iOS wakes it up (every 15–60 minutes or less often). Swiping AstraGram away from recent apps stops both.") }
+    public var backgroundNotifications: String { t("Уведомления без push", "Notifications Without Push") }
+    public var keepAliveInBackground: String { t("Держать соединение в фоне", "Stay Connected in Background") }
+    public var backgroundNotificationsFooter: String { t("Push-уведомления не приходят в приложения из AltStore. «Держать соединение в фоне» доставляет сообщения сразу, но тратит больше заряда.", "Push notifications don't reach apps from AltStore. Staying connected delivers messages at once but uses more battery.") }
     public var shortcutGhostOn: String { t("Включить режим призрака", "Turn On Ghost Mode") }
     public var shortcutGhostOff: String { t("Выключить режим призрака", "Turn Off Ghost Mode") }
     public var shortcutStateOn: String { t("Сейчас включён", "Now on") }
@@ -205,8 +208,8 @@ public struct AstraStrings {
     public var dedsecToastOn: String { t("DEDSEC: группы и каналы без звука и уведомлений", "DEDSEC: groups and channels are silent") }
     public var dedsecToastOff: String { t("DEDSEC: уведомления групп и каналов включены", "DEDSEC: group and channel notifications are on") }
     public var dedsecHeader: String { t("DEDSEC", "DEDSEC") }
-    public var dedsecSilence: String { t("Тишина групп и каналов", "Silence groups and channels") }
-    public var dedsecFooter: String { t("Функция от автора (DEDSEC): выключает уведомления и звуки всех групп и каналов одной кнопкой, новые группы и каналы тоже будут молчать. Чтобы какой-то чат уведомлял, включите в его профиле уведомления: это исключение. Переключается и из меню иконки приложения (долгое нажатие на иконку).", "From the author (DEDSEC): one switch turns off notifications and sounds of all groups and channels, and new ones are silent too. To keep a chat notifying, turn its notifications on in its profile: that is an exception. Also available from the app icon menu (long press the icon).") }
+    public var dedsecSilence: String { t("Тишина групп и каналов", "Silence Groups and Channels") }
+    public var dedsecFooter: String { t("Выключает уведомления всех групп и каналов, включая новые. Исключения задаются в профиле чата.", "Mutes all groups and channels, new ones too. Set exceptions in a chat's profile.") }
     public var liquidGlassBeta: String { t("Liquid Glass+ (бета)", "Liquid Glass+ (beta)") }
     public var liquidGlassFooter: String { t("Бета-вид по концепту Liquid Glass: в профиле круглые стеклянные кнопки с подписью снизу, нижняя панель из трёх вкладок («Контакты», «Чаты», «Настройки»; звонки остаются в настройках). Обычный вид остаётся по умолчанию. Применяется после перезапуска приложения.", "A beta look after the Liquid Glass concept: round glass buttons with labels under them in profiles, a tab bar of three tabs (Contacts, Chats, Settings; calls stay in Settings). The regular look stays the default. Applied after the app restarts.") }
     public var themesHeader: String { t("ВИД (БЕТА)", "LOOK (BETA)") }
@@ -215,7 +218,7 @@ public struct AstraStrings {
     public var aiKey: String { t("Ключ", "Key") }
     public var aiModel: String { t("Модель", "Model") }
     public var aiTest: String { t("Проверить подключение", "Test Connection") }
-    public var aiFooter: String { t("Без ключа AI работает через бесплатный публичный сервис Pollinations: регистрация не нужна, но не чаще одного запроса в 45 секунд и только текст (расшифровка голосовых недоступна). Со своим ключом (OpenAI, OpenRouter, Groq, DeepSeek или свой сервер с OpenAI-совместимым API) ограничений нет. Текст отправляется в сервис только когда вы сами выбираете AI-действие. Ключ хранится только на этом устройстве.", "Without a key, AI uses the free public Pollinations service: no sign-up, but at most one request every 45 seconds and text only (no voice transcription). With your own key (OpenAI, OpenRouter, Groq, DeepSeek or your own OpenAI-compatible server) there are no such limits. Text is sent to the service only when you pick an AI action. The key stays on this device.") }
+    public var aiFooter: String { t("Без ключа работает бесплатный сервис Pollinations (1 запрос в 45 секунд). Со своим ключом ограничений нет. Текст уходит в сервис только по вашему действию.", "Without a key, the free Pollinations service is used (1 request per 45 s). With your own key there are no limits. Text is sent only when you choose an AI action.") }
     public var bookmarks: String { t("Закладки", "Bookmarks") }
     public var bookmarksEmpty: String { t("Закладок пока нет. Долгое нажатие на сообщение → AstraGram → «В закладки».", "No bookmarks yet. Long press a message → AstraGram → Bookmark.") }
     public var bookmarksClear: String { t("Удалить все закладки", "Delete All Bookmarks") }
@@ -233,8 +236,8 @@ public struct AstraStrings {
     public var backupDone: String { t("Настройки восстановлены", "Settings restored") }
     public var backupInvalid: String { t("Это не резервная копия AstraGram", "This is not an AstraGram backup") }
     public var mediaHeader: String { t("ФИЛЬТРЫ МЕДИА", "MEDIA FILTERS") }
-    public var hideStickers: String { t("Скрывать стикеры других", "Hide stickers from others") }
-    public var hideGifs: String { t("Скрывать GIF других", "Hide GIFs from others") }
+    public var hideStickers: String { t("Скрывать стикеры других", "Hide Stickers from Others") }
+    public var hideGifs: String { t("Скрывать GIF других", "Hide GIFs from Others") }
     public var aiMenu: String { t("AI", "AI") }
     public var aiTranslate: String { t("Перевести", "Translate") }
     public var aiSummarize: String { t("Кратко пересказать", "Summarize") }
@@ -252,16 +255,16 @@ public struct AstraStrings {
     public var bookmarkAdded: String { t("Сообщение в закладках AstraGram", "Message bookmarked") }
     public var exportChat: String { t("Экспорт чата и статистика", "Export Chat and Statistics") }
     public var aiNotConfiguredShort: String { t("Сначала добавьте ключ в Настройки → AstraGram → AI", "First add a key in Settings → AstraGram → AI") }
-    public var aiFree: String { t("бесплатный", "free") }
+    public var aiFree: String { t("Бесплатно", "Free") }
     public var lookHeader: String { t("ВИД", "LOOK") }
     public var roundProfileButtons: String { t("Круглые кнопки в профиле", "Round Profile Buttons") }
     public var profileMusicCapsule: String { t("Музыка капсулой в профиле", "Profile Music as a Capsule") }
     public var contactsTab: String { t("Вкладка «Контакты»", "Contacts Tab") }
     public var callsTab: String { t("Вкладка «Звонки»", "Calls Tab") }
     public var monochrome: String { t("Монохромное оформление", "Monochrome Look") }
-    public var lookFooter: String { t("Каждая часть вида включается отдельно. Монохром оставляет только чёрный, белый и серые; тёмный или светлый вариант берётся из вашей темы и ночного режима, а фон чатов, фото, стикеры и эмодзи остаются как были. Когда монохром включён, под ним появляется «Однотонный фон чатов»: чёрный в тёмном варианте и белый в светлом. Материал стекла меняет панели и кнопки: стандартный, прозрачный или матовый; строка переключает их по кругу. Пружинящие нажатия: кнопка проседает под пальцем и возвращается на пружине, а нажатая строка в списке чатов подсвечивается скруглённой плашкой. Вкладки, монохром и нажатия применяются сразу, кнопки и музыка при следующем открытии профиля. Материал стекла, значки настроек и заглушки аватаров полностью меняются после перезапуска. Значок AstraGram у имени держится на двух невидимых символах в конце вашего имени. Он ничего не подтверждает: те же символы может вписать кто угодно. Перед удалением AstraGram выключите значок или нажмите «Убрать метку AstraGram из имени», иначе символы останутся в имени. Значок включается для всех аккаунтов сразу, имя аккаунта меняется, когда вы его открываете.", "Every part of the look has its own switch. Monochrome leaves only black, white and grays; the dark or the light variant follows your theme and night mode, while the chat background, photos, stickers and emoji stay as they are. While Monochrome is on, Plain Chat Background appears under it: black in the dark variant and white in the light one. Glass Material changes panels and buttons: standard, clear or matte; the row cycles through them. Springy Presses: a button sinks under the finger and comes back on a spring, and the pressed row of the chat list is highlighted as a rounded plate. Tabs, Monochrome and presses apply at once, buttons and music the next time a profile opens. The glass material, the settings icons and avatar placeholders change fully after the app restarts. The AstraGram badge by your name rests on two invisible characters at the end of your name. It proves nothing: anyone can type the same characters. Before deleting AstraGram, turn the badge off or tap Remove AstraGram Mark from My Name, or the characters stay in your name. The badge is on or off for all accounts at once; an account's name changes when you open it.") }
+    public var lookFooter: String { t("Монохром оставляет только чёрный, белый и серые. Значок AstraGram виден у тех, у кого он тоже включён. Часть изменений применяется после перезапуска.", "Monochrome keeps only black, white and grays. The AstraGram badge is seen by people who have it on too. Some changes apply after a restart.") }
     public var restartApp: String { t("Перезапустить AstraGram", "Restart AstraGram") }
-    public var restartFooter: String { t("iOS не позволяет приложению открыть себя заново. AstraGram закроется и пришлёт уведомление: нажмите на него, и приложение откроется снова. Если уведомления выключены, откройте его с домашнего экрана.", "iOS does not let an app reopen itself. AstraGram closes and sends a notification: tap it and the app opens again. If notifications are off, open it from the Home Screen.") }
+    public var restartFooter: String { t("AstraGram закроется и пришлёт уведомление, чтобы открыться снова.", "AstraGram closes and sends a notification to reopen it.") }
     public var restartNotificationTitle: String { t("AstraGram закрыт", "AstraGram is closed") }
     public var restartNotificationText: String { t("Нажмите, чтобы открыть снова.", "Tap to open it again.") }
     public var glassMaterial: String { t("Материал стекла", "Glass Material") }
@@ -272,24 +275,43 @@ public struct AstraStrings {
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }
     public var astraBadge: String { t("Значок AstraGram у имени", "AstraGram Badge by My Name") }
     public var streaks: String { t("🔥 Огоньки", "🔥 Streaks") }
-    public var astraBadgeClear: String { t("Убрать метку AstraGram из имени", "Remove AstraGram Mark from My Name") }
+    public var astraBadgeClear: String { t("Убрать метку из имени", "Remove Mark from Name") }
     public var astraBadgeCleared: String { t("Метка AstraGram убрана из имени, значок выключен", "The AstraGram mark is removed from your name and the badge is off") }
     public var astraBadgeNothing: String { t("В имени нет метки AstraGram, значок выключен", "Your name has no AstraGram mark; the badge is off") }
     public var securityHeader: String { t("БЕЗОПАСНОСТЬ", "SECURITY") }
     public var securityCheck: String { t("Проверка безопасности", "Security Check") }
     public var lockedChats: String { t("Чаты под Face ID", "Chats Locked with Face ID") }
-    public var lockedChatsNone: String { t("нет", "none") }
+    public var lockedChatsNone: String { t("Нет", "None") }
     public var lockedChatsReason: String { t("Изменить список защищённых чатов", "Change the list of locked chats") }
     public var biometricForAstraGram: String { t("Face ID для настроек AstraGram", "Face ID for AstraGram Settings") }
-    public var hideInAppSwitcher: String { t("Скрывать экран в переключателе приложений", "Hide Screen in App Switcher") }
+    public var hideInAppSwitcher: String { t("Скрывать в переключателе", "Hide in App Switcher") }
     public var blockThirdPartyKeyboards: String { t("Запретить сторонние клавиатуры", "Block Third-Party Keyboards") }
-    public var warnSuspiciousLinks: String { t("Предупреждать о подозрительных ссылках", "Warn about Suspicious Links") }
+    public var warnSuspiciousLinks: String { t("Предупреждать о ссылках", "Warn About Links") }
     public var stripLinkTrackers: String { t("Убирать трекеры из ссылок", "Remove Trackers from Links") }
-    public var clipboardExpire: String { t("Очищать скопированное через минуту", "Clear What Is Copied in a Minute") }
-    public var clipboardLocalOnly: String { t("Не передавать буфер на другие устройства", "Keep the Clipboard on This Device") }
-    public var telegramPrivacy: String { t("Конфиденциальность Telegram", "Telegram Privacy and Security") }
-    public var securityFooter: String { t("Проверка безопасности показывает, что защищает аккаунт и приложение сейчас и что стоит поправить. Чат под Face ID открывается после Face ID или код-пароля устройства и остаётся открытым, пока приложение не уйдёт в фон; в списке чатов у него нет текста и картинок последнего сообщения, а предпросмотр по долгому нажатию отключён. Сторонняя клавиатура видит всё, что вы набираете. Подозрительной считается ссылка на IP-адрес, на адрес с особыми символами, на сайт, похожий на Telegram, и на файл, который может что-то установить. Трекеры — это метки в ссылке, по которым сайт узнаёт, откуда вы пришли. Очистка буфера касается того, что скопировано в самом приложении. Клавиатуры применяются после перезапуска.", "Security Check shows what protects the account and the app now and what is worth fixing. A chat locked with Face ID opens after Face ID or the device passcode and stays open until the app goes to the background; in the chat list it shows neither the text nor the pictures of its last message, and its long-press preview is off. A third-party keyboard sees everything you type. A link is suspicious when it leads to an IP address, to an address with special characters, to a site that resembles Telegram, or to a file that can install something. Trackers are marks in a link that tell a site where you came from. Clearing the clipboard applies to what was copied in the app itself. Keyboards apply after the app restarts.") }
+    public var clipboardExpire: String { t("Очищать буфер через минуту", "Clear Clipboard in a Minute") }
+    public var clipboardLocalOnly: String { t("Буфер только на этом устройстве", "Local-Only Clipboard") }
+    public var telegramPrivacy: String { t("Конфиденциальность Telegram", "Telegram Privacy") }
+    public var securityFooter: String { t("Чаты под Face ID скрывают текст в списке. Сторонние клавиатуры видят всё, что вы набираете.", "Chats locked with Face ID hide their text in the chat list. Third-party keyboards see everything you type.") }
     public var pluginInstallTitle: String { t("Установить плагин?", "Install the Plugin?") }
     public var pluginInstallWarning: String { t("Плагин — это программа: она видит ваши сообщения и может менять то, что вы отправляете. Устанавливайте плагины только из источников, которым доверяете.", "A plugin is a program: it sees your messages and can change what you send. Install plugins only from sources you trust.") }
     public var pluginInstallConfirm: String { t("Установить", "Install") }
+
+    // Pages of the AstraGram settings (the main page lists them, Telegram-settings style).
+    public var pageGhost: String { t("Режим призрака", "Ghost Mode") }
+    public var pageHistory: String { t("Удалённые и правки", "Deleted and Edited") }
+    public var pagePrivacy: String { t("Конфиденциальность", "Privacy") }
+    public var pageSecurity: String { t("Безопасность", "Security") }
+    public var pageAppearance: String { t("Оформление", "Appearance") }
+    public var pageChats: String { t("Чаты и медиа", "Chats and Media") }
+    public var pageNotifications: String { t("Уведомления", "Notifications") }
+    public var pageStreaks: String { t("Огоньки", "Streaks") }
+    public var pageGiftShop: String { t("Магазин подарков", "Gift Shop") }
+    public var pageFeedback: String { t("Ошибки и идеи", "Bugs and Ideas") }
+    public var pageDonate: String { t("Поддержать AstraGram", "Support AstraGram") }
+    public var pageTools: String { t("AI и инструменты", "AI and Tools") }
+    public var pageAbout: String { t("Об AstraGram", "About AstraGram") }
+    public var valueOn: String { t("Вкл.", "On") }
+    public var valueOff: String { t("Выкл.", "Off") }
+    public var valuePartial: String { t("Частично", "Partly") }
+    public var rootFooter: String { t("Настройки AstraGram действуют для всех аккаунтов на этом устройстве.", "AstraGram settings apply to all accounts on this device.") }
 }

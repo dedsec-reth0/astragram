@@ -11,6 +11,7 @@ public final class AstraTextResultController: UIViewController {
     private let textView = UITextView()
     private let activityIndicator = UIActivityIndicatorView(style: .large)
     private var resultText: String?
+    private var didStartLoad = false
 
     public init(title: String, isRussian: Bool, load: @escaping (@escaping (Result<String, Error>) -> Void) -> Void) {
         self.titleText = title
@@ -65,6 +66,16 @@ public final class AstraTextResultController: UIViewController {
         ])
 
         self.activityIndicator.startAnimating()
+    }
+
+    override public func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // The task starts only once the sheet has finished appearing: an AI task may first present a consent alert,
+        // and UIKit drops a presentation made while this sheet is still animating in, which left the sheet spinning.
+        if self.didStartLoad {
+            return
+        }
+        self.didStartLoad = true
         self.load({ [weak self] result in
             DispatchQueue.main.async {
                 guard let self else {

@@ -130,10 +130,26 @@ func _internal_updateNameColorAndEmoji(account: Account, nameColor: UpdateNameCo
         flagsProfile |= 1 << 1
     }
     let inputProfileColor = Api.PeerColor.peerColor(.init(flags: flagsProfile, color: profileColor?.rawValue, backgroundEmojiId: profileBackgroundEmojiId))
-    return postbox.transaction { transaction -> Bool in
-        return transaction.getPeer(peerId) is TelegramUser
+    // AstraGram: with Local Premium (and no real Premium) the server refuses the colors, so they are kept on this device.
+    let keptLocally = postbox.transaction { transaction -> Bool in
+        guard let peer = transaction.getPeer(peerId) as? TelegramUser, AstraLocalPremium.isLocalOnly(peer) else {
+            return false
+        }
+        AstraLocalPremium.setColors(nameColor: nameColorValue, backgroundEmojiId: backgroundEmojiIdValue, profileColor: profileColor, profileBackgroundEmojiId: profileBackgroundEmojiId, accountPeerId: peerId)
+        updatePeersCustom(transaction: transaction, peers: [peer], update: { _, updated in updated })
+        return true
     }
     |> castError(UpdateNameColorAndEmojiError.self)
+    return keptLocally
+    |> mapToSignal { keptLocally -> Signal<Bool, UpdateNameColorAndEmojiError> in
+        if keptLocally {
+            return .complete()
+        }
+        return postbox.transaction { transaction -> Bool in
+            return transaction.getPeer(peerId) is TelegramUser
+        }
+        |> castError(UpdateNameColorAndEmojiError.self)
+    }
     |> mapToSignal { hasPeer -> Signal<Void, UpdateNameColorAndEmojiError> in
         guard hasPeer else { return .fail(.generic) }
         let replies = _internal_applyAccountPeerColor(postbox: postbox, network: network, peerId: peerId, forProfile: false, color: inputRepliesColor, update: { peer in

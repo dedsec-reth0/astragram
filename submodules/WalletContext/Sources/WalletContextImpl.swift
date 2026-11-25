@@ -502,6 +502,11 @@ actor WalletContextImpl {
             && self.isNetworkAvailable
     }
 
+    // AstraGram: failed wallet state requests are retried with a growing delay. The wallet is unavailable for most
+    // accounts (WALLET_UNAVAILABLE), and a fixed 5-second retry kept requesting it every 5 seconds for as long as the
+    // app was open.
+    private var astraServerStateRetryAttempt: Int = 0
+
     private var needsServerWalletStateRefresh: Bool {
         (self.serverWalletState == nil || self.serverStateNeedsActivation)
             && self.currentState.activeOperation?.defersServerWalletState != true
@@ -583,6 +588,7 @@ actor WalletContextImpl {
             }
             self.serverStateRetryTask?.cancel()
             self.serverStateRetryTask = nil
+            self.astraServerStateRetryAttempt = 0
             self.applyServerWalletState(value, forceActivation: promotedReplacement, balanceOverlayRevision: balanceOverlayRevision)
         } catch is CancellationError {
         } catch {
@@ -1563,7 +1569,10 @@ actor WalletContextImpl {
     }
 
     private func performServerStateRetryDelay() async {
-        try? await Task.sleep(nanoseconds: 5_000_000_000)
+        // 5 s, 10 s, 20 s ... up to 10 minutes.
+        let delay = min(600.0, 5.0 * pow(2.0, Double(min(self.astraServerStateRetryAttempt, 8))))
+        self.astraServerStateRetryAttempt += 1
+        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000.0))
         guard !Task.isCancelled,
               !self.isShutdown else {
             return

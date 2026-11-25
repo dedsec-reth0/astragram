@@ -70,6 +70,9 @@ jobs:
           [ -n "$ID" ] || { echo "::error::Could not find or create the D1 database"; exit 1; }
           sed -i "s/database_id = \".*\"/database_id = \"$ID\"/" wrangler.toml
           $WRANGLER d1 execute astragram-streaks --remote --file schema.sql --yes
+          # Columns added to tables that already exist (CREATE TABLE IF NOT EXISTS leaves those as they are); a column
+          # that is already there makes ALTER fail, which is fine.
+          $WRANGLER d1 execute astragram-streaks --remote --yes --command "ALTER TABLE visual_gifts ADD COLUMN changed_at INTEGER NOT NULL DEFAULT 0" || true
 
       - name: Deploy worker
         if: steps.secrets.outputs.ready == 'true'
@@ -90,9 +93,9 @@ jobs:
           SECRET=$(printf '%s' "$BOT_TOKEN:webhook" | sha256sum | cut -c1-48)
           API="https://api.telegram.org/bot$BOT_TOKEN"
           curl -fsS "$API/setWebhook" -H 'content-type: application/json' \
-            -d "{\"url\":\"$URL/tg\",\"secret_token\":\"$SECRET\",\"allowed_updates\":[\"message\",\"callback_query\"],\"drop_pending_updates\":true}" > /dev/null
+            -d "{\"url\":\"$URL/tg\",\"secret_token\":\"$SECRET\",\"allowed_updates\":[\"message\",\"callback_query\",\"pre_checkout_query\"],\"drop_pending_updates\":true}" > /dev/null
           curl -fsS "$API/setMyCommands" -H 'content-type: application/json' \
-            -d '{"commands":[{"command":"streaks","description":"Мои огоньки"},{"command":"help","description":"Как работает огонёк"},{"command":"stop","description":"Выключить напоминания"}]}' > /dev/null
+            -d '{"commands":[{"command":"streaks","description":"Мои огоньки"},{"command":"help","description":"Как работает огонёк"},{"command":"stop","description":"Выключить напоминания"},{"command":"paysupport","description":"Помощь с оплатой"}]}' > /dev/null
           curl -fsS "$API/setMyDescription" -H 'content-type: application/json' \
             -d '{"description":"🔥 Огоньки AstraGram для тех, у кого нет AstraGram: счёт, напоминание вечером и восстановление пропущенного дня. Боту приходят только числа, тексты сообщений — никогда."}' > /dev/null
           USERNAME=$(curl -fsS "$API/getMe" | jq -r .result.username)

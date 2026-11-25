@@ -147,47 +147,94 @@ public enum AstraStreak {
     public static func compute(postbox: Postbox, peerId: PeerId, startDay: Int32, localRestores: Set<Int32>) -> Signal<AstraStreakState, NoError> {
         return postbox.transaction { transaction -> AstraStreakState in
             let today = AstraStreak.today()
-            // At most a year back: older days are not read.
-            let firstDay = max(startDay, today - 370)
+            // The whole streak is read, back to its first day: a cap on how far back messages are read would also
+            // cap the count (a streak would stop growing at the cap).
+            let firstDay = startDay
             let fromTimestamp = Int32(clamping: Int64(firstDay) * 86400 - 2 * 86400)
             var mine: [Int32: Int] = [:]
             var theirs: [Int32: Int] = [:]
-            var restored = localRestores
-            let messages = transaction.getMessages(
-                peerId: peerId,
-                namespace: Namespaces.Message.Cloud,
-                from: MessageIndex.upperBound(peerId: peerId, namespace: Namespaces.Message.Cloud),
-                includeFrom: false,
-                to: MessageIndex(id: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: 0), timestamp: fromTimestamp),
-                limit: 30000
-            )
-            for message in messages {
-                if message.media.contains(where: { $0 is TelegramMediaAction }) {
-                    continue
+            // Restores of days before the streak's first day (from an earlier streak with the same person) are not
+            // part of this streak.
+            var restored = localRestores.filter { $0 >= firstDay }
+            var chatRestores = Set<Int32>()
+            // Read in pages, newest first, so a busy chat is not cut off at a fixed number of messages and loses its
+            // oldest days.
+            let lowerBound = MessageIndex(id: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: 0), timestamp: fromTimestamp)
+            var cursor = MessageIndex.upperBound(peerId: peerId, namespace: Namespaces.Message.Cloud)
+            let pageSize = 2000
+            reading: while true {
+                let messages = transaction.getMessages(
+                    peerId: peerId,
+                    namespace: Namespaces.Message.Cloud,
+                    from: cursor,
+                    includeFrom: false,
+                    to: lowerBound,
+                    limit: pageSize
+                )
+                for message in messages {
+                    if message.media.contains(where: { $0 is TelegramMediaAction }) {
+                        continue
+                    }
+                    if message.flags.contains(.Failed) || message.flags.contains(.Unsent) {
+                        continue
+                    }
+                    // A message kept in the chat after deletion is gone for everyone else, so it must not count, or
+                    // this device's streak diverges from the other side's and from the bot.
+                    if message.astraDeletedAt != nil {
+                        continue
+                    }
+                    if let day = AstraStreak.restoredDay(in: message.text) {
+                        // A restore is sent the day after the missed day. A mark for any other day (an old message, a
+                        // forged one, a different time zone by more than a day) does not count, nor one for a day
+                        // before this streak began.
+                        let sentDay = AstraStreak.dayNumber(message.timestamp)
+                        if day >= sentDay - 2 && day <= sentDay - 1 && day >= firstDay {
+                            chatRestores.insert(day)
+                        }
+                        continue
+                    }
+                    let day = AstraStreak.dayNumber(message.timestamp)
+                    if day < firstDay {
+                        continue
+                    }
+                    if message.flags.contains(.Incoming) {
+                        theirs[day, default: 0] += 1
+                    } else {
+                        mine[day, default: 0] += 1
+                    }
                 }
-                if message.flags.contains(.Failed) || message.flags.contains(.Unsent) {
-                    continue
+                guard messages.count == pageSize, let last = messages.last else {
+                    break
                 }
-                // A message kept in the chat after deletion is gone for everyone else, so it must not count, or this
-                // device's streak diverges from the other side's and from the bot.
-                if message.astraDeletedAt != nil {
-                    continue
-                }
-                if let day = AstraStreak.restoredDay(in: message.text) {
-                    restored.insert(day)
-                    continue
-                }
-                let day = AstraStreak.dayNumber(message.timestamp)
-                if day < firstDay {
-                    continue
-                }
-                if message.flags.contains(.Incoming) {
-                    theirs[day, default: 0] += 1
-                } else {
-                    mine[day, default: 0] += 1
+                cursor = last.index
+                // Every day after the oldest one of this page is fully read (a day's restore mark is sent on a later
+                // day, so it is read too). A missed day older than the last week ends the chain, so the older history
+                // cannot change the count and is not read; the last week is always read, as its restores are counted.
+                // The missed day's whole calendar week must be read too: restores of its earlier days share the week's
+                // budget with the later ones, so an unread one could let a later restore count that should not.
+                let oldestDay = AstraStreak.dayNumber(last.timestamp)
+                var day = today - 8
+                while day > oldestDay && day >= firstDay {
+                    let messagesDone = (mine[day] ?? 0) >= AstraStreak.messagesPerDay && (theirs[day] ?? 0) >= AstraStreak.messagesPerDay
+                    if !messagesDone && !restored.contains(day) && !chatRestores.contains(day) && AstraStreak.week(day) > AstraStreak.week(oldestDay) {
+                        break reading
+                    }
+                    day -= 1
                 }
             }
-            return AstraStreak.state(today: today, startDay: firstDay, mine: mine, theirs: theirs, restored: restored)
+            // At most restoresPerWeek restores count in a week, whoever sent them.
+            var perWeek: [Int32: Int] = [:]
+            for day in restored {
+                perWeek[AstraStreak.week(day), default: 0] += 1
+            }
+            for day in chatRestores.sorted() where !restored.contains(day) {
+                let week = AstraStreak.week(day)
+                if perWeek[week, default: 0] < AstraStreak.restoresPerWeek {
+                    perWeek[week, default: 0] += 1
+                    restored.insert(day)
+                }
+            }
+            return AstraStreak.state(today: today, startDay: startDay, mine: mine, theirs: theirs, restored: restored)
         }
     }
 
@@ -210,7 +257,8 @@ public enum AstraStreak {
         }
         let todayDone = done(today)
         let count = chain(endingAt: todayDone ? today : today - 1)
-        let restoresUsed = restored.filter { AstraStreak.week($0) == AstraStreak.week(today - 1) && !messagesDone($0) }.count
+        // Only restores of this streak count against the week's budget, not ones of an earlier streak with the person.
+        let restoresUsed = restored.filter { $0 >= startDay && AstraStreak.week($0) == AstraStreak.week(today - 1) && !messagesDone($0) }.count
         let restoresLeft = max(0, AstraStreak.restoresPerWeek - restoresUsed)
         var restorableDay: Int32?
         var lostCount = 0
@@ -237,7 +285,81 @@ public enum AstraStreak {
 
     /// Counts the streak of an account's chat (for the app's modules, which do not use Postbox).
     public static func compute(account: Account, peerId: EnginePeer.Id, startDay: Int32, localRestores: Set<Int32>) -> Signal<AstraStreakState, NoError> {
-        return AstraStreak.compute(postbox: account.postbox, peerId: peerId, startDay: startDay, localRestores: localRestores)
+        let count = AstraStreak.compute(postbox: account.postbox, peerId: peerId, startDay: startDay, localRestores: localRestores)
+        // Counted at once from what is stored, and again once the missing history is in.
+        let load: Signal<AstraStreakState, NoError> = AstraStreak.loadMissingHistory(account: account, peerId: peerId, startDay: startDay)
+        return count |> then(load) |> then(count)
+    }
+
+    private static let loadLock = NSLock()
+    // Keyed by account and chat: two accounts with a streak with the same person each load their own history.
+    private static var lastLoad: [String: Double] = [:]
+
+    /// The streak is counted from the messages stored on this device, so a chat whose recent history was never opened
+    /// here (a new device, a fresh login) would count only the days it has. Before counting, the gaps in the chat's
+    /// history back to the streak's first day are loaded from the server (at most every 5 minutes for a chat, and at
+    /// most 20 pages of 100 messages at a time).
+    static func loadMissingHistory<T>(account: Account, peerId: PeerId, startDay: Int32) -> Signal<T, NoError> {
+        let now = CFAbsoluteTimeGetCurrent()
+        let loadKey = AstraStreak.cacheKey(accountPeerId: account.peerId, peerId: peerId)
+        AstraStreak.loadLock.lock()
+        let last = AstraStreak.lastLoad[loadKey]
+        let due = last == nil || now - last! > 5.0 * 60.0
+        if due {
+            AstraStreak.lastLoad[loadKey] = now
+        }
+        AstraStreak.loadLock.unlock()
+        if !due {
+            return .complete()
+        }
+        // Back to the streak's first day, as the count reads the whole streak.
+        let firstDay = startDay
+        let fromTimestamp = Int32(clamping: Int64(firstDay) * 86400 - 2 * 86400)
+        let postbox = account.postbox
+
+        func step(_ remaining: Int) -> Signal<T, NoError> {
+            if remaining <= 0 {
+                return .complete()
+            }
+            return postbox.transaction { transaction -> ClosedRange<Int32>? in
+                // Message ids of a chat grow with time, so only the gaps above the newest stored message older than
+                // the streak can hold its days.
+                let older = transaction.getMessages(
+                    peerId: peerId,
+                    namespace: Namespaces.Message.Cloud,
+                    from: MessageIndex(id: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: Int32.max - 1), timestamp: fromTimestamp),
+                    includeFrom: false,
+                    to: MessageIndex.lowerBound(peerId: peerId, namespace: Namespaces.Message.Cloud),
+                    limit: 1
+                )
+                let floor = older.first?.id.id ?? 0
+                let holes = transaction.getHoles(peerId: peerId, namespace: Namespaces.Message.Cloud)
+                guard let range = holes.rangeView.last(where: { $0.upperBound - 1 > Int(floor) }) else {
+                    return nil
+                }
+                let lower = max(Int32(clamping: range.lowerBound), floor + 1)
+                let upper = Int32(clamping: range.upperBound - 1)
+                return lower <= upper ? lower ... upper : nil
+            }
+            |> mapToSignal { range -> Signal<T, NoError> in
+                guard let range = range else {
+                    return .complete()
+                }
+                let direction: MessageHistoryViewRelativeHoleDirection = .range(
+                    start: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: range.upperBound),
+                    end: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: range.lowerBound - 1)
+                )
+                return fetchMessageHistoryHole(accountPeerId: account.peerId, source: .network(account.network), postbox: postbox, peerInput: .direct(peerId: peerId, threadId: nil), namespace: Namespaces.Message.Cloud, direction: direction, space: .everywhere, count: 100)
+                |> mapToSignal { result -> Signal<T, NoError> in
+                    // Nothing taken out of the gap (an error, or a gap the server cannot fill): stop here.
+                    guard let result = result, !result.removedIndices.isEmpty else {
+                        return .complete()
+                    }
+                    return step(remaining - 1)
+                }
+            }
+        }
+        return step(20)
     }
 
     /// The id of the newest message of each chat; changes when a chat gets a message.
@@ -285,6 +407,7 @@ public enum AstraStreak {
         }
         if changed {
             AstraStreak.updatesPipe.putNext(Void())
+            AstraMarks.changed()
         }
     }
 
@@ -344,6 +467,20 @@ extension AstraMessageStore {
                         sqlite3_finalize(statement)
                     }
                 }
+            }
+            self.changesPipe.putNext(Void())
+        }
+    }
+
+    /// Turns a streak on with exactly `startDay`, replacing the start day it already has: the account's list from the
+    /// streak bot decides it, so every device counts from the same day.
+    public func setStreakStartDay(peerId: PeerId, startDay: Int32) {
+        self.queue.async {
+            if let statement = self.prepare("INSERT INTO streaks (peer_id, start_day) VALUES (?, ?) ON CONFLICT (peer_id) DO UPDATE SET start_day = excluded.start_day") {
+                sqlite3_bind_int64(statement, 1, peerId.toInt64())
+                sqlite3_bind_int(statement, 2, startDay)
+                sqlite3_step(statement)
+                sqlite3_finalize(statement)
             }
             self.changesPipe.putNext(Void())
         }

@@ -289,24 +289,58 @@ public func translateMessageIds(context: AccountContext, messageIds: [EngineMess
             }
         }
         
-        let translationConfiguration = TranslationConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
-        var enableLocalIfPossible = false
-        switch translationConfiguration.auto {
-        case .system:
-            if #available(iOS 18.0, *) {
-                enableLocalIfPossible = true
-            }
-        default:
-            break
-        }
-        return context.engine.messages.translateMessages(messageIds: messageIdsToTranslate, fromLang: fromLang, toLang: toLang, enableLocalIfPossible: enableLocalIfPossible)
+        // AstraGram: chats are translated by Telegram's own translation of the messages' texts (what the "Translate" menu
+        // item uses, free on every account), not by message ids: asking by id is whole-chat translation, which the
+        // server allows only with Premium, so with Local Premium it failed silently. Nor on the device: the system
+        // translator needs the source language, and in a chat translated on request it was only guessed.
+        return context.engine.messages.translateMessages(messageIds: messageIdsToTranslate, fromLang: fromLang, toLang: toLang, enableLocalIfPossible: false, byText: true)
         |> `catch` { _ -> Signal<Never, NoError> in
             return .complete()
         }
     } |> switchToLatest
 }
 
+/// AstraGram: "Translate their messages" in a chat: everything others write there is translated into the language
+/// picked (by Telegram's chat translation), whatever language it is in and even where Telegram would not offer it.
+public enum AstraIncomingTranslation {
+    private static let storageKey = "astragram.incomingTranslation"
+    private static let changes = ValuePipe<Void>()
+
+    public static func language(peerId: EnginePeer.Id) -> String? {
+        return (UserDefaults.standard.dictionary(forKey: AstraIncomingTranslation.storageKey) as? [String: String])?["\(peerId.toInt64())"]
+    }
+
+    public static func setLanguage(_ code: String?, peerId: EnginePeer.Id) {
+        var current = (UserDefaults.standard.dictionary(forKey: AstraIncomingTranslation.storageKey) as? [String: String]) ?? [:]
+        current["\(peerId.toInt64())"] = code
+        UserDefaults.standard.set(current, forKey: AstraIncomingTranslation.storageKey)
+        AstraIncomingTranslation.changes.putNext(Void())
+    }
+
+    static func languageSignal(peerId: EnginePeer.Id) -> Signal<String?, NoError> {
+        return (.single(Void()) |> then(AstraIncomingTranslation.changes.signal()))
+        |> map { _ in AstraIncomingTranslation.language(peerId: peerId) }
+        |> distinctUntilChanged
+    }
+}
+
 public func chatTranslationState(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?) -> Signal<ChatTranslationState?, NoError> {
+    return combineLatest(astraChatTranslationState(context: context, peerId: peerId, threadId: threadId), AstraIncomingTranslation.languageSignal(peerId: peerId))
+    |> map { state, forced -> ChatTranslationState? in
+        guard let forced else {
+            return state
+        }
+        // The language the messages are in, when Telegram found it; otherwise any other (the server finds it itself).
+        var fromLang = state?.fromLang ?? ""
+        if fromLang.isEmpty || normalizeTranslationLanguage(fromLang) == forced {
+            fromLang = forced == "en" ? "ru" : "en"
+        }
+        return ChatTranslationState(baseLang: forced, fromLang: fromLang, timestamp: state?.timestamp, toLang: forced, isEnabled: true)
+    }
+    |> distinctUntilChanged
+}
+
+private func astraChatTranslationState(context: AccountContext, peerId: EnginePeer.Id, threadId: Int64?) -> Signal<ChatTranslationState?, NoError> {
     let sharesPeerChoice = context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
     |> map { peer -> Bool in
         return chatTranslationSharesPeerChoice(peer: peer)

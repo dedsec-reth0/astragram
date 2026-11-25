@@ -334,6 +334,7 @@ public final class GiftItemComponent: Component {
         private let containerButton = HighlightTrackingButton()
         
         public let backgroundLayer = SimpleLayer()
+        private let astraSheenLayer = CAGradientLayer()
         private var loadingBackground: ComponentView<Empty>?
         
         private let patternView = ComponentView<Empty>()
@@ -1389,9 +1390,31 @@ public final class GiftItemComponent: Component {
                     self.backgroundLayer.backgroundColor = component.theme.list.itemBlocksBackgroundColor.cgColor
                 }
             }
+            // AstraGram: on a coloured profile (a see-through card colour) the card is glass, as in iOS 26: a light rim
+            // and a sheen on top, so a gift stands apart from a background of its own colour.
+            let astraGlass = component.theme.list.itemBlocksBackgroundColor.alpha < 1.0 && ![.buttonIcon, .tableIcon].contains(component.mode)
+            if astraGlass {
+                // Over everything in the card (a unique gift's backdrop and pattern included).
+                self.astraSheenLayer.borderWidth = 1.0
+                self.astraSheenLayer.borderColor = UIColor(white: 1.0, alpha: 0.38).cgColor
+                self.astraSheenLayer.cornerRadius = self.backgroundLayer.cornerRadius
+                self.astraSheenLayer.masksToBounds = true
+                self.astraSheenLayer.zPosition = 100.0
+                if self.astraSheenLayer.superlayer == nil {
+                    self.astraSheenLayer.colors = [UIColor(white: 1.0, alpha: 0.22).cgColor, UIColor(white: 1.0, alpha: 0.04).cgColor, UIColor(white: 1.0, alpha: 0.0).cgColor]
+                    self.astraSheenLayer.locations = [0.0, 0.45, 1.0]
+                    self.astraSheenLayer.startPoint = CGPoint(x: 0.5, y: 0.0)
+                    self.astraSheenLayer.endPoint = CGPoint(x: 0.5, y: 1.0)
+                    self.layer.addSublayer(self.astraSheenLayer)
+                }
+                self.astraSheenLayer.isHidden = false
+            } else {
+                self.astraSheenLayer.isHidden = true
+            }
             
             let backgroundFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - backgroundSize.width) / 2.0), y: floorToScreenPixels((size.height - backgroundSize.height) / 2.0)), size: backgroundSize)
             transition.setFrame(layer: self.backgroundLayer, frame: backgroundFrame)
+            self.astraSheenLayer.frame = backgroundFrame
             transition.setFrame(view: self.containerButton, frame: CGRect(origin: .zero, size: size))
             
             var iconBackgroundSize: CGSize?

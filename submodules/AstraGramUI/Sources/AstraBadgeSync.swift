@@ -13,6 +13,8 @@ import AccountContext
 public enum AstraBadgeSync {
     private static var disposables: [EnginePeer.Id: Disposable] = [:]
     private static var timers: [EnginePeer.Id: SwiftSignalKit.Timer] = [:]
+    /// The account (session) the state above was started for: a new login of the same account gets a new one.
+    private static var accountIds: [EnginePeer.Id: ObjectIdentifier] = [:]
     /// The bot is connected for the badge at most once per account in a session.
     private static var linkTried = Set<EnginePeer.Id>()
     /// The old name mark is taken out at most once per account in a session.
@@ -22,9 +24,21 @@ public enum AstraBadgeSync {
 
     public static func start(context: AccountContext) {
         let peerId = context.account.peerId
-        if AstraBadgeSync.disposables[peerId] != nil {
-            return
+        // Visual gifts are asked again on every switch to the account (at most once a minute).
+        AstraVisualGifts.start(context: context)
+        if let existing = AstraBadgeSync.disposables[peerId] {
+            if AstraBadgeSync.accountIds[peerId] == ObjectIdentifier(context.account) {
+                return
+            }
+            // A new login of the same account: the state bound to the old, logged-out context goes, so the refreshes
+            // use the new one (and the old account is not kept alive). The old account is retained until here, so its
+            // identifier cannot have been reused by the new one.
+            existing.dispose()
+            AstraBadgeSync.disposables[peerId] = nil
+            AstraBadgeSync.timers[peerId]?.invalidate()
+            AstraBadgeSync.timers[peerId] = nil
         }
+        AstraBadgeSync.accountIds[peerId] = ObjectIdentifier(context.account)
         let enabled = AstraGramSettings.signal
         |> map { settings -> Bool in
             return settings.astraBadge
@@ -49,7 +63,7 @@ public enum AstraBadgeSync {
                 }, queue: Queue.mainQueue())
                 AstraBadgeSync.timers[peerId]?.start()
             } else {
-                AstraBadge.setUsers([])
+                AstraBadge.setUsers([], accountPeerId: peerId)
                 // Switched off now: the server forgets the badge (it was never on if off at launch).
                 if !wasFirst {
                     AstraStreakBot.badge(accountPeerId: peerId, show: false, completion: { _ in })
@@ -60,10 +74,42 @@ public enum AstraBadgeSync {
 
         if !AstraGramSettings.current.astraBadgeAsked && !AstraBadgeSync.didAsk {
             AstraBadgeSync.didAsk = true
-            let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+            let isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
             Queue.mainQueue().after(2.0, {
                 AstraBadgeSync.ask(isRussian: isRussian)
             })
+        }
+    }
+
+    /// Who to ask the server about: the people in the chat list (archive included) and the contacts. The server answers
+    /// only for the IDs it is asked about, so nobody gets the whole list.
+    static func candidates(context: AccountContext) -> Signal<[Int64], NoError> {
+        let peerId = context.account.peerId
+        // Right after launch or an account switch the chat list may still be loading (an empty list would ask about
+        // nobody): wait for it, at most 10 s.
+        func loaded(_ group: EngineChatList.Group, _ count: Int) -> Signal<EngineChatList, NoError> {
+            let list = context.engine.messages.chatList(group: group, count: count)
+            return (list |> filter { !$0.isLoading } |> take(1))
+            |> timeout(10.0, queue: Queue.concurrentDefaultQueue(), alternate: list |> take(1))
+        }
+        return combineLatest(
+            loaded(.root, 400),
+            loaded(.archive, 200),
+            context.engine.data.get(TelegramEngine.EngineData.Item.Contacts.List(includePresences: false))
+        )
+        |> map { chatList, archive, contacts -> [Int64] in
+            var ids = Set<Int64>()
+            for item in chatList.items + archive.items {
+                let id = item.renderedPeer.peerId
+                if id.namespace == Namespaces.Peer.CloudUser {
+                    ids.insert(id.id._internalGetInt64Value())
+                }
+            }
+            for peer in contacts.peers {
+                ids.insert(peer.id.id._internalGetInt64Value())
+            }
+            ids.remove(peerId.id._internalGetInt64Value())
+            return Array(ids.prefix(1000))
         }
     }
 
@@ -72,16 +118,17 @@ public enum AstraBadgeSync {
         guard AstraGramSettings.current.astraBadge, AstraStreakBot.isAvailable else {
             return
         }
-        AstraStreakBot.badge(accountPeerId: peerId, show: true, completion: { result in
+        let _ = (AstraBadgeSync.candidates(context: context) |> deliverOnMainQueue).start(next: { check in
+        AstraStreakBot.badge(accountPeerId: peerId, show: true, check: check, completion: { result in
             Queue.mainQueue().async {
                 guard AstraGramSettings.current.astraBadge else {
                     return
                 }
                 switch result {
                 case let .users(ids):
-                    AstraBadge.setUsers(ids.union([peerId.id._internalGetInt64Value()]))
+                    AstraBadge.setUsers(ids.union([peerId.id._internalGetInt64Value()]), accountPeerId: peerId)
                 case .notLinked:
-                    // Connected once per session; the server learns the token when the bot gets "/start", so the
+                    // Connected once per session; the server may take a moment to know the new token, so the
                     // list is asked again a little later.
                     if AstraBadgeSync.linkTried.contains(peerId) {
                         return
@@ -98,6 +145,7 @@ public enum AstraBadgeSync {
                     break
                 }
             }
+        })
         })
     }
 
@@ -156,8 +204,8 @@ public enum AstraBadgeSync {
         }
         let title = isRussian ? "Значок AstraGram" : "AstraGram Badge"
         let message = isRussian
-            ? "Другие пользователи AstraGram увидят рядом с вашим именем значок AstraGram, а вы — у них.\n\nДля этого AstraGram подключит бота огоньков AstraGram (в его чат уйдёт одно сообщение «/start») и сообщит его серверу ваш Telegram ID. Сервер отдаёт список ID со значком только приложениям AstraGram, у которых значок тоже включён. Ваше имя не меняется.\n\nЗначок ничего не подтверждает: не доверяйте человеку только из-за него.\n\nИзменить можно в настройках AstraGram → «Оформление»."
-            : "Other AstraGram users will see an AstraGram badge beside your name, and you beside theirs.\n\nFor this AstraGram connects the AstraGram streak bot (one \"/start\" message goes to its chat) and tells its server your Telegram ID. The server gives the list of IDs with the badge only to AstraGram apps that show the badge too. Your name is not changed.\n\nThe badge proves nothing: do not trust someone because of it alone.\n\nYou can change this in AstraGram settings → Look."
+            ? "Другие пользователи AstraGram увидят рядом с вашим именем значок AstraGram, а вы — у них.\n\nДля этого AstraGram подключит бота огоньков AstraGram (без сообщений в его чат) и сообщит его серверу ваш Telegram ID. Сервер отдаёт список ID со значком только приложениям AstraGram, у которых значок тоже включён. Ваше имя не меняется.\n\nЗначок ничего не подтверждает: не доверяйте человеку только из-за него.\n\nИзменить можно в настройках AstraGram → «Оформление»."
+            : "Other AstraGram users will see an AstraGram badge beside your name, and you beside theirs.\n\nFor this AstraGram connects the AstraGram streak bot (with no message in its chat) and tells its server your Telegram ID. The server gives the list of IDs with the badge only to AstraGram apps that show the badge too. Your name is not changed.\n\nThe badge proves nothing: do not trust someone because of it alone.\n\nYou can change this in AstraGram settings → Look."
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: isRussian ? "Не показывать" : "Don't Show", style: .cancel, handler: { _ in
             AstraGramSettings.update { $0.astraBadgeAsked = true; $0.astraBadge = false }

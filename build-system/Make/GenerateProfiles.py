@@ -8,7 +8,7 @@ import argparse
 import subprocess
 import base64
 
-from BuildEnvironment import run_executable_with_output, check_run_system
+from BuildEnvironment import run_executable_with_output, check_run_system, user_keychain_search_list
 
 
 def setup_temp_keychain(p12_path, p12_password=''):
@@ -25,10 +25,9 @@ def setup_temp_keychain(p12_path, p12_password=''):
     ], check_result=True)
 
     # Add to search list
-    existing = run_executable_with_output('security', arguments=['list-keychains', '-d', 'user'])
     run_executable_with_output('security', arguments=[
-        'list-keychains', '-d', 'user', '-s', keychain_name, existing.replace('"', '')
-    ], check_result=True)
+        'list-keychains', '-d', 'user', '-s'
+    ] + user_keychain_search_list(keychain_name), check_result=True)
 
     # Unlock and set settings
     run_executable_with_output('security', arguments=['set-keychain-settings', keychain_name])

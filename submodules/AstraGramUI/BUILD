@@ -22,6 +22,8 @@ swift_library(
         "//submodules/UndoUI:UndoUI",
         "//submodules/Pasteboard:Pasteboard",
         "//submodules/AppBundle:AppBundle",
+        "//submodules/ComponentFlow:ComponentFlow",
+        "//submodules/TelegramUI/Components/Gifts/GiftItemComponent:GiftItemComponent",
     ],
     visibility = [
         "//visibility:public",

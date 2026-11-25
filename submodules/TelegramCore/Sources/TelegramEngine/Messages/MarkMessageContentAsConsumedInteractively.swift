@@ -16,7 +16,8 @@ func _internal_markMessageContentAsConsumedInteractively(postbox: Postbox, messa
                         updateMessage = true
                         
                         if message.id.peerId.namespace == Namespaces.Peer.SecretChat {
-                            if let state = transaction.getPeerChatState(message.id.peerId) as? SecretChatState {
+                            // AstraGram ghost mode: in a secret chat too, playing a voice or round message is not reported.
+                            if !AstraGramSettings.current.hideMessageContentsRead, let state = transaction.getPeerChatState(message.id.peerId) as? SecretChatState {
                                 var layer: SecretChatLayer?
                                 switch state.embeddedState {
                                     case .terminated, .handshake:

@@ -302,6 +302,10 @@ extension ChatControllerImpl {
                 if !isScheduledMessages, let user = self.presentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.id != self.context.account.peerId, user.id.namespace == Namespaces.Peer.CloudUser, !user.isDeleted, !isServicePeer(user), user.botInfo == nil, !user.flags.contains(.isSupport) {
                     availableButtons.append(.astraStreak)
                 }
+                // AstraGram: "Translate my messages" in this chat.
+                if !isScheduledMessages, banSendText == nil, let peerId = self.chatLocation.peerId, peerId != self.context.account.peerId, peerId.namespace != Namespaces.Peer.SecretChat {
+                    availableButtons.append(.astraTranslate)
+                }
             case .edit, .bot:
                 break
             }
@@ -1065,6 +1069,12 @@ extension ChatControllerImpl {
                             }
                         }
                         return true
+                    case .astraTranslate:
+                        if let controller = strongSelf.astraTranslateAttachmentScreen() {
+                            completion(controller, nil)
+                            return true
+                        }
+                        return false
                     case .astraStreak:
                         if let peerId = strongSelf.presentationInterfaceState.chatLocation.peerId {
                             strongSelf.attachmentController?.dismiss(animated: true)

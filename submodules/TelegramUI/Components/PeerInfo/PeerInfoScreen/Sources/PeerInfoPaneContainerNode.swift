@@ -947,6 +947,37 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         return result
     }
 
+    private var astraPaneTheme: (base: PresentationTheme, theme: PresentationTheme)?
+
+    private func astraPanePresentationData(_ presentationData: PresentationData) -> PresentationData {
+        guard self.astraTint != nil else {
+            return presentationData
+        }
+        if let current = self.astraPaneTheme, current.base === presentationData.theme {
+            return presentationData.withUpdated(theme: current.theme)
+        }
+        // White texts read on a color; a light theme's dark ones would not. The panes' own backgrounds are
+        // see-through, so they follow the surface as its color moves (with the music).
+        let base = presentationData.theme.overallDarkAppearance ? presentationData.theme : defaultDarkColorPresentationTheme
+        let list = base.list.withUpdated(blocksBackgroundColor: UIColor.clear, plainBackgroundColor: UIColor.clear, itemBlocksBackgroundColor: UIColor(white: 1.0, alpha: 0.16))
+        let theme = PresentationTheme(name: base.name, index: base.index, referenceTheme: base.referenceTheme, overallDarkAppearance: base.overallDarkAppearance, intro: base.intro, passcode: base.passcode, rootController: base.rootController, list: list, chatList: base.chatList, chat: base.chat, actionSheet: base.actionSheet, contextMenu: base.contextMenu, inAppNotification: base.inAppNotification, chart: base.chart, preview: base.preview)
+        self.astraPaneTheme = (presentationData.theme, theme)
+        return presentationData.withUpdated(theme: theme)
+    }
+
+    /// AstraGram: the profile's surface color (nil: the theme's background).
+    var astraTint: UIColor? {
+        didSet {
+            if let astraTint {
+                self.backgroundColor = astraTint
+            }
+            // The panes change their theme only when the color comes or goes, not as it moves.
+            if (oldValue == nil) != (self.astraTint == nil), let (size, sideInset, topInset, bottomInset, deviceMetrics, visibleHeight, expansionFraction, presentationData, data, areTabsHidden, disableTabSwitching, navigationHeight) = self.currentParams {
+                self.update(size: size, sideInset: sideInset, topInset: topInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, expansionFraction: expansionFraction, presentationData: presentationData, data: data, areTabsHidden: areTabsHidden, disableTabSwitching: disableTabSwitching, navigationHeight: navigationHeight, transition: .immediate)
+            }
+        }
+    }
+
     func update(size: CGSize, sideInset: CGFloat, topInset: CGFloat, bottomInset: CGFloat, deviceMetrics: DeviceMetrics, visibleHeight: CGFloat, expansionFraction: CGFloat, presentationData: PresentationData, data: PeerInfoScreenData?, areTabsHidden: Bool, disableTabSwitching: Bool, navigationHeight: CGFloat, transition: ContainedViewLayoutTransition) {
         let previousAvailablePanes = self.currentAvailablePanes
         let availablePanes = data?.availablePanes ?? []
@@ -992,6 +1023,8 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         }
         
         self.currentParams = (size, sideInset, topInset, bottomInset, deviceMetrics, visibleHeight, expansionFraction, presentationData, data, areTabsHidden, disableTabSwitching, navigationHeight)
+        // AstraGram: on a colored profile the panes (the gifts' background and cards among them) take the surface's color.
+        let presentationData = self.astraPanePresentationData(presentationData)
         
         let backgroundColor: UIColor
         if self.currentPaneKey == .gifts {
@@ -1004,7 +1037,8 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
             }
         }
         
-        self.backgroundColor = backgroundColor
+        // AstraGram: on a colored profile the panes sit on the same surface as the rest.
+        self.backgroundColor = self.astraTint ?? backgroundColor
 
         let isScrollingLockedAtTop = expansionFraction < 1.0 - CGFloat.ulpOfOne
 

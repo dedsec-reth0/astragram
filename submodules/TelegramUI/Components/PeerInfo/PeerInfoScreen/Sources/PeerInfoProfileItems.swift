@@ -959,11 +959,18 @@ func infoItems(
     
     // AstraGram: the streak (огонёк) with this person.
     if case let .user(user)? = data.peer, user.botInfo == nil, user.id != context.account.peerId, !isMyProfile, user.id.namespace == Namespaces.Peer.CloudUser {
-        let isRussian = presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+        let isRussian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
         let streakText = astraStreakSummary(AstraStreak.cached(accountPeerId: context.account.peerId, peerId: user.id), isRussian: isRussian)
         let userId = user.id
         items[.astraInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.streak", label: isRussian ? "Огонёк" : "Streak", text: streakText, textColor: .primary, action: { _, _ in
             astraOpenStreak(context: context, peerId: userId)
+        }, requestLayout: { animated in
+            interaction.requestLayout(animated)
+        }))
+        // AstraGram: a free visual gift for this person, from AstraGram's gift shop.
+        let giftPeer = EnginePeer(user)
+        items[.astraInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.gift", label: isRussian ? "Подарок AstraGram" : "AstraGram Gift", text: isRussian ? "Подарить бесплатно" : "Give for Free", textColor: .accent, action: { _, _ in
+            astraOpenGiftShop(context: context, giftTo: giftPeer)
         }, requestLayout: { animated in
             interaction.requestLayout(animated)
         }))

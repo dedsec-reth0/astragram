@@ -151,7 +151,17 @@ public func astraPluginsController(context: AccountContext) -> ViewController {
             AstraHaptics.success()
             presentControllerImpl?(UndoOverlayController(presentationData: presentationData, content: .info(title: nil, text: strings.pluginsInstalledDone, timeout: nil, customUndoText: nil), elevatedLayout: false, action: { _ in return false }))
         } else {
-            presentControllerImpl?(textAlertController(context: context, title: nil, text: strings.pluginsInvalid, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]))
+            // Say why: nothing to read (empty clipboard, or iOS refused the paste) is not the same as a file that is not
+            // a plugin.
+            let text: String
+            if source?.isEmpty ?? true {
+                text = strings.pluginsNoSource
+            } else if !(source?.contains("@id") ?? false) {
+                text = strings.pluginsNoHeader
+            } else {
+                text = strings.pluginsInvalid
+            }
+            presentControllerImpl?(textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]))
         }
     }
 

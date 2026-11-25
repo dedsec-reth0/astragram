@@ -11,7 +11,7 @@ import UndoUI
 import Security
 
 private func astraIsRussian(_ context: AccountContext) -> Bool {
-    return context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+    return context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
 }
 
 func astraDaysText(_ count: Int, isRussian: Bool) -> String {
@@ -90,6 +90,42 @@ public enum AstraStreakBot {
         return String(data: data, encoding: .utf8)
     }
 
+    /// The token of this account, or else of any other account on this device that has the bot connected. Only for
+    /// asking about other people (the badge's and the visual gifts' `check`): what an account says about itself goes
+    /// with its own token, so the server ties it to the right Telegram ID.
+    static func tokenForLookup(accountPeerId: EnginePeer.Id) -> String? {
+        return AstraStreakBot.tokensForLookup(accountPeerId: accountPeerId).first
+    }
+
+    /// Every token on this device, this account's first: an old one (an account logged out, a link the server dropped)
+    /// is turned away by the server, so the next one is tried.
+    static func tokensForLookup(accountPeerId: EnginePeer.Id) -> [String] {
+        var tokens: [String] = []
+        if let token = AstraStreakBot.token(accountPeerId: accountPeerId) {
+            tokens.append(token)
+        }
+        // iOS does not return the data of several keychain items at once: the accounts first, then each one's token.
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "org.astragram.streakbot",
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let items = result as? [[String: Any]] else {
+            return tokens
+        }
+        for item in items {
+            guard let account = item[kSecAttrAccount as String] as? String, let value = Int64(account) else {
+                continue
+            }
+            if let token = AstraStreakBot.token(accountPeerId: EnginePeer.Id(value)), !tokens.contains(token) {
+                tokens.append(token)
+            }
+        }
+        return tokens
+    }
+
     private static func setToken(_ token: String?, accountPeerId: EnginePeer.Id) {
         let query = AstraStreakBot.keychainQuery(accountPeerId)
         SecItemDelete(query as CFDictionary)
@@ -118,8 +154,9 @@ public enum AstraStreakBot {
         context.sharedContext.openExternalUrl(context: context, urlContext: .generic, url: "\(AstraStreakBot.link)?start=l\(token)", forceExternal: false, presentationData: presentationData, navigationController: navigationController, dismissInput: {})
     }
 
-    /// Connects the bot without leaving the app: AstraGram itself sends the bot "/start l<token>" from this account,
-    /// which is what pressing Start on the link would send. The bot's reply stays in the bot's chat.
+    /// Connects the bot without leaving the app and without any message in the bot's chat: AstraGram asks Telegram for
+    /// the bot's web-app data (signed by Telegram, naming this account) and hands it to the server with a new token.
+    /// Should that fail, it falls back to sending the bot "/start l<token>", what pressing Start on the link would send.
     static func linkSilently(context: AccountContext, completion: @escaping (Bool) -> Void) {
         var bytes = [UInt8](repeating: 0, count: 24)
         guard AstraStreakBot.isAvailable, SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
@@ -128,6 +165,7 @@ public enum AstraStreakBot {
         }
         let token = bytes.map { String(format: "%02x", $0) }.joined()
         let account = context.account
+        let engine = context.engine
         // Called exactly once: with the bot found, or with false when it cannot be found (no network, the lookup
         // ending without a result, or no answer in 10 s), so the caller always goes on (the invite is still sent).
         var finished = false
@@ -137,7 +175,7 @@ public enum AstraStreakBot {
                 completion(linked)
             }
         }
-        let _ = (context.engine.peers.resolvePeerByName(name: AstraStreakBot.username, referrer: nil)
+        let _ = (engine.peers.resolvePeerByName(name: AstraStreakBot.username, referrer: nil)
         |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
             guard case let .result(peer) = result else {
                 return .complete()
@@ -151,12 +189,53 @@ public enum AstraStreakBot {
                 finish(false)
                 return
             }
-            AstraStreakBot.setToken(token, accountPeerId: account.peerId)
-            let _ = enqueueMessages(account: account, peerId: peer.id, messages: [.message(text: "/start l\(token)", attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])]).startStandalone()
-            finish(true)
+            let fallback = {
+                AstraStreakBot.setToken(token, accountPeerId: account.peerId)
+                let _ = enqueueMessages(account: account, peerId: peer.id, messages: [.message(text: "/start l\(token)", attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])]).startStandalone()
+                finish(true)
+            }
+            var base = AstraStreakBot.serverURL
+            while base.hasSuffix("/") {
+                base.removeLast()
+            }
+            let _ = (engine.messages.requestWebView(peerId: peer.id, botId: peer.id, url: base + "/webapp", payload: nil, themeParams: nil, fromMenu: false, replyToMessageId: nil, threadId: nil)
+            |> map(Optional.init)
+            |> `catch` { _ -> Signal<RequestWebViewResult?, NoError> in
+                return .single(nil)
+            }
+            |> timeout(10.0, queue: Queue.mainQueue(), alternate: .single(nil))
+            |> take(1)
+            |> deliverOnMainQueue).start(next: { result in
+                guard let result = result, let initData = AstraStreakBot.webAppData(url: result.url) else {
+                    fallback()
+                    return
+                }
+                AstraStreakBot.request(path: "/api/login", token: token, body: ["initData": initData], statusCompletion: { object, _ in
+                    Queue.mainQueue().async {
+                        if object?["ok"] as? Bool == true {
+                            AstraStreakBot.setToken(token, accountPeerId: account.peerId)
+                            finish(true)
+                        } else {
+                            fallback()
+                        }
+                    }
+                })
+            })
         }, completed: {
             finish(false)
         })
+    }
+
+    /// The signed data Telegram puts in a web app's address: "#tgWebAppData=<encoded data>&tgWebAppVersion=...".
+    private static func webAppData(url: String) -> String? {
+        guard let fragment = URLComponents(string: url)?.percentEncodedFragment else {
+            return nil
+        }
+        for part in fragment.components(separatedBy: "&") where part.hasPrefix("tgWebAppData=") {
+            let value = String(part.dropFirst("tgWebAppData=".count))
+            return value.removingPercentEncoding
+        }
+        return nil
     }
 
     static func unlink(accountPeerId: EnginePeer.Id) {
@@ -173,6 +252,12 @@ public enum AstraStreakBot {
     }
 
     /// `statusCompletion` also gets the HTTP status (0 without an answer).
+    /// A call that needs no streak-bot link (feedback, donations); the account's token goes along when there is one.
+    static func publicRequest(path: String, accountPeerId: EnginePeer.Id?, body: [String: Any], completion: @escaping ([String: Any]?, Int) -> Void) {
+        let token = accountPeerId.flatMap { AstraStreakBot.token(accountPeerId: $0) }
+        AstraStreakBot.request(path: path, token: token ?? "", body: body, statusCompletion: completion)
+    }
+
     private static func request(path: String, token: String, body: [String: Any], statusCompletion completion: @escaping ([String: Any]?, Int) -> Void) {
         var base = AstraStreakBot.serverURL
         while base.hasSuffix("/") {
@@ -185,7 +270,9 @@ public enum AstraStreakBot {
         var request = URLRequest(url: url, timeoutInterval: 30.0)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = data
         URLSession.shared.dataTask(with: request, completionHandler: { data, response, _ in
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -205,13 +292,14 @@ public enum AstraStreakBot {
         case failed
     }
 
-    /// Tells the server whether this account shows the AstraGram badge; with it on, gets back everyone who shows it.
-    static func badge(accountPeerId: EnginePeer.Id, show: Bool, completion: @escaping (BadgeResult) -> Void) {
+    /// Tells the server whether this account shows the AstraGram badge; with it on, gets back which of `check` (the
+    /// people in the account's chats and contacts) show it too. The server never hands out the whole list.
+    static func badge(accountPeerId: EnginePeer.Id, show: Bool, check: [Int64] = [], completion: @escaping (BadgeResult) -> Void) {
         guard AstraStreakBot.isAvailable, let token = AstraStreakBot.token(accountPeerId: accountPeerId) else {
             completion(.notLinked)
             return
         }
-        AstraStreakBot.request(path: "/api/badge", token: token, body: ["show": show], statusCompletion: { object, status in
+        AstraStreakBot.request(path: "/api/badge", token: token, body: ["show": show, "check": check.map { NSNumber(value: $0) }], statusCompletion: { object, status in
             if status == 401 {
                 completion(.notLinked)
                 return
@@ -224,9 +312,262 @@ public enum AstraStreakBot {
         })
     }
 
-    /// Sends the numbers of the streaks; returns the days the other people asked to restore in the bot, or nil when the
-    /// server did not take them (no connection, or Start not pressed in the bot yet).
-    static func sync(accountPeerId: EnginePeer.Id, states: [EnginePeer.Id: AstraStreakState], completion: @escaping ([(peerId: EnginePeer.Id, day: Int32)]?) -> Void) {
+    struct VisualGiftsResult {
+        /// The visual gifts the people asked about put on their own profiles, by Telegram ID.
+        var users: [Int64: [Int64]]
+        /// When each of those lists last changed.
+        var usersDate: [Int64: Int32] = [:]
+        /// What those people set on their own gifts (pinned, upgraded), by Telegram ID and gift.
+        var usersMeta: [Int64: [Int64: AstraGiftMeta]] = [:]
+        /// The visual gifts the people asked about were given by others, by Telegram ID.
+        var received: [Int64: [AstraReceivedGift]]
+        /// The account's own list as the server keeps it; nil when another account's token asked.
+        var mine: [Int64]?
+        /// What the account set on its own gifts; nil when another account's token asked.
+        var mineMeta: [Int64: AstraGiftMeta]?
+        /// The gifts others gave this account; nil when another account's token asked.
+        var mineReceived: [AstraReceivedGift]?
+        /// The gifts worn as a status, by Telegram ID (nil from a server before wearing).
+        var worn: [Int64: AstraWornGift]?
+        /// The Local Premium looks of the account and of the people asked about (nil from an older server).
+        var premiumLooks: [Int64: AstraPremiumLooks.Look]?
+        /// The server's ID of the gift this call gave (`send`).
+        var sent: Int64?
+        /// The look an upgrade gave (`upgrade`).
+        var upgraded: AstraUniqueLook?
+        /// The gift's new server ID after `transfer`.
+        var transferred: Int64?
+        /// The HTTP status of a refused call (429: the day's gifts are used up; 409: too many pinned).
+        var status: Int = 200
+    }
+
+    /// What one call to the gifts API does besides asking (`check`).
+    struct VisualGiftsChange {
+        /// Replaces the account's own list.
+        var set: [Int64]?
+        /// Gives a gift, with a caption and the giver's name hidden from everyone but the recipient.
+        var send: (to: Int64, gift: Int64, text: String, anonymous: Bool)?
+        /// Takes received gifts off for good.
+        var hide: [Int64] = []
+        /// Pins or hides gifts on the profile, by ref.
+        var meta: [(ref: String, pinned: Bool?, hidden: Bool?)] = []
+        /// Upgrades a gift to the look given (names from Telegram's list for the gift).
+        var upgrade: (ref: String, model: String, pattern: String, backdrop: String)?
+        /// The admin's own number for the upgrade.
+        var upgradeNumber: Int32?
+        /// Passes a gift on to someone else.
+        var transfer: (ref: String, to: Int64, text: String, anonymous: Bool)?
+        /// Wears a gift as the status (`.some(nil)` takes it off).
+        var wear: String??
+        /// The account's Local Premium look (`.some(nil)` takes it off); sent only with the account's own connection.
+        var premiumLook: [String: Any]??
+
+        var changesOwnData: Bool {
+            return self.set != nil || self.send != nil || !self.hide.isEmpty || !self.meta.isEmpty || self.upgrade != nil || self.transfer != nil || self.wear != nil
+        }
+    }
+
+    static func visualGifts(accountPeerId: EnginePeer.Id, set: [Int64]?, send: (to: Int64, gift: Int64)? = nil, hide: [Int64] = [], premiumLook: [String: Any]?? = nil, check: [Int64], completion: @escaping (VisualGiftsResult?) -> Void) {
+        var change = VisualGiftsChange()
+        change.premiumLook = premiumLook
+        change.set = set
+        change.send = send.map { (to: $0.to, gift: $0.gift, text: "", anonymous: false) }
+        change.hide = hide
+        AstraStreakBot.visualGifts(accountPeerId: accountPeerId, change: change, check: check, completion: completion)
+    }
+
+    /// Changes the account's visual gifts (`change`) and gets the visual gifts of `check` (the people in the account's
+    /// chats and contacts); nil when the server did not answer or the bot is not connected. With no change, another
+    /// account's token on this device does for asking (`tokenForLookup`); the answer's own lists are then that account's
+    /// and are left out.
+    static func visualGifts(accountPeerId: EnginePeer.Id, change: VisualGiftsChange, check: [Int64], completion: @escaping (VisualGiftsResult?) -> Void) {
+        let ownToken = AstraStreakBot.token(accountPeerId: accountPeerId)
+        let tokens: [String]
+        if change.changesOwnData {
+            tokens = ownToken.map { [$0] } ?? []
+        } else {
+            tokens = AstraStreakBot.tokensForLookup(accountPeerId: accountPeerId)
+        }
+        guard AstraStreakBot.isAvailable, !tokens.isEmpty else {
+            completion(nil)
+            return
+        }
+        // Gift IDs are 64-bit: they go as strings, which JavaScript cannot round.
+        var body: [String: Any] = ["check": check.map { NSNumber(value: $0) }]
+        if let set = change.set {
+            body["gifts"] = set.map { "\($0)" }
+        }
+        if let send = change.send {
+            body["send"] = ["to": NSNumber(value: send.to), "gift": "\(send.gift)", "text": send.text, "anonymous": send.anonymous]
+        }
+        if !change.hide.isEmpty {
+            body["hide"] = change.hide.map { NSNumber(value: $0) }
+        }
+        if !change.meta.isEmpty {
+            body["meta"] = change.meta.map { item -> [String: Any] in
+                var value: [String: Any] = ["ref": item.ref]
+                if let pinned = item.pinned {
+                    value["pinned"] = pinned
+                }
+                if let hidden = item.hidden {
+                    value["hidden"] = hidden
+                }
+                return value
+            }
+        }
+        if let upgrade = change.upgrade {
+            var value: [String: Any] = ["ref": upgrade.ref, "model": upgrade.model, "pattern": upgrade.pattern, "backdrop": upgrade.backdrop]
+            if let number = change.upgradeNumber {
+                value["number"] = NSNumber(value: number)
+            }
+            body["upgrade"] = value
+        }
+        if let transfer = change.transfer {
+            body["transfer"] = ["ref": transfer.ref, "to": NSNumber(value: transfer.to), "text": transfer.text, "anonymous": transfer.anonymous]
+        }
+        if let wear = change.wear {
+            body["wear"] = wear.map { ["ref": $0] as Any } ?? NSNull()
+        }
+        func int64(_ item: Any?) -> Int64? {
+            if let string = item as? String {
+                return Int64(string)
+            }
+            return (item as? NSNumber)?.int64Value
+        }
+        func ids(_ value: Any?) -> [Int64] {
+            return (value as? [Any] ?? []).compactMap(int64)
+        }
+        func look(_ value: Any?) -> AstraUniqueLook? {
+            guard let value = value as? [String: Any], let number = int64(value["n"]), let model = value["m"] as? String, let pattern = value["p"] as? String, let backdrop = value["b"] as? String else {
+                return nil
+            }
+            return AstraUniqueLook(number: Int32(clamping: number), model: model, pattern: pattern, backdrop: backdrop)
+        }
+        func meta(_ value: [String: Any]) -> AstraGiftMeta {
+            return AstraGiftMeta(pinnedAt: int64(value["pin"]).map { Int32(clamping: $0) }, hidden: (value["hidden"] as? Bool) == true ? true : nil, unique: look(value["u"]))
+        }
+        func receivedList(_ value: Any?) -> [AstraReceivedGift] {
+            return (value as? [[String: Any]] ?? []).compactMap { item in
+                guard let id = int64(item["id"]), let gift = int64(item["gift"]), let from = int64(item["from"]) else {
+                    return nil
+                }
+                let text = (item["text"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                return AstraReceivedGift(id: id, gift: gift, from: from, date: Int32(clamping: int64(item["date"]) ?? 0), text: text, anonymous: (item["anon"] as? Bool) == true ? true : nil, meta: meta(item))
+            }
+        }
+        func metaMap(_ value: Any?) -> [Int64: AstraGiftMeta] {
+            var result: [Int64: AstraGiftMeta] = [:]
+            for (gift, item) in value as? [String: Any] ?? [:] {
+                if let gift = Int64(gift), let item = item as? [String: Any] {
+                    result[gift] = meta(item)
+                }
+            }
+            return result
+        }
+        func attempt(_ index: Int) {
+            let token = tokens[index]
+            let isOwn = token == ownToken
+            var body = body
+            if isOwn, let premiumLook = change.premiumLook {
+                body["premiumLook"] = premiumLook.map { $0 as Any } ?? NSNull()
+            }
+            AstraStreakBot.request(path: "/api/gifts", token: token, body: body, statusCompletion: { object, status in
+                guard let object = object else {
+                    // A token the server does not know: the next one on this device.
+                    if status == 401 && index + 1 < tokens.count {
+                        attempt(index + 1)
+                    } else if status == 429 || status == 400 || status == 409 {
+                        completion(VisualGiftsResult(users: [:], received: [:], mine: nil, mineReceived: nil, sent: nil, status: status))
+                    } else {
+                        completion(nil)
+                    }
+                    return
+                }
+                var users: [Int64: [Int64]] = [:]
+                for (user, gifts) in object["users"] as? [String: Any] ?? [:] {
+                    if let user = Int64(user) {
+                        users[user] = ids(gifts)
+                    }
+                }
+                var usersDate: [Int64: Int32] = [:]
+                for (user, date) in object["usersDate"] as? [String: Any] ?? [:] {
+                    if let user = Int64(user), let date = int64(date) {
+                        usersDate[user] = Int32(clamping: date)
+                    }
+                }
+                var usersMeta: [Int64: [Int64: AstraGiftMeta]] = [:]
+                for (user, value) in object["usersMeta"] as? [String: Any] ?? [:] {
+                    if let user = Int64(user) {
+                        usersMeta[user] = metaMap(value)
+                    }
+                }
+                var received: [Int64: [AstraReceivedGift]] = [:]
+                for (user, gifts) in object["received"] as? [String: Any] ?? [:] {
+                    if let user = Int64(user) {
+                        received[user] = receivedList(gifts)
+                    }
+                }
+                var worn: [Int64: AstraWornGift]?
+                if let value = object["worn"] as? [String: Any] {
+                    var result: [Int64: AstraWornGift] = [:]
+                    for (user, item) in value {
+                        if let user = Int64(user), let item = item as? [String: Any], let ref = item["ref"] as? String, let gift = int64(item["gift"]) {
+                            result[user] = AstraWornGift(ref: ref, gift: gift, unique: look(item["u"]))
+                        }
+                    }
+                    worn = result
+                }
+                var premiumLooks: [Int64: AstraPremiumLooks.Look]?
+                if let value = object["premiumLooks"] as? [String: Any] {
+                    var looks: [Int64: AstraPremiumLooks.Look] = [:]
+                    for (user, item) in value {
+                        if let user = Int64(user), let item = item as? [String: Any] {
+                            looks[user] = AstraPremiumLooks.Look(status: int64(item["status"]), statusUntil: int64(item["statusUntil"]).map { Int32(clamping: $0) }, nameColor: int64(item["nameColor"]).map { Int32(clamping: $0) }, backgroundEmoji: int64(item["backgroundEmoji"]), profileColor: int64(item["profileColor"]).map { Int32(clamping: $0) }, profileBackgroundEmoji: int64(item["profileBackgroundEmoji"]))
+                        }
+                    }
+                    premiumLooks = looks
+                }
+                var result = VisualGiftsResult(
+                    users: users,
+                    usersDate: usersDate,
+                    usersMeta: usersMeta,
+                    received: received,
+                    mine: isOwn ? ids(object["mine"]) : nil,
+                    mineMeta: isOwn ? metaMap(object["mineMeta"]) : nil,
+                    mineReceived: isOwn ? receivedList(object["mineReceived"]) : nil,
+                    worn: worn,
+                    sent: int64(object["sent"])
+                )
+                result.premiumLooks = premiumLooks
+                result.upgraded = look((object["upgraded"] as? [String: Any])?["u"])
+                result.transferred = int64(object["transferred"])
+                completion(result)
+            })
+        }
+        attempt(0)
+    }
+
+    struct SyncResult {
+        /// The days the other people asked to restore in the bot.
+        var restores: [(peerId: EnginePeer.Id, day: Int32)]
+        /// The account's streaks on all of its devices, with their start days (nil from a server before the shared list).
+        var streaks: [EnginePeer.Id: Int32]?
+        /// Streaks a device turned off.
+        var stopped: Set<EnginePeer.Id>
+        /// Days restored on any of the account's devices.
+        var restored: [(peerId: EnginePeer.Id, day: Int32)] = []
+        /// The starts and stops this sync handed over.
+        var sentEvents: [Int64: Int32]
+    }
+
+    private static func userPeerId(_ id: Int64) -> EnginePeer.Id {
+        return EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(id))
+    }
+
+    /// Sends the numbers of the streaks and what was turned on or off on this device; returns what the server keeps for
+    /// the account, or nil when it did not take them (no connection, or Start not pressed in the bot yet).
+    /// `startDays` are the stored ones (a state's `startDay` is cut to the year it counts).
+    static func sync(accountPeerId: EnginePeer.Id, states: [EnginePeer.Id: AstraStreakState], startDays: [EnginePeer.Id: Int32], restores: [EnginePeer.Id: Set<Int32>], completion: @escaping (SyncResult?) -> Void) {
         guard AstraStreakBot.isAvailable, let token = AstraStreakBot.token(accountPeerId: accountPeerId) else {
             completion(nil)
             return
@@ -241,28 +582,134 @@ public enum AstraStreakBot {
                 "todayDone": state.todayDone,
                 "restoresLeft": state.restoresLeft,
                 "lostCount": state.lostCount,
-                "day": state.today
+                "day": state.today,
+                "startDay": startDays[peerId] ?? state.startDay
             ]
             if let restorableDay = state.restorableDay {
                 pair["restorableDay"] = restorableDay
             }
+            if let days = restores[peerId], !days.isEmpty {
+                pair["restored"] = Array(days.sorted().suffix(60))
+            }
             pairs.append(pair)
         }
-        AstraStreakBot.request(path: "/api/sync", token: token, body: ["pairs": pairs, "need": AstraStreak.messagesPerDay, "tz": TimeZone.current.secondsFromGMT()], completion: { object in
+        let events = AstraStreakEvents.pending(accountPeerId: accountPeerId)
+        var starts: [[String: Any]] = []
+        var stops: [Int64] = []
+        for (friend, startDay) in events {
+            if startDay == AstraStreakEvents.stopped {
+                stops.append(friend)
+            } else {
+                starts.append(["friend": friend, "startDay": startDay])
+            }
+        }
+        let body: [String: Any] = [
+            "v": 2,
+            "pairs": pairs,
+            "starts": starts,
+            "stops": stops,
+            "need": AstraStreak.messagesPerDay,
+            "tz": TimeZone.current.secondsFromGMT()
+        ]
+        AstraStreakBot.request(path: "/api/sync", token: token, body: body, completion: { object in
             guard let object = object else {
                 completion(nil)
                 return
             }
-            var result: [(peerId: EnginePeer.Id, day: Int32)] = []
+            var result = SyncResult(restores: [], streaks: nil, stopped: Set(), sentEvents: events)
             if let restores = object["restores"] as? [[String: Any]] {
                 for restore in restores {
                     if let friend = (restore["friend"] as? NSNumber)?.int64Value, let day = (restore["day"] as? NSNumber)?.int32Value {
-                        result.append((peerId: EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(friend)), day: day))
+                        result.restores.append((peerId: AstraStreakBot.userPeerId(friend), day: day))
                     }
                 }
             }
+            if let streaks = object["streaks"] as? [[String: Any]] {
+                var shared: [EnginePeer.Id: Int32] = [:]
+                for streak in streaks {
+                    if let friend = (streak["friend"] as? NSNumber)?.int64Value, let startDay = (streak["startDay"] as? NSNumber)?.int32Value, friend > 0, startDay > 0 {
+                        shared[AstraStreakBot.userPeerId(friend)] = startDay
+                    }
+                }
+                result.streaks = shared
+            }
+            if let restored = object["restored"] as? [[String: Any]] {
+                for item in restored {
+                    if let friend = (item["friend"] as? NSNumber)?.int64Value, let day = (item["day"] as? NSNumber)?.int32Value {
+                        result.restored.append((peerId: AstraStreakBot.userPeerId(friend), day: day))
+                    }
+                }
+            }
+            if let stopped = object["stopped"] as? [NSNumber] {
+                result.stopped = Set(stopped.map { AstraStreakBot.userPeerId($0.int64Value) })
+            }
             completion(result)
         })
+    }
+}
+
+/// What was done to the streaks on this device since the streak bot last took it: the friends whose streak was started
+/// (with its start day) or turned off. The bot keeps the account's list for all of its devices from these; a device
+/// that is not linked to the bot keeps them until it is.
+enum AstraStreakEvents {
+    static let stopped: Int32 = -1
+
+    private static func key(_ accountPeerId: EnginePeer.Id) -> String {
+        return "astra.streakEvents.\(accountPeerId.toInt64())"
+    }
+
+    static func pending(accountPeerId: EnginePeer.Id) -> [Int64: Int32] {
+        guard let stored = UserDefaults.standard.dictionary(forKey: AstraStreakEvents.key(accountPeerId)) as? [String: NSNumber] else {
+            return [:]
+        }
+        var result: [Int64: Int32] = [:]
+        for (friend, value) in stored {
+            if let friend = Int64(friend) {
+                result[friend] = value.int32Value
+            }
+        }
+        return result
+    }
+
+    private static func store(_ events: [Int64: Int32], accountPeerId: EnginePeer.Id) {
+        let key = AstraStreakEvents.key(accountPeerId)
+        if events.isEmpty {
+            UserDefaults.standard.removeObject(forKey: key)
+        } else {
+            var stored: [String: NSNumber] = [:]
+            for (friend, value) in events {
+                stored["\(friend)"] = NSNumber(value: value)
+            }
+            UserDefaults.standard.set(stored, forKey: key)
+        }
+    }
+
+    /// A streak started (`startDay`) or turned off (nil) on this device. Only the last thing done to a friend is kept.
+    static func note(accountPeerId: EnginePeer.Id, peerId: EnginePeer.Id, startDay: Int32?) {
+        guard peerId.namespace == Namespaces.Peer.CloudUser else {
+            return
+        }
+        var events = AstraStreakEvents.pending(accountPeerId: accountPeerId)
+        events[peerId.id._internalGetInt64Value()] = startDay ?? AstraStreakEvents.stopped
+        AstraStreakEvents.store(events, accountPeerId: accountPeerId)
+    }
+
+    /// Forgets the events a sync handed over, unless something was done to that friend again since.
+    static func handedOver(_ sent: [Int64: Int32], accountPeerId: EnginePeer.Id) {
+        var events = AstraStreakEvents.pending(accountPeerId: accountPeerId)
+        for (friend, value) in sent where events[friend] == value {
+            events.removeValue(forKey: friend)
+        }
+        AstraStreakEvents.store(events, accountPeerId: accountPeerId)
+    }
+}
+
+extension AstraMessageStore {
+    /// Turns a streak on (from `startDay`) or off (nil) by the user's hand: the streak bot hands it to the account's other
+    /// devices.
+    func astraUserSetStreak(accountPeerId: EnginePeer.Id, peerId: EnginePeer.Id, startDay: Int32?) {
+        self.setStreak(peerId: peerId, startDay: startDay)
+        AstraStreakEvents.note(accountPeerId: accountPeerId, peerId: peerId, startDay: startDay)
     }
 }
 
@@ -275,9 +722,15 @@ public final class AstraStreakManager {
 
     public static func start(context: AccountContext) {
         let peerId = context.account.peerId
-        if AstraStreakManager.managers[peerId] == nil {
-            AstraStreakManager.managers[peerId] = AstraStreakManager(context: context)
+        if let existing = AstraStreakManager.managers[peerId] {
+            if existing.account === context.account {
+                return
+            }
+            // A new login of the same user is a new Account with its own postbox and store: the old manager would keep
+            // counting from the closed ones, so it is stopped and replaced.
+            existing.stop()
         }
+        AstraStreakManager.managers[peerId] = AstraStreakManager(context: context)
     }
 
     static func forAccount(_ peerId: EnginePeer.Id) -> AstraStreakManager? {
@@ -291,14 +744,44 @@ public final class AstraStreakManager {
     private var timer: SwiftSignalKit.Timer?
     private let refreshPipe = ValuePipe<Void>()
     private var states: [EnginePeer.Id: AstraStreakState] = [:]
+    /// The streaks on this device with their start days, as stored.
+    private var localStreaks: [EnginePeer.Id: Int32] = [:]
+    /// The days restored on this device, sent to the bot so the account's other devices count them too.
+    private var localRestores: [EnginePeer.Id: Set<Int32>] = [:]
+    private var localStreaksDisposable: Disposable?
     private var lastSync: Double = 0.0
     private var lastSyncedStates: [EnginePeer.Id: AstraStreakState] = [:]
     /// The bot token the numbers were last sent with: a new link (a new token) sends them again at once.
     private var lastSyncedToken: String?
     private let statesPromise = ValuePromise<[EnginePeer.Id: AstraStreakState]>([:], ignoreRepeated: true)
+    /// The streaks the bot keeps for the account (on all of its devices), from the last sync; nil until one answered with
+    /// the list.
+    private let sharedPromise = ValuePromise<Set<EnginePeer.Id>?>(nil, ignoreRepeated: true)
+    /// The next sync goes now, not after the usual wait.
+    private var forceSync = false
+    private var syncCompletions: [(Bool) -> Void] = []
 
     var statesSignal: Signal<[EnginePeer.Id: AstraStreakState], NoError> {
         return self.statesPromise.get()
+    }
+
+    var sharedSignal: Signal<Set<EnginePeer.Id>?, NoError> {
+        return self.sharedPromise.get()
+    }
+
+    /// Sends the streaks to the bot now; `completion` says whether the bot took them.
+    func syncNow(completion: @escaping (Bool) -> Void) {
+        self.syncCompletions.append(completion)
+        self.forceSync = true
+        self.syncIfNeeded()
+    }
+
+    private func finishSync(_ success: Bool) {
+        let completions = self.syncCompletions
+        self.syncCompletions = []
+        for completion in completions {
+            completion(success)
+        }
     }
 
     private init(context: AccountContext) {
@@ -309,6 +792,9 @@ public final class AstraStreakManager {
         let store = self.store
 
         let streaks = store.streaks()
+        self.localStreaksDisposable = (streaks |> deliverOnMainQueue).start(next: { [weak self] streaks in
+            self?.localStreaks = streaks
+        })
         // Recounted when a chat with a streak gets a message, when a restore is saved, and every minute (the day changes).
         let topMessages = streaks
         |> mapToSignal { streaks -> Signal<[EnginePeer.Id: Int32], NoError> in
@@ -317,27 +803,30 @@ public final class AstraStreakManager {
         let ticks: Signal<Void, NoError> = .single(Void()) |> then(self.refreshPipe.signal())
 
         self.disposable = (combineLatest(streaks, topMessages, ticks)
-        |> mapToSignal { streaks, _, _ -> Signal<[EnginePeer.Id: AstraStreakState], NoError> in
+        |> mapToSignal { streaks, _, _ -> Signal<([EnginePeer.Id: AstraStreakState], [EnginePeer.Id: Set<Int32>]), NoError> in
             if streaks.isEmpty {
-                return .single([:])
+                return .single(([:], [:]))
             }
-            let signals = streaks.map { peerId, startDay -> Signal<(EnginePeer.Id, AstraStreakState), NoError> in
+            let signals = streaks.map { peerId, startDay -> Signal<(EnginePeer.Id, AstraStreakState, Set<Int32>), NoError> in
                 return store.streakRestores(peerId: peerId)
                 |> mapToSignal { restores in
                     return AstraStreak.compute(account: account, peerId: peerId, startDay: startDay, localRestores: restores)
+                    |> map { (peerId, $0, restores) }
                 }
-                |> map { (peerId, $0) }
             }
             return combineLatest(signals)
-            |> map { pairs -> [EnginePeer.Id: AstraStreakState] in
+            |> map { pairs -> ([EnginePeer.Id: AstraStreakState], [EnginePeer.Id: Set<Int32>]) in
                 var result: [EnginePeer.Id: AstraStreakState] = [:]
-                for (peerId, state) in pairs {
+                var restores: [EnginePeer.Id: Set<Int32>] = [:]
+                for (peerId, state, peerRestores) in pairs {
                     result[peerId] = state
+                    restores[peerId] = peerRestores
                 }
-                return result
+                return (result, restores)
             }
         }
-        |> deliverOnMainQueue).start(next: { [weak self] states in
+        |> deliverOnMainQueue).start(next: { [weak self] states, restores in
+            self?.localRestores = restores
             self?.apply(states)
         })
 
@@ -349,6 +838,17 @@ public final class AstraStreakManager {
 
     func refresh() {
         self.refreshPipe.putNext(Void())
+    }
+
+    /// Stops counting and syncing, for a manager whose account was replaced by a new login.
+    private func stop() {
+        self.disposable?.dispose()
+        self.disposable = nil
+        self.localStreaksDisposable?.dispose()
+        self.localStreaksDisposable = nil
+        self.timer?.invalidate()
+        self.timer = nil
+        self.finishSync(false)
     }
 
     private func apply(_ states: [EnginePeer.Id: AstraStreakState]) {
@@ -369,39 +869,74 @@ public final class AstraStreakManager {
     /// the bot, and the server turns it away until then.
     private func syncIfNeeded() {
         guard AstraStreakBot.isAvailable, let token = AstraStreakBot.token(accountPeerId: self.accountPeerId) else {
+            self.finishSync(false)
             return
         }
         let now = CFAbsoluteTimeGetCurrent()
-        let changed = self.states != self.lastSyncedStates || token != self.lastSyncedToken
-        if !(changed && now - self.lastSync > 60.0) && now - self.lastSync < 15.0 * 60.0 {
+        let accountPeerId = self.accountPeerId
+        let changed = self.states != self.lastSyncedStates || token != self.lastSyncedToken || !AstraStreakEvents.pending(accountPeerId: accountPeerId).isEmpty
+        if !self.forceSync && !(changed && now - self.lastSync > 60.0) && now - self.lastSync < 15.0 * 60.0 {
             return
         }
+        self.forceSync = false
         self.lastSync = now
         let states = self.states
         self.lastSyncedStates = states
         self.lastSyncedToken = token
         let store = self.store
-        AstraStreakBot.sync(accountPeerId: self.accountPeerId, states: states, completion: { [weak self] restores in
+        let localRestores = self.localRestores
+        AstraStreakBot.sync(accountPeerId: accountPeerId, states: states, startDays: self.localStreaks, restores: localRestores, completion: { [weak self] result in
             Queue.mainQueue().async {
-                guard let restores = restores else {
+                guard let result = result else {
                     if let self, self.lastSyncedToken == token {
                         self.lastSyncedToken = nil
                     }
+                    self?.finishSync(false)
                     return
                 }
+                AstraStreakEvents.handedOver(result.sentEvents, accountPeerId: accountPeerId)
+                self?.merge(result)
+                self?.finishSync(true)
                 var applied = false
-                for restore in restores {
+                for restore in result.restores {
                     // Only what the rules allow now: yesterday, while it can still be restored.
                     if let state = states[restore.peerId], state.restorableDay == restore.day, state.restoresLeft > 0 {
                         store.addStreakRestore(peerId: restore.peerId, day: restore.day)
                         applied = true
                     }
                 }
+                // Days another device of the account restored (a request from the bot reaches only one of them).
+                for (peerId, day) in result.restored where states[peerId] != nil && !(localRestores[peerId]?.contains(day) ?? false) {
+                    store.addStreakRestore(peerId: peerId, day: day)
+                    applied = true
+                }
                 if applied {
                     self?.lastSync = 0.0
+                    // Counted again now, not at the next minute tick.
+                    self?.refresh()
                 }
             }
         })
+    }
+
+    /// Takes the account's list from the bot: streaks started on another device come here with the same start day, and
+    /// streaks turned off there go off here too. A friend with something done on this device that the bot has not
+    /// taken yet is left as it is: that newer change goes out with the next sync.
+    private func merge(_ result: AstraStreakBot.SyncResult) {
+        guard let shared = result.streaks else {
+            return
+        }
+        self.sharedPromise.set(Set(shared.keys))
+        let pending = AstraStreakEvents.pending(accountPeerId: self.accountPeerId)
+        func isPending(_ peerId: EnginePeer.Id) -> Bool {
+            return pending[peerId.id._internalGetInt64Value()] != nil
+        }
+        for (peerId, startDay) in shared where !isPending(peerId) && self.localStreaks[peerId] != startDay {
+            self.store.setStreakStartDay(peerId: peerId, startDay: startDay)
+        }
+        for peerId in result.stopped where !isPending(peerId) && self.localStreaks[peerId] != nil && shared[peerId] == nil {
+            self.store.setStreak(peerId: peerId, startDay: nil)
+        }
     }
 }
 
@@ -414,8 +949,14 @@ private final class AstraStreakArguments {
     let linkBot: () -> Void
     let unlinkBot: () -> Void
     let invite: () -> Void
+    let openPet: () -> Void
+    let save: () -> Void
+    let context: AccountContext
 
-    init(start: @escaping () -> Void, stop: @escaping () -> Void, restore: @escaping () -> Void, linkBot: @escaping () -> Void, unlinkBot: @escaping () -> Void, invite: @escaping () -> Void) {
+    init(context: AccountContext, start: @escaping () -> Void, stop: @escaping () -> Void, restore: @escaping () -> Void, linkBot: @escaping () -> Void, unlinkBot: @escaping () -> Void, invite: @escaping () -> Void, openPet: @escaping () -> Void, save: @escaping () -> Void) {
+        self.context = context
+        self.save = save
+        self.openPet = openPet
         self.start = start
         self.stop = stop
         self.restore = restore
@@ -425,33 +966,53 @@ private final class AstraStreakArguments {
     }
 }
 
+/// What a row of the streak screen does when tapped.
+private enum AstraStreakRowAction: Equatable {
+    case none
+    case start
+    case stop
+    case restore
+    case linkBot
+    case unlinkBot
+    case invite
+    case openPet
+    case save
+}
+
+/// The streak screen in Telegram's settings style: rows with icons (or the people's avatars), grouped in blocks, with
+/// short footers.
 private enum AstraStreakEntry: ItemListNodeEntry {
-    case header(String)
-    case value(Int32, String, String)
-    case action(Int32, String, Bool)
-    case destructive(Int32, String)
-    case info(Int32, String)
-    case sectionFooter(Int32, Int32, String)
+    case header(Int32, Int32, String)
+    case row(Int32, Int32, UIImage?, EnginePeer?, String, String, AstraStreakRowAction)
+    case button(Int32, Int32, String, ItemListActionKind, AstraStreakRowAction)
+    case footer(Int32, Int32, String)
 
     var section: ItemListSectionId {
         switch self {
-        case .header, .value(0 ..< 100, _, _):
-            return 0
-        case let .value(id, _, _), let .action(id, _, _), let .destructive(id, _), let .info(id, _):
-            return ItemListSectionId(id / 100)
-        case let .sectionFooter(_, section, _):
+        case let .header(_, section, _), let .row(_, section, _, _, _, _, _), let .button(_, section, _, _, _), let .footer(_, section, _):
             return ItemListSectionId(section)
         }
     }
 
     var stableId: Int32 {
         switch self {
-        case .header:
-            return 0
-        case let .value(id, _, _), let .action(id, _, _), let .destructive(id, _), let .info(id, _):
+        case let .header(id, _, _), let .row(id, _, _, _, _, _, _), let .button(id, _, _, _, _), let .footer(id, _, _):
             return id
-        case let .sectionFooter(id, _, _):
-            return id
+        }
+    }
+
+    static func ==(lhs: AstraStreakEntry, rhs: AstraStreakEntry) -> Bool {
+        switch (lhs, rhs) {
+        case let (.header(a1, b1, c1), .header(a2, b2, c2)):
+            return a1 == a2 && b1 == b2 && c1 == c2
+        case let (.row(a1, b1, i1, p1, c1, d1, e1), .row(a2, b2, i2, p2, c2, d2, e2)):
+            return a1 == a2 && b1 == b2 && i1 === i2 && p1 == p2 && c1 == c2 && d1 == d2 && e1 == e2
+        case let (.button(a1, b1, c1, d1, e1), .button(a2, b2, c2, d2, e2)):
+            return a1 == a2 && b1 == b2 && c1 == c2 && d1 == d2 && e1 == e2
+        case let (.footer(a1, b1, c1), .footer(a2, b2, c2)):
+            return a1 == a2 && b1 == b2 && c1 == c2
+        default:
+            return false
         }
     }
 
@@ -461,38 +1022,54 @@ private enum AstraStreakEntry: ItemListNodeEntry {
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! AstraStreakArguments
+        let perform: (AstraStreakRowAction) -> Void = { action in
+            switch action {
+            case .none:
+                break
+            case .start:
+                arguments.start()
+            case .stop:
+                arguments.stop()
+            case .restore:
+                arguments.restore()
+            case .linkBot:
+                arguments.linkBot()
+            case .unlinkBot:
+                arguments.unlinkBot()
+            case .invite:
+                arguments.invite()
+            case .openPet:
+                arguments.openPet()
+            case .save:
+                arguments.save()
+            }
+        }
         switch self {
-        case let .header(text):
+        case let .header(_, _, text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
-        case let .value(_, title, label):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: .none, action: nil)
-        case let .action(id, title, enabled):
-            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: enabled ? .generic : .disabled, alignment: .natural, sectionId: self.section, style: .blocks, action: {
-                switch id {
-                case 101:
-                    arguments.start()
-                case 102:
-                    arguments.restore()
-                case 201:
-                    arguments.invite()
-                case 202:
-                    arguments.linkBot()
-                default:
-                    break
-                }
+        case let .row(_, _, icon, peer, title, label, action):
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, context: peer != nil ? arguments.context : nil, iconPeer: peer, title: title, label: label, sectionId: self.section, style: .blocks, disclosureStyle: action == .none ? .none : .arrow, action: action == .none ? nil : {
+                perform(action)
             })
-        case let .destructive(id, title):
-            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .destructive, alignment: .natural, sectionId: self.section, style: .blocks, action: {
-                if id == 203 {
-                    arguments.unlinkBot()
-                } else {
-                    arguments.stop()
-                }
+        case let .button(_, _, title, kind, action):
+            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: kind, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                perform(action)
             })
-        case let .info(_, text), let .sectionFooter(_, _, text):
+        case let .footer(_, _, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         }
     }
+}
+
+/// Icons of the streak screens.
+enum AstraStreakIcons {
+    static let flame = AstraGramSettingsIcons.symbol("flame.fill", UIColor(rgb: 0xFF6A00))
+    static let restore = AstraGramSettingsIcons.symbol("arrow.counterclockwise", UIColor(rgb: 0x34C759))
+    static let pet = AstraGramSettingsIcons.symbol("face.smiling.inverse", UIColor(rgb: 0xFF9F0A))
+    static let calendar = AstraGramSettingsIcons.symbol("calendar", UIColor(rgb: 0xFF453A))
+    static let me = AstraGramSettingsIcons.symbol("person.fill", UIColor(rgb: 0x0A84FF))
+    static let them = AstraGramSettingsIcons.symbol("bubble.left.fill", UIColor(rgb: 0x34C759))
+    static let save = AstraGramSettingsIcons.symbol("icloud.and.arrow.up.fill", UIColor(rgb: 0x007AFF))
 }
 
 /// The streak with one person: how it stands, restoring yesterday, the bot for someone without AstraGram.
@@ -529,12 +1106,13 @@ public func astraStreakController(context: AccountContext, peerId: EnginePeer.Id
     }
 
     let arguments = AstraStreakArguments(
+        context: context,
         start: {
             let isRussian = astraIsRussian(context)
             let _ = (peer |> take(1) |> deliverOnMainQueue).start(next: { peer in
                 guard let peer = peer, AstraStreakBot.isAvailable, !peer.astraUsesAstraGram else {
                     // Both on AstraGram: each phone counts the streak by itself, no bot is needed.
-                    store.setStreak(peerId: peerId, startDay: AstraStreak.today())
+                    store.astraUserSetStreak(accountPeerId: accountPeerId, peerId: peerId, startDay: AstraStreak.today())
                     AstraHaptics.success()
                     return
                 }
@@ -550,7 +1128,7 @@ public func astraStreakController(context: AccountContext, peerId: EnginePeer.Id
                     preferredStyle: .alert
                 )
                 alert.addAction(UIAlertAction(title: isRussian ? "Начать и пригласить" : "Start and Invite", style: .default, handler: { _ in
-                    store.setStreak(peerId: peerId, startDay: AstraStreak.today())
+                    store.astraUserSetStreak(accountPeerId: accountPeerId, peerId: peerId, startDay: AstraStreak.today())
                     AstraHaptics.success()
                     let finish = {
                         let inviteLink = "\(AstraStreakBot.link)?start=f\(accountPeerId.id._internalGetInt64Value())"
@@ -570,7 +1148,7 @@ public func astraStreakController(context: AccountContext, peerId: EnginePeer.Id
                     }
                 }))
                 alert.addAction(UIAlertAction(title: isRussian ? "Только начать" : "Just Start", style: .default, handler: { _ in
-                    store.setStreak(peerId: peerId, startDay: AstraStreak.today())
+                    store.astraUserSetStreak(accountPeerId: accountPeerId, peerId: peerId, startDay: AstraStreak.today())
                     AstraHaptics.success()
                 }))
                 alert.addAction(UIAlertAction(title: isRussian ? "Отмена" : "Cancel", style: .cancel, handler: nil))
@@ -580,7 +1158,7 @@ public func astraStreakController(context: AccountContext, peerId: EnginePeer.Id
         stop: {
             let isRussian = astraIsRussian(context)
             showAlert(title: isRussian ? "Выключить огонёк?" : "Turn off the streak?", text: isRussian ? "Счёт и восстановления этого огонька пропадут. Начать можно заново, но с нуля." : "The count and restores of this streak are lost. You can start again, from zero.", actionTitle: isRussian ? "Выключить" : "Turn Off", destructive: true, action: {
-                store.setStreak(peerId: peerId, startDay: nil)
+                store.astraUserSetStreak(accountPeerId: accountPeerId, peerId: peerId, startDay: nil)
             })
         },
         restore: {
@@ -594,6 +1172,7 @@ public func astraStreakController(context: AccountContext, peerId: EnginePeer.Id
                 store.addStreakRestore(peerId: peerId, day: day)
                 send(text)
                 AstraHaptics.success()
+                AstraStreakManager.forAccount(accountPeerId)?.refresh()
             })
         },
         linkBot: {
@@ -630,6 +1209,39 @@ public func astraStreakController(context: AccountContext, peerId: EnginePeer.Id
                 send(text)
                 toast(isRussian ? "Приглашение отправлено" : "Invitation sent")
             })
+        },
+        openPet: {
+            astraTopViewController()?.present(AstraStreakPetController(context: context, peerId: peerId), animated: true)
+        },
+        save: {
+            let isRussian = astraIsRussian(context)
+            let syncNow = {
+                guard let manager = AstraStreakManager.forAccount(accountPeerId) else {
+                    return
+                }
+                manager.syncNow(completion: { success in
+                    toast(success
+                        ? (isRussian ? "Огонёк сохранён: он будет на всех ваших устройствах" : "Streak saved: it will be on all your devices")
+                        : (isRussian ? "Пока не сохранилось. AstraGram попробует снова через минуту" : "Not saved yet. AstraGram tries again in a minute"))
+                })
+            }
+            if AstraStreakBot.isLinked(accountPeerId: accountPeerId) {
+                syncNow()
+                return
+            }
+            showAlert(title: isRussian ? "Сохранить огонёк?" : "Save the streak?", text: isRussian ? "Сейчас огонёк есть только на этом устройстве. Чтобы он был на всех ваших устройствах и не пропал при переустановке, AstraGram подключит бота огоньков @\(AstraStreakBot.username): ему уходят ID собеседников с огоньком, день начала, счёт и сколько сообщений написано сегодня. Тексты сообщений не отправляются." : "The streak is only on this device now. To have it on all your devices and keep it after reinstalling, AstraGram connects the streak bot @\(AstraStreakBot.username): it gets the IDs of people you have a streak with, the start day, the count and how many messages were written today. Message texts are not sent.", actionTitle: isRussian ? "Сохранить" : "Save", action: {
+                AstraStreakBot.linkSilently(context: context, completion: { linked in
+                    guard linked else {
+                        toast(isRussian ? "Не удалось подключить бота огоньков" : "Couldn't connect the streak bot")
+                        return
+                    }
+                    botLinked.set(true)
+                    // The bot ties the token to the account once it gets "/start" from it: the sync waits a moment.
+                    Queue.mainQueue().after(5.0, {
+                        syncNow()
+                    })
+                })
+            })
         }
     )
 
@@ -639,64 +1251,95 @@ public func astraStreakController(context: AccountContext, peerId: EnginePeer.Id
             return AstraStreakManager.forAccount(accountPeerId)?.statesSignal ?? .single([:])
         }
     )
+    let shared: Signal<Set<EnginePeer.Id>?, NoError> = Signal<Set<EnginePeer.Id>?, NoError>.single(nil) |> then(
+        (Signal<Void, NoError>.single(Void()) |> deliverOnMainQueue)
+        |> mapToSignal { _ -> Signal<Set<EnginePeer.Id>?, NoError> in
+            return AstraStreakManager.forAccount(accountPeerId)?.sharedSignal ?? .single(nil)
+        }
+    )
 
     let signal = combineLatest(queue: .mainQueue(),
         context.sharedContext.presentationData,
         store.streaks(),
         states,
         peer,
-        botLinked.get()
+        botLinked.get(),
+        shared
     )
-    |> map { presentationData, streaks, states, peer, botLinked -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let isRussian = presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+    |> map { presentationData, streaks, states, peer, botLinked, shared -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let isRussian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
         let name = peer?.compactDisplayTitle ?? ""
         let need = AstraStreak.messagesPerDay
         var entries: [AstraStreakEntry] = []
         let isOn = streaks[peerId] != nil
         let state = states[peerId]
 
+        func progress(_ value: Int32) -> String {
+            let done = min(Int(value), need)
+            if done >= need {
+                return isRussian ? "\(need) из \(need) ✓" : "\(need) of \(need) ✓"
+            }
+            return isRussian ? "\(done) из \(need)" : "\(done) of \(need)"
+        }
+
         if isOn {
-            entries.append(.header(isRussian ? "ОГОНЁК С \(name.uppercased())" : "STREAK WITH \(name.uppercased())"))
+            entries.append(.header(1, 0, isRussian ? "ОГОНЁК С \(name.uppercased())" : "STREAK WITH \(name.uppercased())"))
             if let state = state {
-                entries.append(.value(1, isRussian ? "🔥 Огонёк" : "🔥 Streak", astraDaysText(state.displayCount, isRussian: isRussian)))
-                entries.append(.value(2, isRussian ? "Вы сегодня" : "You today", "\(min(state.todayMine, need))/\(need)"))
-                entries.append(.value(3, isRussian ? "\(name) сегодня" : "\(name) today", "\(min(state.todayTheirs, need))/\(need)"))
-                entries.append(.value(4, isRussian ? "Восстановлений на неделе" : "Restores this week", "\(state.restoresLeft)/\(AstraStreak.restoresPerWeek)"))
+                entries.append(.row(2, 0, AstraStreakIcons.flame, nil, isRussian ? "Огонёк" : "Streak", astraDaysText(state.displayCount, isRussian: isRussian), .none))
+                entries.append(.row(3, 0, AstraStreakIcons.calendar, nil, isRussian ? "Осталось восстановлений" : "Restores Left", isRussian ? "\(state.restoresLeft) из \(AstraStreak.restoresPerWeek)" : "\(state.restoresLeft) of \(AstraStreak.restoresPerWeek)", .none))
+
+                entries.append(.header(10, 1, isRussian ? "СЕГОДНЯ" : "TODAY"))
+                // Icons the size of the other rows' (an avatar row is taller, and one's own avatar is drawn as Saved Messages).
+                entries.append(.row(11, 1, AstraStreakIcons.me, nil, isRussian ? "Вы" : "You", progress(Int32(state.todayMine)), .none))
+                entries.append(.row(12, 1, AstraStreakIcons.them, nil, name, progress(Int32(state.todayTheirs)), .none))
                 let statusText: String
                 if state.todayDone {
-                    statusText = isRussian ? "Сегодня засчитано, огонёк горит." : "Today counts, the streak is alive."
+                    statusText = isRussian ? "Сегодня засчитано — огонёк горит." : "Today counts — the streak is alive."
                 } else if state.restorableDay != nil {
-                    statusText = isRussian ? "Вчера не набралось по \(need) сообщения. Восстановите вчерашний день сегодня, иначе огонёк начнётся заново." : "Yesterday did not reach \(need) messages each. Restore yesterday today, or the streak starts over."
+                    statusText = isRussian ? "Вчера не набралось по \(need) сообщения. Восстановите вчерашний день, иначе огонёк начнётся заново." : "Yesterday didn't reach \(need) messages each. Restore it, or the streak starts over."
                 } else {
-                    statusText = isRussian ? "Чтобы день засчитался, каждому нужно написать сегодня хотя бы \(need) сообщения." : "For today to count, each of you writes at least \(need) messages today."
+                    statusText = isRussian ? "Напишите друг другу хотя бы по \(need) сообщения, чтобы день засчитался." : "Write at least \(need) messages each for today to count."
                 }
-                entries.append(.info(5, statusText))
-            } else {
-                entries.append(.info(5, isRussian ? "Считаю…" : "Counting…"))
-            }
-            if let state = state, state.restorableDay != nil {
-                entries.append(.action(102, isRussian ? "Восстановить вчерашний день" : "Restore Yesterday", state.restoresLeft > 0))
-            }
-            entries.append(.destructive(103, isRussian ? "Выключить огонёк" : "Turn Off Streak"))
-            entries.append(.sectionFooter(104, 1, isRussian ? "День засчитывается, когда каждый из вас написал хотя бы \(need) сообщения. Пропущенный день можно восстановить на следующий день, не больше \(AstraStreak.restoresPerWeek) раз в неделю. Если день не набран и не восстановлен, огонёк гаснет и начинается заново. Считается на этом устройстве по сообщениям чата, поэтому работает и с теми, у кого нет AstraGram." : "A day counts when each of you wrote at least \(need) messages. A missed day can be restored on the next day, at most \(AstraStreak.restoresPerWeek) times a week. A day neither reached nor restored ends the streak, and it starts over. Counted on this device from the chat's messages, so it works with people without AstraGram too."))
+                entries.append(.footer(19, 1, statusText))
 
-            if AstraStreakBot.isAvailable {
-                if let peer = peer, !peer.astraUsesAstraGram {
-                    entries.append(.action(201, isRussian ? "Пригласить \(name) в бота" : "Invite \(name) to the Bot", true))
+                entries.append(.row(20, 2, AstraStreakIcons.pet, nil, isRussian ? "Серийчик" : "Streak Buddy", "", .openPet))
+                if state.restorableDay != nil {
+                    if state.restoresLeft > 0 {
+                        entries.append(.row(21, 2, AstraStreakIcons.restore, nil, isRussian ? "Восстановить вчера" : "Restore Yesterday", "", .restore))
+                    } else {
+                        entries.append(.row(21, 2, AstraStreakIcons.restore, nil, isRussian ? "Восстановлений не осталось" : "No Restores Left", "", .none))
+                    }
                 }
-                if botLinked {
-                    entries.append(.destructive(203, isRussian ? "Отключить бота огоньков" : "Disconnect Streak Bot"))
-                } else {
-                    entries.append(.action(202, isRussian ? "Подключить бота огоньков" : "Connect Streak Bot", true))
-                }
-                entries.append(.sectionFooter(204, 2, isRussian ? "У кого нет AstraGram, следит за огоньком в боте @\(AstraStreakBot.username): видит счёт, получает напоминание вечером и может восстановить вчерашний день. Бот знает только числа, тексты сообщений к нему не попадают." : "People without AstraGram follow the streak in the bot @\(AstraStreakBot.username): they see the count, get a reminder in the evening, and can restore yesterday. The bot knows only the numbers; message texts never reach it."))
             } else {
-                entries.append(.sectionFooter(204, 2, isRussian ? "Бот огоньков для тех, у кого нет AstraGram, ещё не запущен. Огонёк уже считается в AstraGram, бот подключится в одном из следующих обновлений." : "The streak bot for people without AstraGram is not running yet. The streak is already counted in AstraGram; the bot comes in a later update."))
+                entries.append(.footer(19, 0, isRussian ? "Считаю…" : "Counting…"))
             }
+
+            // Still only on this device: the bot is not connected, the start has not reached it yet, or its list (from
+            // the last sync) does not have this streak.
+            let startNotSent = AstraStreakEvents.pending(accountPeerId: accountPeerId)[peerId.id._internalGetInt64Value()] != nil
+            let missingFromBot = shared.map { !$0.contains(peerId) } ?? false
+            if AstraStreakBot.isAvailable && peerId.namespace == Namespaces.Peer.CloudUser && (!botLinked || startNotSent || missingFromBot) {
+                entries.append(.row(25, 5, AstraStreakIcons.save, nil, isRussian ? "Сохранить огонёк" : "Save Streak", "", .save))
+                entries.append(.footer(29, 5, isRussian ? "Огонёк пока есть только на этом устройстве. Сохраните его, чтобы он был на всех ваших устройствах и не пропал при переустановке." : "This streak is only on this device for now. Save it to have it on all your devices and keep it after reinstalling."))
+            }
+
+            if AstraStreakBot.isAvailable, let peer = peer, !peer.astraUsesAstraGram {
+                entries.append(.header(30, 3, isRussian ? "БОТ ОГОНЬКОВ" : "STREAK BOT"))
+                entries.append(.button(31, 3, isRussian ? "Пригласить \(name) в бота" : "Invite \(name) to the Bot", .generic, .invite))
+                if botLinked {
+                    entries.append(.button(32, 3, isRussian ? "Отключить бота" : "Disconnect Bot", .destructive, .unlinkBot))
+                } else {
+                    entries.append(.button(32, 3, isRussian ? "Подключить бота" : "Connect Bot", .generic, .linkBot))
+                }
+                entries.append(.footer(39, 3, isRussian ? "У \(name) нет AstraGram: счёт, напоминания и восстановление — в боте @\(AstraStreakBot.username). Боту уходят только числа." : "\(name) doesn't use AstraGram: the count, reminders and restores are in the bot @\(AstraStreakBot.username). The bot gets only numbers."))
+            }
+
+            entries.append(.button(40, 4, isRussian ? "Выключить огонёк" : "Turn Off Streak", .destructive, .stop))
+            entries.append(.footer(49, 4, isRussian ? "Пропущенный день можно восстановить на следующий день — до \(AstraStreak.restoresPerWeek) раз в неделю." : "A missed day can be restored the next day — up to \(AstraStreak.restoresPerWeek) times a week."))
         } else {
-            entries.append(.header(isRussian ? "ОГОНЁК С \(name.uppercased())" : "STREAK WITH \(name.uppercased())"))
-            entries.append(.action(101, isRussian ? "🔥 Начать огонёк" : "🔥 Start a Streak", true))
-            entries.append(.sectionFooter(104, 1, isRussian ? "Пишите друг другу каждый день хотя бы по \(need) сообщения, и огонёк будет расти. Пропуск можно восстановить \(AstraStreak.restoresPerWeek) раз в неделю. Если огонёк погаснет, всё начнётся заново. Работает и с теми, у кого нет AstraGram." : "Write to each other at least \(need) messages every day, and the streak grows. A miss can be restored \(AstraStreak.restoresPerWeek) times a week. If the streak goes out, it starts over. Works with people without AstraGram too."))
+            entries.append(.header(1, 0, isRussian ? "ОГОНЁК С \(name.uppercased())" : "STREAK WITH \(name.uppercased())"))
+            entries.append(.row(2, 0, AstraStreakIcons.flame, nil, isRussian ? "Начать огонёк" : "Start a Streak", "", .start))
+            entries.append(.footer(9, 0, isRussian ? "Пишите друг другу каждый день хотя бы по \(need) сообщения — огонёк будет расти, а Серийчик в чате взрослеть. Работает и с теми, у кого нет AstraGram." : "Write at least \(need) messages each every day — the streak grows and the buddy in the chat grows up. Works with people without AstraGram too."))
         }
 
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(isRussian ? "Огонёк" : "Streak"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
@@ -724,23 +1367,35 @@ public func astraOpenStreak(context: AccountContext, peerId: EnginePeer.Id) {
 
 // MARK: - All streaks
 
+private final class AstraStreaksListArguments {
+    let context: AccountContext
+    let open: (EnginePeer.Id) -> Void
+    let syncDevices: () -> Void
+
+    init(context: AccountContext, open: @escaping (EnginePeer.Id) -> Void, syncDevices: @escaping () -> Void) {
+        self.context = context
+        self.open = open
+        self.syncDevices = syncDevices
+    }
+}
+
 private enum AstraStreaksListEntry: ItemListNodeEntry {
-    case streak(Int, EnginePeer.Id, String, String)
-    case empty(String)
-    case footer(String)
+    case header(Int32, Int32, String)
+    case streak(Int32, Int32, EnginePeer, String)
+    case syncDevices(Int32, Int32, String)
+    case footer(Int32, Int32, String)
 
     var section: ItemListSectionId {
-        return 0
+        switch self {
+        case let .header(_, section, _), let .streak(_, section, _, _), let .syncDevices(_, section, _), let .footer(_, section, _):
+            return ItemListSectionId(section)
+        }
     }
 
-    var stableId: Int {
+    var stableId: Int32 {
         switch self {
-        case let .streak(index, _, _, _):
-            return index
-        case .empty:
-            return 100000
-        case .footer:
-            return 100001
+        case let .header(id, _, _), let .streak(id, _, _, _), let .syncDevices(id, _, _), let .footer(id, _, _):
+            return id
         }
     }
 
@@ -749,13 +1404,19 @@ private enum AstraStreaksListEntry: ItemListNodeEntry {
     }
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
-        let open = arguments as! (EnginePeer.Id) -> Void
+        let arguments = arguments as! AstraStreaksListArguments
         switch self {
-        case let .streak(_, peerId, title, label):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: self.section, style: .blocks, action: {
-                open(peerId)
+        case let .header(_, _, text):
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
+        case let .streak(_, _, peer, label):
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, context: arguments.context, iconPeer: peer, title: peer.compactDisplayTitle, label: label, sectionId: self.section, style: .blocks, action: {
+                arguments.open(peer.id)
             })
-        case let .empty(text), let .footer(text):
+        case let .syncDevices(_, _, title):
+            return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: {
+                arguments.syncDevices()
+            })
+        case let .footer(_, _, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         }
     }
@@ -770,6 +1431,30 @@ public func astraStreaksListController(context: AccountContext) -> ViewControlle
     let open: (EnginePeer.Id) -> Void = { peerId in
         pushImpl?(astraStreakController(context: context, peerId: peerId))
     }
+    let botLinked = ValuePromise<Bool>(AstraStreakBot.isLinked(accountPeerId: accountPeerId), ignoreRepeated: true)
+    let syncDevices: () -> Void = {
+        guard let top = astraTopViewController() else {
+            return
+        }
+        let isRussian = astraIsRussian(context)
+        let alert = UIAlertController(
+            title: isRussian ? "Огоньки на всех устройствах?" : "Streaks on all devices?",
+            message: isRussian
+                ? "Список огоньков этого аккаунта будет общим на всех устройствах, где он подключён: огонёк, начатый на одном, появится на других. Для этого AstraGram подключит бота огоньков @\(AstraStreakBot.username): ему уходят ID собеседников с огоньком, день начала, счёт и сколько сообщений написано сегодня. Тексты сообщений не отправляются. Подключите так каждое устройство."
+                : "This account's streaks will be the same on every device where this is on: a streak started on one shows up on the others. For this AstraGram connects the streak bot @\(AstraStreakBot.username): it gets the IDs of people you have a streak with, the start day, the count and how many messages were written today. Message texts are not sent. Turn this on on each device.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: isRussian ? "Отмена" : "Cancel", style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: isRussian ? "Подключить" : "Connect", style: .default, handler: { _ in
+            AstraStreakBot.linkSilently(context: context, completion: { linked in
+                if linked {
+                    botLinked.set(true)
+                    AstraStreakManager.forAccount(accountPeerId)?.refresh()
+                }
+            })
+        }))
+        top.present(alert, animated: true)
+    }
 
     let peers = store.streaks()
     |> mapToSignal { streaks -> Signal<[EnginePeer], NoError> in
@@ -783,21 +1468,52 @@ public func astraStreaksListController(context: AccountContext) -> ViewControlle
         return AstraStreakManager.forAccount(accountPeerId)?.statesSignal ?? .single([:])
     }
 
-    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, peers, states)
-    |> map { presentationData, peers, states -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let isRussian = presentationData.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+    let arguments = AstraStreaksListArguments(context: context, open: open, syncDevices: syncDevices)
+    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, peers, states, botLinked.get())
+    |> map { presentationData, peers, states, botLinked -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let isRussian = presentationData.strings.baseLanguageCode.astraUsesRussianTexts
         let sorted = peers.sorted { (states[$0.id]?.displayCount ?? 0) > (states[$1.id]?.displayCount ?? 0) }
         var entries: [AstraStreaksListEntry] = []
-        for (index, peer) in sorted.enumerated() {
-            entries.append(.streak(index, peer.id, peer.compactDisplayTitle, astraStreakSummary(states[peer.id], isRussian: isRussian)))
+        // Streaks to save today first, then the burning ones, then the ones that have only started.
+        let atRisk = sorted.filter { states[$0.id]?.restorableDay != nil }
+        let burning = sorted.filter { states[$0.id]?.restorableDay == nil && (states[$0.id]?.displayCount ?? 0) > 0 }
+        let starting = sorted.filter { states[$0.id]?.restorableDay == nil && (states[$0.id]?.displayCount ?? 0) == 0 }
+        var id: Int32 = 0
+        func add(_ section: Int32, _ title: String, _ list: [EnginePeer]) {
+            guard !list.isEmpty else {
+                return
+            }
+            id += 1
+            entries.append(.header(id, section, title))
+            for peer in list {
+                id += 1
+                entries.append(.streak(id, section, peer, astraStreakSummary(states[peer.id], isRussian: isRussian)))
+            }
         }
+        add(0, isRussian ? "НУЖНО ВОССТАНОВИТЬ" : "NEEDS A RESTORE", atRisk)
+        add(1, isRussian ? "ГОРЯТ" : "BURNING", burning)
+        add(2, isRussian ? "НАЧАТЫ" : "JUST STARTED", starting)
+        id += 1
         if sorted.isEmpty {
-            entries.append(.empty(isRussian ? "Огоньков пока нет. Откройте профиль собеседника и нажмите «Огонёк»." : "No streaks yet. Open someone's profile and tap Streak."))
+            entries.append(.footer(id, 3, isRussian ? "Огоньков пока нет. Откройте профиль собеседника → «Огонёк» → «Начать огонёк»." : "No streaks yet. Open someone's profile → Streak → Start a Streak."))
+        } else {
+            entries.append(.footer(id, 3, isRussian ? "Огонёк растёт, когда вы оба пишете каждый день хотя бы по \(AstraStreak.messagesPerDay) сообщения. Число видно у имени в списке чатов." : "A streak grows when both of you write at least \(AstraStreak.messagesPerDay) messages every day. The number shows beside the name in the chat list."))
         }
-        entries.append(.footer(isRussian ? "Огонёк растёт, когда вы оба пишете каждый день хотя бы по \(AstraStreak.messagesPerDay) сообщения. Число видно у имени в списке чатов." : "A streak grows when both of you write at least \(AstraStreak.messagesPerDay) messages every day. The number shows beside the name in the chat list."))
+        if AstraStreakBot.isAvailable {
+            id += 1
+            entries.append(.header(id, 4, isRussian ? "НА ВСЕХ УСТРОЙСТВАХ" : "ON ALL DEVICES"))
+            id += 1
+            if botLinked {
+                entries.append(.footer(id, 4, isRussian ? "Огоньки этого аккаунта общие на всех устройствах, где подключён бот огоньков. Новое устройство получает их в течение нескольких минут." : "This account's streaks are shared by every device where the streak bot is connected. A new device gets them within a few minutes."))
+            } else {
+                entries.append(.syncDevices(id, 4, isRussian ? "Синхронизировать огоньки" : "Sync Streaks"))
+                id += 1
+                entries.append(.footer(id, 4, isRussian ? "Огоньки хранятся на устройстве. Чтобы они были на всех ваших устройствах, подключите синхронизацию на каждом из них." : "Streaks are kept on the device. To have them on all your devices, turn on sync on each of them."))
+            }
+        }
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(isRussian ? "Огоньки" : "Streaks"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: false)
-        return (controllerState, (listState, open))
+        return (controllerState, (listState, arguments))
     }
 
     let controller = ItemListController(context: context, state: signal)

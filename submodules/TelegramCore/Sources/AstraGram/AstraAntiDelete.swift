@@ -142,13 +142,26 @@ enum AstraAntiDelete {
             }
         }
         // Edit updates also carry view counters, reply markup and reactions: only a new edit date with changed
-        // text or media is an edit worth a version.
+        // text, formatting or media is an edit worth a version. Formatting counts, because an edit may change only a
+        // link's target or a spoiler, and the history keeps the entities of each version.
         guard let editDate = updatedEditDate, editDate != previousEditDate else {
             return
         }
         let previousMediaIds = previous.media.compactMap { $0.id }
         let updatedMediaIds = updated.media.compactMap { $0.id }
-        if previous.text == updated.text && previousMediaIds == updatedMediaIds {
+        var previousEntities: [MessageTextEntity] = []
+        for attribute in previous.attributes {
+            if let attribute = attribute as? TextEntitiesMessageAttribute {
+                previousEntities = attribute.entities
+            }
+        }
+        var updatedEntities: [MessageTextEntity] = []
+        for attribute in updated.attributes {
+            if let attribute = attribute as? TextEntitiesMessageAttribute {
+                updatedEntities = attribute.entities
+            }
+        }
+        if previous.text == updated.text && previousEntities == updatedEntities && previousMediaIds == updatedMediaIds {
             return
         }
         AstraMessageStore.forMediaBoxBasePath(mediaBox.basePath).saveEdit(previous: AstraMessageSnapshot(message: previous), replacedAt: editDate)

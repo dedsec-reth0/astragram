@@ -2216,8 +2216,8 @@ public final class PendingMessageManager {
     }
     
     private func applySentMessage(postbox: Postbox, stateManager: AccountStateManager, message: Message, content: PendingMessageUploadedContentAndReuploadInfo, result: Api.Updates) -> Signal<Void, NoError> {
-        // AstraGram ghost mode: a sent message shows the account online.
-        AstraGhostMode.markAsOnline()
+        // AstraGram ghost mode: a sent message shows the account online. Network.request already marks this
+        // account (only) as online for the send request; an untargeted mark here would make every account send "offline".
         if let _ = message.peers[message.id.peerId] as? TelegramChannel {
             for attribute in message.attributes {
                 if let attribute = attribute as? PaidStarsMessageAttribute {
@@ -2282,8 +2282,8 @@ public final class PendingMessageManager {
     }
     
     private func applySentGroupMessages(postbox: Postbox, stateManager: AccountStateManager, messages: [Message], result: Api.Updates) -> Signal<Void, NoError> {
-        // AstraGram ghost mode: a sent message shows the account online.
-        AstraGhostMode.markAsOnline()
+        // AstraGram ghost mode: a sent message shows the account online. Network.request already marks this
+        // account (only) as online for the send request; an untargeted mark here would make every account send "offline".
         var namespace = Namespaces.Message.Cloud
         if let message = messages.first {
             if let channel = message.peers[message.id.peerId] as? TelegramChannel, channel.isMonoForum {

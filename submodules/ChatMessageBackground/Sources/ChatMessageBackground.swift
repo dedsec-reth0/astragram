@@ -75,7 +75,9 @@ public class ChatMessageBackground: ASDisplayNode {
 
     // AstraGram: an outline of the bubble's own shape (tail and merged corners included), and a see-through fill.
     private var astraOutlineView: UIImageView?
-    private static var astraRingCache: [ObjectIdentifier: UIImage] = [:]
+    // The source image is kept with its ring: an identifier is only an address, and a freed bubble image's address
+    // is reused by a new one of another shape, which then got the old ring.
+    private static var astraRingCache: [ObjectIdentifier: (source: UIImage, ring: UIImage)] = [:]
 
     /// The colour of an outline drawn along the bubble's shape, or nil for none.
     public var astraOutlineColor: UIColor? {
@@ -98,8 +100,8 @@ public class ChatMessageBackground: ASDisplayNode {
     /// a line along the bubble's edge.
     private static func astraRing(_ image: UIImage, color: UIColor) -> UIImage? {
         let key = ObjectIdentifier(image)
-        if let cached = ChatMessageBackground.astraRingCache[key] {
-            return cached
+        if let cached = ChatMessageBackground.astraRingCache[key], cached.source === image {
+            return cached.ring
         }
         let size = image.size
         guard size.width > 6.0, size.height > 6.0 else {
@@ -121,7 +123,7 @@ public class ChatMessageBackground: ASDisplayNode {
         if ChatMessageBackground.astraRingCache.count > 64 {
             ChatMessageBackground.astraRingCache.removeAll()
         }
-        ChatMessageBackground.astraRingCache[key] = result
+        ChatMessageBackground.astraRingCache[key] = (source: image, ring: result)
         return result
     }
 

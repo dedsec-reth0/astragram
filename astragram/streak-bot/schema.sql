@@ -27,6 +27,26 @@ CREATE TABLE IF NOT EXISTS pairs (
 );
 CREATE INDEX IF NOT EXISTS pairs_friend ON pairs(friend_id);
 
+-- The account's list of streaks, shared by all of its devices (apps from version 2): the day each streak started, or
+-- stopped = 1 once a device turned it off (a mark kept for 30 days, so the other devices turn it off too).
+CREATE TABLE IF NOT EXISTS streak_list (
+  owner_id INTEGER NOT NULL,
+  friend_id INTEGER NOT NULL,
+  start_day INTEGER NOT NULL,
+  stopped INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (owner_id, friend_id)
+);
+
+-- Days restored on one of the account's devices (a restore asked for in the bot reaches one device): every device of the
+-- account counts them.
+CREATE TABLE IF NOT EXISTS streak_restores (
+  owner_id INTEGER NOT NULL,
+  friend_id INTEGER NOT NULL,
+  day INTEGER NOT NULL,
+  PRIMARY KEY (owner_id, friend_id, day)
+);
+
 CREATE TABLE IF NOT EXISTS friends (
   tg_id INTEGER PRIMARY KEY,
   started_at INTEGER NOT NULL,
@@ -87,8 +107,96 @@ CREATE TABLE IF NOT EXISTS broadcasts (
   created_at INTEGER NOT NULL
 );
 
+-- Visual gifts: the Telegram gift IDs an AstraGram user put on their profile in AstraGram's gift shop (not bought,
+-- only shown in AstraGram), as a JSON array. Other AstraGram apps get them only for the people in their own chats.
+CREATE TABLE IF NOT EXISTS visual_gifts (
+  tg_id INTEGER PRIMARY KEY,
+  gifts TEXT NOT NULL DEFAULT '[]',
+  updated_at INTEGER NOT NULL,
+  changed_at INTEGER NOT NULL DEFAULT 0
+);
+
+-- Visual gifts one AstraGram user gave another for free: shown on the recipient's profile in AstraGram, with the sender.
+-- The recipient can take one off (deletes the row).
+CREATE TABLE IF NOT EXISTS visual_gift_received (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  to_id INTEGER NOT NULL,
+  from_id INTEGER NOT NULL,
+  gift_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS visual_gift_received_to ON visual_gift_received(to_id);
+CREATE INDEX IF NOT EXISTS visual_gift_received_from ON visual_gift_received(from_id, created_at);
+
 -- AstraGram users who show the AstraGram badge: other AstraGram users draw it beside their names.
 CREATE TABLE IF NOT EXISTS badges (
   tg_id INTEGER PRIMARY KEY,
   updated_at INTEGER NOT NULL
+);
+
+-- Bug reports and ideas sent from AstraGram's settings. Forwarded to the admin at once; kept here for the record.
+CREATE TABLE IF NOT EXISTS feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,                     -- bug | idea
+  text TEXT NOT NULL,
+  tg_id INTEGER,                          -- set only when the sender let AstraGram name them
+  verified INTEGER NOT NULL DEFAULT 0,    -- 1: the account was proven by its streak-bot token
+  ip TEXT NOT NULL DEFAULT '',
+  app TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS feedback_ip ON feedback(ip, created_at);
+
+-- What a visual gift's owner set on it, beside the gift itself (apps from 1.0.30): `ref` is 'o<gift ID>' for a gift the
+-- owner put on from the shop, 'r<row>' for a visual_gift_received row. pinned_at > 0 pins it to the top of the profile
+-- (in that order); hidden keeps it for the owner only; unique is the look it was upgraded to ({n, m, p, b}: number,
+-- model, pattern, backdrop, as Telegram names them); text and anonymous are what the giver wrote and whether the giver's
+-- name is kept from everyone but the recipient.
+CREATE TABLE IF NOT EXISTS visual_gift_meta (
+  tg_id INTEGER NOT NULL,
+  ref TEXT NOT NULL,
+  pinned_at INTEGER NOT NULL DEFAULT 0,
+  hidden INTEGER NOT NULL DEFAULT 0,
+  unique_look TEXT NOT NULL DEFAULT '',
+  text TEXT NOT NULL DEFAULT '',
+  anonymous INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (tg_id, ref)
+);
+
+-- The next number of each gift upgraded in AstraGram (its own count, apart from Telegram's).
+CREATE TABLE IF NOT EXISTS visual_gift_numbers (
+  gift_id TEXT PRIMARY KEY,
+  next INTEGER NOT NULL
+);
+
+-- The visual gift each AstraGram user wears as their status (AstraGram shows it beside their name; everyone else sees
+-- the user's own Telegram status).
+CREATE TABLE IF NOT EXISTS visual_gift_worn (
+  tg_id INTEGER PRIMARY KEY,
+  ref TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+-- The Premium look of an AstraGram user with Local Premium (emoji status, name and profile colours, as JSON): other
+-- AstraGram apps show it on that user; everyone else sees the user as Telegram does.
+CREATE TABLE IF NOT EXISTS premium_look (
+  tg_id INTEGER PRIMARY KEY,
+  look TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+-- Every visual gift an account gave or passed on, for the daily limit (GIFTS_PER_DAY). Apart from
+-- visual_gift_received, so a recipient hiding gifts (or a trim) does not give the sender new ones. Kept a day.
+CREATE TABLE IF NOT EXISTS visual_gift_sends (
+  from_id INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS visual_gift_sends_from ON visual_gift_sends(from_id, created_at);
+
+-- How many IDs each account asked about this hour in the badge's and the visual gifts' `check` (CHECK_IDS_PER_HOUR),
+-- so nobody can sweep ID ranges to collect every AstraGram user. period is the hour (unix time / 3600).
+CREATE TABLE IF NOT EXISTS check_budget (
+  tg_id INTEGER PRIMARY KEY,
+  period INTEGER NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0
 );

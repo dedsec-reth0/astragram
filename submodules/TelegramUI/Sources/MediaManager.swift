@@ -117,6 +117,7 @@ public final class MediaManagerImpl: NSObject, MediaManager {
                 if let musicMediaPlayer = self.musicMediaPlayer {
                     let type = musicMediaPlayer.type
                     let account = musicMediaPlayer.engine.account
+                    self.musicMediaPlayerAudioLevelValue.set(.single(musicMediaPlayer.audioLevel))
                     self.musicMediaPlayerStateValue.set(musicMediaPlayer.playbackState
                     |> map { state -> (Account, SharedMediaPlayerItemPlaybackStateOrLoading, MediaManagerPlayerType)? in
                         guard let state = state else {
@@ -130,12 +131,17 @@ public final class MediaManagerImpl: NSObject, MediaManager {
                     } |> deliverOnMainQueue)
                 } else {
                     self.musicMediaPlayerStateValue.set(.single(nil))
+                    self.musicMediaPlayerAudioLevelValue.set(.single(.never()))
                     self.musicListenTracker?.playerClosed()
                 }
             }
         }
     }
     private let musicMediaPlayerStateValue = Promise<(Account, SharedMediaPlayerItemPlaybackStateOrLoading, MediaManagerPlayerType)?>(nil)
+    private let musicMediaPlayerAudioLevelValue = Promise<Signal<Float, NoError>>(.never())
+    public var musicMediaPlayerAudioLevel: Signal<Float, NoError> {
+        return self.musicMediaPlayerAudioLevelValue.get() |> switchToLatest
+    }
     public var musicMediaPlayerState: Signal<(Account, SharedMediaPlayerItemPlaybackStateOrLoading, MediaManagerPlayerType)?, NoError> {
         return self.musicMediaPlayerStateValue.get()
     }

@@ -23,7 +23,13 @@ final class AstraBackgroundNotifier {
     private let sharedContext: Signal<SharedApplicationContext, NoError>
     private let refreshTaskId: String
     private var messagesDisposable: Disposable?
-    private var notifiedIds = Set<MessageId>()
+    // Keyed by account too: a channel or supergroup message has the same id on every account that is in it, and each
+    // account notifies it on its own.
+    private struct NotifiedKey: Hashable {
+        let accountId: AccountRecordId
+        let messageId: MessageId
+    }
+    private var notifiedIds = Set<NotifiedKey>()
 
     /// Created during app launch: background task handlers must be registered before launch ends.
     init(application: UIApplication, sharedContext: Signal<SharedApplicationContext, NoError>, baseAppBundleId: String) {
@@ -97,15 +103,17 @@ final class AstraBackgroundNotifier {
     }
 
     private func notify(context: AccountContext, messages: [Message]) {
-        guard AstraGramSettings.current.backgroundNotifications, self.application.applicationState != .active else {
+        // Only while in the background: "inactive" is also Control Center or a Face ID prompt over the open app.
+        guard AstraGramSettings.current.backgroundNotifications, self.application.applicationState == .background else {
             return
         }
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         for message in messages {
-            if self.notifiedIds.contains(message.id) || !message.flags.contains(.Incoming) || AstraGramSettings.shouldHideMessage(message) {
+            let key = NotifiedKey(accountId: context.account.id, messageId: message.id)
+            if self.notifiedIds.contains(key) || !message.flags.contains(.Incoming) || AstraGramSettings.shouldHideMessage(message) {
                 continue
             }
-            self.notifiedIds.insert(message.id)
+            self.notifiedIds.insert(key)
 
             let content = UNMutableNotificationContent()
             let chatTitle = message.peers[message.id.peerId].flatMap { EnginePeer($0).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) } ?? "AstraGram"
@@ -117,20 +125,28 @@ final class AstraBackgroundNotifier {
                 body = EnginePeer(author).displayTitle(strings: presentationData.strings, displayOrder: presentationData.nameDisplayOrder) + ": " + body
             }
             content.title = chatTitle
-            // A chat locked with Face ID does not show its messages in a notification either.
-            if AstraGramSettings.current.lockedChats.contains(message.id.peerId.toInt64()) {
+            // A chat locked with Face ID, and a secret chat, do not show their messages in a notification.
+            if AstraGramSettings.current.lockedChats.contains(message.id.peerId.toInt64()) || message.id.peerId.namespace == Namespaces.Peer.SecretChat {
                 body = AstraStringsCompat.isRussian(presentationData) ? "Новое сообщение" : "New message"
             }
             content.body = body
             content.sound = .default
             content.threadIdentifier = "\(message.id.peerId.toInt64())"
-            content.userInfo = [
+            var userInfo: [AnyHashable: Any] = [
                 "accountId": context.account.id.int64,
                 "peerId": message.id.peerId.toInt64(),
                 "messageId.namespace": message.id.namespace,
                 "messageId.id": message.id.id
             ]
-            let request = UNNotificationRequest(identifier: "astra-\(context.account.id.int64)-\(message.id.peerId.toInt64())-\(message.id.id)", content: content, trigger: nil)
+            // A tap on a forum topic's message opens that topic: AppDelegate reads "threadId" as a forum topic id, so it
+            // is set only in forums (in other chats a thread id is a comment or reply thread, not a topic).
+            if let threadId = message.threadId, let channel = message.peers[message.id.peerId] as? TelegramChannel, channel.flags.contains(.isForum) {
+                userInfo["threadId"] = threadId
+            }
+            content.userInfo = userInfo
+            // The identifier has Telegram's "m<peer>:<namespace>:<id>" form, so ClearNotificationsManager recognizes it and
+            // takes the notification down when the chat is read; the account suffix keeps the accounts' notifications apart.
+            let request = UNNotificationRequest(identifier: "m\(message.id.peerId.toInt64()):\(message.id.namespace):\(message.id.id)_astra\(context.account.id.int64)", content: content, trigger: nil)
             UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
         }
         if self.notifiedIds.count > 2000 {
@@ -147,7 +163,9 @@ final class AstraBackgroundNotifier {
         do {
             try BGTaskScheduler.shared.submit(request)
         } catch let error {
-            Logger.shared.log("AstraGram", "Could not schedule background refresh: \(error)")
+            // NSLog, not Logger.shared: this also runs when the app goes to the background before launch has set
+            // up the shared logger (for example on the API ID screen), where Logger.shared asserts.
+            NSLog("[AstraGram] Could not schedule background refresh: \(error)")
         }
     }
 

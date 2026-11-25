@@ -82,7 +82,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     /// Look: round glass buttons with their labels under them in profiles.
     public var roundProfileButtons: Bool
     /// Look: the profile music as a capsule under the status, above the buttons.
-    public var profileMusicCapsule: Bool
+    /// Stored under a new name (1.0.31): on for everyone once, as in the concept, whatever the old switch said.
+    public var musicCapsule: Bool
     /// Look: the Contacts tab in the tab bar.
     public var contactsTab: Bool
     /// Look: the Calls tab in the tab bar (Telegram's own "Show Calls Tab" switch mirrors it).
@@ -194,7 +195,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         dedsecSilence: false,
         liquidGlassBeta: false,
         roundProfileButtons: false,
-        profileMusicCapsule: false,
+        musicCapsule: true,
         contactsTab: true,
         callsTab: true,
         monochrome: false,
@@ -268,7 +269,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         dedsecSilence: Bool,
         liquidGlassBeta: Bool,
         roundProfileButtons: Bool,
-        profileMusicCapsule: Bool,
+        musicCapsule: Bool,
         contactsTab: Bool,
         callsTab: Bool,
         monochrome: Bool,
@@ -340,7 +341,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.dedsecSilence = dedsecSilence
         self.liquidGlassBeta = liquidGlassBeta
         self.roundProfileButtons = roundProfileButtons
-        self.profileMusicCapsule = profileMusicCapsule
+        self.musicCapsule = musicCapsule
         self.contactsTab = contactsTab
         self.callsTab = callsTab
         self.monochrome = monochrome
@@ -417,7 +418,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.dedsecSilence = try container.decodeIfPresent(Bool.self, forKey: .dedsecSilence) ?? d.dedsecSilence
         self.liquidGlassBeta = try container.decodeIfPresent(Bool.self, forKey: .liquidGlassBeta) ?? d.liquidGlassBeta
         self.roundProfileButtons = try container.decodeIfPresent(Bool.self, forKey: .roundProfileButtons) ?? (try container.decodeIfPresent(Bool.self, forKey: .liquidGlassBeta) ?? d.roundProfileButtons)
-        self.profileMusicCapsule = try container.decodeIfPresent(Bool.self, forKey: .profileMusicCapsule) ?? (try container.decodeIfPresent(Bool.self, forKey: .liquidGlassBeta) ?? d.profileMusicCapsule)
+        self.musicCapsule = try container.decodeIfPresent(Bool.self, forKey: .musicCapsule) ?? d.musicCapsule
         self.contactsTab = try container.decodeIfPresent(Bool.self, forKey: .contactsTab) ?? d.contactsTab
         self.callsTab = try container.decodeIfPresent(Bool.self, forKey: .callsTab) ?? d.callsTab
         self.monochrome = try container.decodeIfPresent(Bool.self, forKey: .monochrome) ?? d.monochrome
@@ -504,14 +505,61 @@ private enum AstraSecretStore {
             kSecAttrService as String: AstraSecretStore.service,
             kSecAttrAccount as String: AstraSecretStore.account
         ]
-        SecItemDelete(query as CFDictionary)
         if value.isEmpty {
+            let status = SecItemDelete(query as CFDictionary)
+            return status == errSecSuccess || status == errSecItemNotFound
+        }
+        // Updated in place, added only when missing: deleting first lost the old key whenever the add then failed.
+        let data = value.data(using: .utf8) ?? Data()
+        let updateStatus = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if updateStatus == errSecSuccess {
             return true
         }
+        guard updateStatus == errSecItemNotFound else {
+            return false
+        }
         var attributes = query
-        attributes[kSecValueData as String] = value.data(using: .utf8)
+        attributes[kSecValueData as String] = data
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
+    }
+
+    /// An item kept only so the lock can be detected: with no AI key there is no item to fail on, and the Keychain
+    /// reports a missing item as "not found" even while it is locked.
+    private static let probeAccount = "lockProbe"
+
+    /// Saves the probe item once (while the device is unlocked), so later launches before the first unlock see it fail.
+    static func ensureProbe() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: AstraSecretStore.service,
+            kSecAttrAccount as String: AstraSecretStore.probeAccount
+        ]
+        guard SecItemCopyMatching(query as CFDictionary, nil) == errSecItemNotFound else {
+            return
+        }
+        var attributes = query
+        attributes[kSecValueData as String] = Data([1])
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let _ = SecItemAdd(attributes as CFDictionary, nil)
+    }
+
+    /// True while the Keychain cannot be read at all: before the first unlock after a reboot, when the app group's
+    /// defaults are not readable either and read back as empty.
+    static func isLocked() -> Bool {
+        for account in [AstraSecretStore.probeAccount, AstraSecretStore.account] {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: AstraSecretStore.service,
+                kSecAttrAccount as String: account,
+                kSecReturnData as String: true,
+                kSecMatchLimit as String: kSecMatchLimitOne
+            ]
+            if SecItemCopyMatching(query as CFDictionary, nil) == errSecInteractionNotAllowed {
+                return true
+            }
+        }
+        return false
     }
 }
 
@@ -525,13 +573,43 @@ public final class AstraGramSettings {
     /// The settings as stored in the defaults: without the AI key, which goes to the Keychain.
     private static func encodeForStorage(_ value: AstraGramSettingsValues) -> Data? {
         let key = value.aiApiKey
-        if AstraGramSettings.storedApiKey.swap(key) != key {
-            AstraSecretStore.write(key)
-        }
         var stripped = value
-        stripped.aiApiKey = ""
+        if AstraGramSettings.storedApiKey.with({ $0 }) != key {
+            // Marked as stored only once the write worked, so a failed write is retried by the next update. Until
+            // then the key stays in the defaults (as load() does), and a later load() moves it to the Keychain.
+            if AstraSecretStore.write(key) {
+                let _ = AstraGramSettings.storedApiKey.swap(key)
+                stripped.aiApiKey = ""
+            }
+        } else {
+            stripped.aiApiKey = ""
+        }
         return try? JSONEncoder().encode(stripped)
     }
+
+    /// The defaults with the AI key from the Keychain: without it the first update() saw an empty key that differs
+    /// from the unknown stored one and deleted the Keychain item (after a reinstall the Keychain keeps the key while
+    /// the app group's defaults are gone).
+    private static func defaultWithStoredKey() -> AstraGramSettingsValues {
+        var value = AstraGramSettingsValues.default
+        let key = AstraSecretStore.read() ?? ""
+        let _ = AstraGramSettings.storedApiKey.swap(key)
+        value.aiApiKey = key
+        return value
+    }
+
+    /// Set while the settings could not be read because the device has not been unlocked since it started: the
+    /// defaults then stand in memory only, and update() does not save them over the real settings. Cleared by the
+    /// reload once protected data becomes available.
+    private static let loadFailed = Atomic<Bool>(value: false)
+
+    /// Reloads the settings when protected data becomes available after a launch before the first unlock. Observed by
+    /// the notification's name, since TelegramCore does not import UIKit.
+    private static let protectedDataObserver: NSObjectProtocol = NotificationCenter.default.addObserver(forName: NSNotification.Name("UIApplicationProtectedDataDidBecomeAvailable"), object: nil, queue: nil, using: { _ in
+        if AstraGramSettings.loadFailed.with({ $0 }) {
+            AstraGramSettings.reload()
+        }
+    })
 
     private static let state: Atomic<AstraGramSettingsValues> = Atomic(value: AstraGramSettings.load())
     private static let promise: ValuePromise<AstraGramSettingsValues> = ValuePromise(AstraGramSettings.state.with { $0 }, ignoreRepeated: true)
@@ -554,8 +632,18 @@ public final class AstraGramSettings {
     private static func load() -> AstraGramSettingsValues {
         // Settings saved by builds that kept them in the app's own defaults are picked up once.
         guard let data = AstraGramSettings.defaults.data(forKey: AstraGramSettings.defaultsKey) ?? UserDefaults.standard.data(forKey: AstraGramSettings.defaultsKey) else {
-            return .default
+            // Before the first unlock the defaults read as empty although settings exist: not "no settings".
+            if AstraSecretStore.isLocked() {
+                let _ = AstraGramSettings.loadFailed.swap(true)
+                let _ = AstraGramSettings.protectedDataObserver
+            } else {
+                let _ = AstraGramSettings.loadFailed.swap(false)
+                AstraSecretStore.ensureProbe()
+            }
+            return AstraGramSettings.defaultWithStoredKey()
         }
+        let _ = AstraGramSettings.loadFailed.swap(false)
+        AstraSecretStore.ensureProbe()
         if var value = try? JSONDecoder().decode(AstraGramSettingsValues.self, from: data) {
             if !value.aiApiKey.isEmpty {
                 // Saved by a build that kept the key in the defaults: it moves to the Keychain.
@@ -585,7 +673,7 @@ public final class AstraGramSettings {
             }
             return value
         }
-        return .default
+        return AstraGramSettings.defaultWithStoredKey()
     }
 
     /// Reads the settings again from storage (an app extension calls this, since the app may have changed them since
@@ -613,7 +701,8 @@ public final class AstraGramSettings {
             f(&current)
             return current
         }
-        if let data = AstraGramSettings.encodeForStorage(updated) {
+        // Not saved while the stored settings could not be read: the defaults in memory would replace them for good.
+        if !AstraGramSettings.loadFailed.with({ $0 }), let data = AstraGramSettings.encodeForStorage(updated) {
             AstraGramSettings.defaults.set(data, forKey: AstraGramSettings.defaultsKey)
         }
         AstraGramSettings.promise.set(updated)
@@ -632,9 +721,17 @@ public final class AstraGramSettings {
         return true
     }
 
+    /// Back to the defaults, except what protects the user or cannot be typed again easily: the AI key, the chats
+    /// locked with Face ID and Face ID for these settings.
     public static func reset() {
         AstraGramSettings.update { value in
+            let aiApiKey = value.aiApiKey
+            let lockedChats = value.lockedChats
+            let biometricForAstraGram = value.biometricForAstraGram
             value = .default
+            value.aiApiKey = aiApiKey
+            value.lockedChats = lockedChats
+            value.biometricForAstraGram = biometricForAstraGram
         }
     }
 }
@@ -655,6 +752,11 @@ public enum AstraLocalPremium {
             current.insert(peerId)
             return current
         }
+    }
+
+    /// Whether `peerId` is an account logged in on this device, whatever the Local Premium switch says.
+    static func isAccount(_ peerId: PeerId) -> Bool {
+        return AstraLocalPremium.accountPeerIds.with { $0.contains(peerId) }
     }
 
     public static func applies(to peerId: PeerId) -> Bool {
@@ -719,5 +821,130 @@ public enum AstraLocalPremium {
             return user
         }
         return user.withUpdatedEmojiStatus(stored.status)
+    }
+
+    // MARK: The name and profile colors
+
+    /// The server takes name and profile colors only from real Premium as well, so with Local Premium the colors picked
+    /// are kept here and shown in place of the server's, on this device only.
+    private struct StoredColors: Codable {
+        var namePreset: Int32?
+        var nameCollectible: PeerCollectibleColor?
+        var backgroundEmojiId: Int64?
+        var profileColor: Int32?
+        var profileBackgroundEmojiId: Int64?
+
+        var nameColor: PeerColor? {
+            if let nameCollectible {
+                return .collectible(nameCollectible)
+            }
+            return self.namePreset.map { .preset(PeerNameColor(rawValue: $0)) }
+        }
+    }
+
+    private static let colors = Atomic<[PeerId: StoredColors?]>(value: [:])
+
+    private static func colorsKey(_ accountPeerId: PeerId) -> String {
+        return "astragram.localPremium.colors.\(accountPeerId.toInt64())"
+    }
+
+    private static func loadedColors(accountPeerId: PeerId) -> StoredColors? {
+        if let cached = AstraLocalPremium.colors.with({ $0[accountPeerId] }) {
+            return cached
+        }
+        var stored: StoredColors?
+        if let data = UserDefaults.standard.data(forKey: AstraLocalPremium.colorsKey(accountPeerId)) {
+            stored = try? JSONDecoder().decode(StoredColors.self, from: data)
+        }
+        let _ = AstraLocalPremium.colors.modify { current in
+            var current = current
+            current[accountPeerId] = .some(stored)
+            return current
+        }
+        return stored
+    }
+
+    /// Keeps the colors picked as the account's name and profile colors on this device.
+    static func setColors(nameColor: PeerColor, backgroundEmojiId: Int64?, profileColor: PeerNameColor?, profileBackgroundEmojiId: Int64?, accountPeerId: PeerId) {
+        var stored = StoredColors()
+        switch nameColor {
+        case let .preset(color):
+            stored.namePreset = color.rawValue
+        case let .collectible(color):
+            stored.nameCollectible = color
+        }
+        stored.backgroundEmojiId = backgroundEmojiId
+        stored.profileColor = profileColor?.rawValue
+        stored.profileBackgroundEmojiId = profileBackgroundEmojiId
+        if let data = try? JSONEncoder().encode(stored) {
+            UserDefaults.standard.set(data, forKey: AstraLocalPremium.colorsKey(accountPeerId))
+        }
+        let _ = AstraLocalPremium.colors.modify { current in
+            var current = current
+            current[accountPeerId] = .some(stored)
+            return current
+        }
+    }
+
+    /// The account's Local Premium look as other AstraGram apps get it (nil: Local Premium is off, or the account has
+    /// real Premium and Telegram shows its look to everyone already). An emoji status of a gift is left out: worn
+    /// gifts travel on their own.
+    public static func sharedLook(account: TelegramUser) -> [String: Any]? {
+        guard AstraLocalPremium.isLocalOnly(account) else {
+            return nil
+        }
+        var look: [String: Any] = [:]
+        if let status = AstraLocalPremium.loadedEmojiStatus(accountPeerId: account.id)?.status, case let .emoji(fileId) = status.content {
+            look["status"] = "\(fileId)"
+            if let until = status.expirationDate {
+                look["statusUntil"] = NSNumber(value: until)
+            }
+        }
+        if let colors = AstraLocalPremium.loadedColors(accountPeerId: account.id) {
+            if let preset = colors.namePreset {
+                look["nameColor"] = NSNumber(value: preset)
+            }
+            if let id = colors.backgroundEmojiId {
+                look["backgroundEmoji"] = "\(id)"
+            }
+            if let profile = colors.profileColor {
+                look["profileColor"] = NSNumber(value: profile)
+            }
+            if let id = colors.profileBackgroundEmojiId {
+                look["profileBackgroundEmoji"] = "\(id)"
+            }
+        }
+        return look
+    }
+
+    /// `user` with the emoji status and colors picked on this device, when Local Premium shows it as Premium.
+    static func applyingLocal(_ user: TelegramUser) -> TelegramUser {
+        var user = AstraLocalPremium.applyingEmojiStatus(user)
+        guard AstraLocalPremium.isLocalOnly(user), let stored = AstraLocalPremium.loadedColors(accountPeerId: user.id) else {
+            return user
+        }
+        if let nameColor = stored.nameColor, user.nameColor != nameColor {
+            user = user.withUpdatedNameColor(nameColor)
+        }
+        if user.backgroundEmojiId != stored.backgroundEmojiId {
+            user = user.withUpdatedBackgroundEmojiId(stored.backgroundEmojiId)
+        }
+        let profileColor = stored.profileColor.map { PeerNameColor(rawValue: $0) }
+        if user.profileColor != profileColor {
+            user = user.withUpdatedProfileColor(profileColor)
+        }
+        if user.profileBackgroundEmojiId != stored.profileBackgroundEmojiId {
+            user = user.withUpdatedProfileBackgroundEmojiId(stored.profileBackgroundEmojiId)
+        }
+        return user
+    }
+}
+
+public extension String {
+    /// Whether AstraGram's own texts are shown in Russian for this language code: Russian, and also Ukrainian and
+    /// Belarusian (AstraGram has no texts of its own in those, and Russian is closer than English).
+    var astraUsesRussianTexts: Bool {
+        let code = self.lowercased()
+        return code.hasPrefix("ru") || code.hasPrefix("uk") || code.hasPrefix("be")
     }
 }

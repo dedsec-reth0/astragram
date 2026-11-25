@@ -164,10 +164,14 @@ enum AstraStreakPetStore {
         return look
     }
 
+    /// Fires when a look is saved, so the buddy floating in an open chat dresses at once.
+    static let lookChanged = ValuePipe<Void>()
+
     static func setLook(_ look: AstraStreakPetLook, accountPeerId: EnginePeer.Id, peerId: EnginePeer.Id) {
         if let data = try? JSONEncoder().encode(look) {
             UserDefaults.standard.set(data, forKey: AstraStreakPetStore.key(accountPeerId: accountPeerId, peerId: peerId))
         }
+        AstraStreakPetStore.lookChanged.putNext(Void())
     }
 
     /// Where the floating pet sits in chats, as fractions of the chat's size.
@@ -658,6 +662,7 @@ public final class AstraStreakPetAttachment {
     private let peerId: EnginePeer.Id
     private weak var hostView: UIView?
     private var floatingView: AstraStreakPetFloatingView?
+    private var resizeObserver: AstraStreakPetResizeObserver?
     private var disposable: Disposable?
 
     public init(context: AccountContext, peerId: EnginePeer.Id, hostView: UIView) {
@@ -671,8 +676,9 @@ public final class AstraStreakPetAttachment {
         |> mapToSignal { _ -> Signal<[EnginePeer.Id: AstraStreakState], NoError> in
             return AstraStreakManager.forAccount(accountPeerId)?.statesSignal ?? .single([:])
         }
-        self.disposable = (combineLatest(queue: .mainQueue(), AstraMessageStore.forAccount(context.account).streaks(), states)
-        |> deliverOnMainQueue).start(next: { [weak self] streaks, states in
+        let lookChanged: Signal<Void, NoError> = .single(Void()) |> then(AstraStreakPetStore.lookChanged.signal())
+        self.disposable = (combineLatest(queue: .mainQueue(), AstraMessageStore.forAccount(context.account).streaks(), states, lookChanged)
+        |> deliverOnMainQueue).start(next: { [weak self] streaks, states, _ in
             guard let self = self else {
                 return
             }
@@ -687,6 +693,7 @@ public final class AstraStreakPetAttachment {
     deinit {
         self.disposable?.dispose()
         self.floatingView?.removeFromSuperview()
+        self.resizeObserver?.removeFromSuperview()
     }
 
     private func show(state: AstraStreakState?) {
@@ -717,6 +724,19 @@ public final class AstraStreakPetAttachment {
             self.floatingView = view
             view.placeInitially(in: hostView.bounds)
             view.appear()
+            if self.resizeObserver == nil {
+                // The chat resizes while it stays open (rotation, split view, Stage Manager): the pet is put back at its
+                // saved spot within the new size, or it could be left outside the view, where it cannot be dragged back.
+                let observer = AstraStreakPetResizeObserver(frame: hostView.bounds)
+                observer.resized = { [weak self] in
+                    guard let self = self, let hostView = self.hostView, let view = self.floatingView, hostView.bounds.width > 0.0, hostView.bounds.height > 0.0 else {
+                        return
+                    }
+                    view.placeInitially(in: hostView.bounds)
+                }
+                hostView.insertSubview(observer, at: 0)
+                self.resizeObserver = observer
+            }
         }
         hostView.bringSubviewToFront(view)
         view.update(days: days, mood: AstraStreakPetMood.of(state), look: look)
@@ -725,6 +745,35 @@ public final class AstraStreakPetAttachment {
     private func hide() {
         self.floatingView?.removeFromSuperview()
         self.floatingView = nil
+    }
+}
+
+/// An empty view that follows the size of the view it is in (by autoresizing) and says when that size changes, as the
+/// chat's view cannot be subclassed to hear about its own layout.
+final class AstraStreakPetResizeObserver: UIView {
+    var resized: (() -> Void)?
+    private var lastSize: CGSize?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        self.isUserInteractionEnabled = false
+        self.backgroundColor = .clear
+        self.isAccessibilityElement = false
+        self.lastSize = frame.size
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Only a change of size moves the pet, so a layout pass during a drag does not undo it.
+        if self.lastSize != self.bounds.size {
+            self.lastSize = self.bounds.size
+            self.resized?()
+        }
     }
 }
 
@@ -856,7 +905,7 @@ final class AstraStreakPetController: UIViewController {
     init(context: AccountContext, peerId: EnginePeer.Id) {
         self.context = context
         self.peerId = peerId
-        self.isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.lowercased().hasPrefix("ru")
+        self.isRussian = context.sharedContext.currentPresentationData.with { $0 }.strings.baseLanguageCode.astraUsesRussianTexts
         self.look = AstraStreakPetStore.look(accountPeerId: context.account.peerId, peerId: peerId)
         super.init(nibName: nil, bundle: nil)
         self.modalPresentationStyle = .pageSheet
@@ -883,10 +932,13 @@ final class AstraStreakPetController: UIViewController {
         self.view.layer.insertSublayer(background, at: 0)
         self.view.backgroundColor = UIColor(rgb: 0x0E0710)
 
+        // The iOS sheet close button: a light glyph in a translucent circle.
         let close = UIButton(type: .system)
-        close.setTitle("✕", for: .normal)
-        close.titleLabel?.font = UIFont.systemFont(ofSize: 20.0, weight: .semibold)
-        close.tintColor = .white
+        close.setImage(UIImage(systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 14.0, weight: .bold)), for: .normal)
+        close.tintColor = UIColor(white: 1.0, alpha: 0.85)
+        close.backgroundColor = UIColor(white: 1.0, alpha: 0.14)
+        close.layer.cornerRadius = 15.0
+        close.accessibilityLabel = self.text("Закрыть", "Close")
         close.addTarget(self, action: #selector(self.closePressed), for: .touchUpInside)
         close.translatesAutoresizingMaskIntoConstraints = false
 
@@ -902,8 +954,8 @@ final class AstraStreakPetController: UIViewController {
         NSLayoutConstraint.activate([
             close.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor, constant: 10.0),
             close.trailingAnchor.constraint(equalTo: self.view.trailingAnchor, constant: -16.0),
-            close.widthAnchor.constraint(equalToConstant: 40.0),
-            close.heightAnchor.constraint(equalToConstant: 40.0),
+            close.widthAnchor.constraint(equalToConstant: 30.0),
+            close.heightAnchor.constraint(equalToConstant: 30.0),
             self.scrollView.topAnchor.constraint(equalTo: self.view.topAnchor),
             self.scrollView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor),
             self.scrollView.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
@@ -963,7 +1015,7 @@ final class AstraStreakPetController: UIViewController {
         self.restoreButton.backgroundColor = UIColor(rgb: 0xF2380F)
         self.restoreButton.layer.cornerRadius = 14.0
         self.restoreButton.heightAnchor.constraint(equalToConstant: 50.0).isActive = true
-        self.restoreButton.addTarget(self, action: #selector(self.detailsPressed), for: .touchUpInside)
+        self.restoreButton.addTarget(self, action: #selector(self.restorePressed), for: .touchUpInside)
         self.content.addArrangedSubview(self.restoreButton)
 
         let wardrobeTitle = UILabel()
@@ -1065,7 +1117,7 @@ final class AstraStreakPetController: UIViewController {
 
         if let next = stage.nextDays {
             let nextStage = AstraStreakPetStage.forDays(next)
-            self.stageLabel.text = self.text("Стадия: \(stage.nameRu). До «\(nextStage.nameRu)» ещё \(max(0, next - days)) дн.", "Stage: \(stage.nameEn). \(max(0, next - days)) days to \(nextStage.nameEn)")
+            self.stageLabel.text = self.text("Стадия: \(stage.nameRu). До «\(nextStage.nameRu)» ещё \(astraDaysText(max(0, next - days), isRussian: true))", "Stage: \(stage.nameEn). \(max(0, next - days)) days to \(nextStage.nameEn)")
             self.stageProgress.progress = Float(days - stage.fromDays) / Float(max(1, next - stage.fromDays))
         } else {
             self.stageLabel.text = self.text("Стадия: \(stage.nameRu) — высшая!", "Stage: \(stage.nameEn) — the highest!")
@@ -1214,7 +1266,7 @@ final class AstraStreakPetController: UIViewController {
             let item = AstraStreakPetWardrobe.items[index]
             if self.look.best < item.unlockDays {
                 AstraHaptics.warning()
-                let alert = UIAlertController(title: self.isRussian ? item.titleRu : item.titleEn, message: self.text("Откроется, когда огонёк дойдёт до \(item.unlockDays) дн.", "Unlocks when the streak reaches \(item.unlockDays) days."), preferredStyle: .alert)
+                let alert = UIAlertController(title: self.isRussian ? item.titleRu : item.titleEn, message: self.text("Откроется, когда огонёк дойдёт до \(astraDaysText(item.unlockDays, isRussian: true)).", "Unlocks when the streak reaches \(item.unlockDays) days."), preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
                 self.present(alert, animated: true)
                 return
@@ -1248,6 +1300,32 @@ final class AstraStreakPetController: UIViewController {
             self.look.name = String(name.prefix(24))
             self.saveLook()
             self.reload()
+        }))
+        self.present(alert, animated: true)
+    }
+
+    /// Restores yesterday right here (the same rules and confirmation as on the streak screen).
+    @objc private func restorePressed() {
+        let context = self.context
+        let peerId = self.peerId
+        let accountPeerId = context.account.peerId
+        guard let state = AstraStreak.cached(accountPeerId: accountPeerId, peerId: peerId), let day = state.restorableDay, state.restoresLeft > 0 else {
+            return
+        }
+        let text = AstraStreak.restoreMessageText(day: day, isRussian: self.isRussian)
+        let visibleText = text.trimmingCharacters(in: AstraStreak.invisibleCharacters)
+        let alert = UIAlertController(
+            title: self.text("Восстановить огонёк?", "Restore the streak?"),
+            message: self.text("Вчерашний день засчитается. В чат уйдёт сообщение «\(visibleText)». Останется восстановлений на этой неделе: \(state.restoresLeft - 1).", "Yesterday will count. The message “\(visibleText)” goes to the chat. Restores left this week: \(state.restoresLeft - 1)."),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: self.text("Отмена", "Cancel"), style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: self.text("Восстановить", "Restore"), style: .default, handler: { [weak self] _ in
+            AstraMessageStore.forAccount(context.account).addStreakRestore(peerId: peerId, day: day)
+            let _ = enqueueMessages(account: context.account, peerId: peerId, messages: [.message(text: text, attributes: [], inlineStickers: [:], mediaReference: nil, threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])]).startStandalone()
+            AstraHaptics.success()
+            AstraStreakManager.forAccount(accountPeerId)?.refresh()
+            self?.restoreButton.isHidden = true
         }))
         self.present(alert, animated: true)
     }

@@ -226,11 +226,17 @@ public class ItemListAddressItemNode: ListViewItemNode {
                         transition = .immediate
                     }
                     
+                    // AstraGram: the same address keeps its map: loading it again blanks it for a moment, which
+                    // blinks on every update of the screen.
+                    let previousItem = strongSelf.item
                     strongSelf.item = item
-                    if let signal = item.imageSignal {
-                        strongSelf.imageNode.setSignal(signal)
-                    } else {
-                        strongSelf.imageNode.clearContents()
+                    let sameAddress = previousItem.flatMap { $0.text == item.text && $0.label == item.label && ($0.imageSignal == nil) == (item.imageSignal == nil) } ?? false
+                    if !sameAddress {
+                        if let signal = item.imageSignal {
+                            strongSelf.imageNode.setSignal(signal)
+                        } else {
+                            strongSelf.imageNode.clearContents()
+                        }
                     }
                     
                     if strongSelf.iconNode.image == nil {

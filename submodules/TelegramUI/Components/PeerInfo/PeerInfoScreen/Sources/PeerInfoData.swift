@@ -3,6 +3,7 @@ import UIKit
 import TelegramCore
 import SwiftSignalKit
 import AccountContext
+import AstraGramUI
 import PeerPresenceStatusManager
 import TelegramStringFormatting
 import TelegramPresentationData
@@ -1643,7 +1644,10 @@ func peerInfoScreenData(
                 if isMyProfile {
                     availablePanes?.insert(.stories, at: 0)
                     if availablePanes != nil, profileGiftsContext != nil, let cachedData = peerView.cachedData as? CachedUserData {
+                        // AstraGram: visual gifts from AstraGram's gift shop count too.
                         if let starGiftsCount = cachedData.starGiftsCount, starGiftsCount > 0 {
+                            availablePanes?.insert(.gifts, at: 1)
+                        } else if AstraVisualGifts.hasGifts(accountPeerId: context.account.peerId, peerId: peerView.peerId) {
                             availablePanes?.insert(.gifts, at: 1)
                         }
                     }
@@ -1657,6 +1661,8 @@ func peerInfoScreenData(
                     
                     if availablePanes != nil, profileGiftsContext != nil, let cachedData = peerView.cachedData as? CachedUserData, peerView.peerId != context.account.peerId {
                         if let starGiftsCount = cachedData.starGiftsCount, starGiftsCount > 0 {
+                            availablePanes?.insert(.gifts, at: hasStories ? 1 : 0)
+                        } else if AstraVisualGifts.hasGifts(accountPeerId: context.account.peerId, peerId: peerView.peerId) {
                             availablePanes?.insert(.gifts, at: hasStories ? 1 : 0)
                         }
                     }

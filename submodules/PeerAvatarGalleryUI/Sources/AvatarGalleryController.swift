@@ -72,9 +72,14 @@ public func peerInfoProfilePhotos(context: AccountContext, peerId: EnginePeer.Id
     |> distinctUntilChanged
     |> mapToSignal { entries -> Signal<(Bool, [AvatarGalleryEntry])?, NoError> in
         if let entries = entries {
-            if var firstEntry = entries.first {
+            if let firstEntry = entries.first {
+                // AstraGram: the peer view changes with every presence update of the peer (for the account's own peer
+                // that is every "online"/"offline", many times a minute in ghost mode), and each change requested all
+                // profile photos from the server again. The photos are requested again only when what they are built
+                // from changes.
                 return context.account.postbox.peerView(id: peerId)
-                |> mapToSignal { peerView -> Signal<(Bool, [AvatarGalleryEntry])?, NoError>in
+                |> map { peerView -> (EnginePeer, AvatarGalleryEntry, TelegramMediaImage?, TelegramMediaImage?)? in
+                    var firstEntry = firstEntry
                     if let peer = peerViewMainPeer(peerView) {
                         var secondEntry: TelegramMediaImage?
                         var lastEntry: TelegramMediaImage?
@@ -97,11 +102,29 @@ public func peerInfoProfilePhotos(context: AccountContext, peerId: EnginePeer.Id
                                 }
                             }
                         }
-                        return fetchedAvatarGalleryEntries(engine: context.engine, account: context.account, peer: EnginePeer(peer), firstEntry: firstEntry, secondEntry: secondEntry, lastEntry: lastEntry)
-                        |> map(Optional.init)
+                        return (EnginePeer(peer), firstEntry, secondEntry, lastEntry)
                     } else {
+                        return nil
+                    }
+                }
+                |> distinctUntilChanged(isEqual: { lhs, rhs in
+                    guard let lhs, let rhs else {
+                        return lhs == nil && rhs == nil
+                    }
+                    func sameImage(_ a: TelegramMediaImage?, _ b: TelegramMediaImage?) -> Bool {
+                        if let a, let b {
+                            return a.isEqual(to: b)
+                        }
+                        return a == nil && b == nil
+                    }
+                    return lhs.0 == rhs.0 && lhs.1 == rhs.1 && sameImage(lhs.2, rhs.2) && sameImage(lhs.3, rhs.3)
+                })
+                |> mapToSignal { value -> Signal<(Bool, [AvatarGalleryEntry])?, NoError> in
+                    guard let (peer, firstEntry, secondEntry, lastEntry) = value else {
                         return .single(nil)
                     }
+                    return fetchedAvatarGalleryEntries(engine: context.engine, account: context.account, peer: peer, firstEntry: firstEntry, secondEntry: secondEntry, lastEntry: lastEntry)
+                    |> map(Optional.init)
                 }
             } else {
                 return .single((true, []))

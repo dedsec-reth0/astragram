@@ -77,7 +77,12 @@ SOURCE_DESCRIPTION = '''Сборки AstraGram для iOS: Telegram с режи�
 
 
 def gh(*args, check=True):
-    return subprocess.run(['gh'] + list(args), check=check, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    result = subprocess.run(['gh'] + list(args), capture_output=True, text=True, encoding='utf-8', errors='replace')
+    if check and result.returncode != 0:
+        # The output is captured, so a failure would otherwise not say why.
+        sys.stderr.write(result.stderr)
+        result.check_returncode()
+    return result
 
 
 def strip_extensions(source_path, target_path):
@@ -106,9 +111,10 @@ def read_notes(path, fallback):
 
 
 def only_new(notes, repo):
-    """The lines of `notes` that the latest published release does not have yet: WHATSNEW.md keeps growing, and an
+    """The lines of `notes` that no recent published release has yet: WHATSNEW.md keeps growing, and an
     update shows only what this build adds. Empty when every line is already published."""
-    result = gh('api', 'repos/{}/releases/latest'.format(repo), '--jq', '.body', check=False)
+    # Every recent release, not only the latest: a release whose notes were cut down must not bring old lines back.
+    result = gh('api', 'repos/{}/releases?per_page=30'.format(repo), '--jq', '.[].body', check=False)
     if result.returncode != 0:
         return notes
     published = {line.strip() for line in result.stdout.replace('\r\n', '\n').split('\n') if line.strip()}

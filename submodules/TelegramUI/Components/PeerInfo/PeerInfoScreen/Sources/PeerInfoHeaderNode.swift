@@ -35,6 +35,7 @@ import ComponentDisplayAdapters
 import ChatAvatarNavigationNode
 import MultiScaleTextNode
 import PeerInfoCoverComponent
+import AstraGramUI
 import PeerInfoPaneNode
 import MultilineTextComponent
 import PeerInfoRatingComponent
@@ -120,6 +121,42 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     let backgroundBannerView: UIView
     let backgroundCover = ComponentView<Empty>()
     let giftsCover = ComponentView<Empty>()
+    /// AstraGram: the colors of the gift bubble touched last, worn by the header until another one is touched.
+    private var astraBubbleTint: PeerEmojiStatus?
+    /// AstraGram: the profile's user, as last laid out.
+    private var astraCurrentPeer: EnginePeer?
+    /// AstraGram: the color of the profile's surface last given to the screen.
+    fileprivate var astraSurface: UIColor?
+    private var astraSurfaceReported = false
+    /// AstraGram: the music's mood (the dark, drifting color while the profile's track plays).
+    fileprivate var astraMusicMoodPlaying = false
+    fileprivate var astraMusicMoodAmount: CGFloat = 0.0
+    fileprivate var astraMusicMoodTime: CGFloat = 0.0
+    fileprivate var astraMusicMoodColor: UIColor?
+    fileprivate var astraMusicMoodLink: CADisplayLink?
+    /// AstraGram: the beat found in the music's loudness: a slow average, the last beat's time and the pulse after it.
+    fileprivate let astraMusicLevelDisposable = MetaDisposable()
+    fileprivate var astraLevelAverage: CGFloat = 0.0
+    fileprivate var astraLevelPrevious: CGFloat = 0.0
+    fileprivate var astraLastBeat: Double = 0.0
+    fileprivate var astraBeatKick: CGFloat = 0.0
+    /// AstraGram: the track of this profile's music playing now (nil: none playing).
+    fileprivate var astraNowPlaying: (title: String?, performer: String?)?
+    /// AstraGram: the white ring around the avatar while the profile's music plays.
+    fileprivate let astraAvatarRing = CAShapeLayer()
+    /// AstraGram's own touch: the song's last two seconds of loudness as hairlines round the avatar, like a record's
+    /// grooves; the newest at the top, older ones turning clockwise and fading.
+    fileprivate let astraGrooveLayer = CAShapeLayer()
+    fileprivate let astraGrooveMask = CAGradientLayer()
+    fileprivate var astraGrooveSamples = [CGFloat](repeating: 0.0, count: 72)
+    fileprivate var astraGrooveHead = 0
+    /// AstraGram: recolors the header's background (its luminance and pattern kept) with the profile's flowing color.
+    private let astraFlowOverlay = UIView()
+    /// AstraGram: the rest of the profile takes on the flowing color too (nil: back to the theme).
+    var astraFlowTintUpdated: ((UIColor?) -> Void)?
+    /// AstraGram: how strong the music's vignette is now (0: none).
+    var astraMusicVignetteUpdated: ((CGFloat) -> Void)?
+    private var astraBubbleGifts: (EnginePeer.Id, Signal<[ProfileGiftsContext.State.StarGift], NoError>)?
     var didSetupBackgroundCover = false
     let buttonsContainerNode: SparseNode
     let buttonsBackgroundNode: NavigationBackgroundNode
@@ -220,6 +257,13 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     var musicBackground: UIView?
     /// AstraGram "Liquid Glass+ (beta)": the capsule behind the music, which sits between the status and the buttons.
     private var astraMusicPillLayer: CALayer?
+    /// AstraGram: the capsule fills as the profile's music plays, as in the concept.
+    private let astraMusicFillLayer = CALayer()
+    private var astraMusicPlaybackDisposable: Disposable?
+    private var astraMusicPlaybackPeerId: EnginePeer.Id?
+    private var astraMusicPlayback: (fraction: Double, secondsLeft: Double, playing: Bool)?
+    private let astraEqualizerLayer = CALayer()
+    private var astraEqualizerBars: [CALayer] = []
     var music: ComponentView<Empty>?
     var walletBalance: ComponentView<Empty>?
     private var walletBalanceCutoutIcon: (color: UIColor, image: UIImage)?
@@ -461,6 +505,8 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     }
     
     deinit {
+        self.astraMusicPlaybackDisposable?.dispose()
+        self.astraMusicLevelDisposable.dispose()
         self.emojiStatusPackDisposable.dispose()
     }
     
@@ -478,6 +524,19 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         } set(value) {
             super.accessibilityElements = value
         }
+    }
+    
+    override func didEnterHierarchy() {
+        super.didEnterHierarchy()
+        // AstraGram: the music mood resumes when the profile is on screen again (the frame step is clamped, so the
+        // colours do not jump).
+        self.astraMusicMoodLink?.isPaused = false
+    }
+    
+    override func didExitHierarchy() {
+        super.didExitHierarchy()
+        // AstraGram: the music mood sleeps while the profile is covered.
+        self.astraMusicMoodLink?.isPaused = true
     }
     
     override func didLoad() {
@@ -664,7 +723,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let actionButtonKeys: [PeerInfoHeaderButtonKey] = (self.isSettings || self.isMyProfile) ? [] : peerInfoHeaderActionButtons(peer: peer, isSecretChat: isSecretChat, isContact: isContact)
         let buttonKeys: [PeerInfoHeaderButtonKey] = (self.isSettings || self.isMyProfile) ? [] : peerInfoHeaderButtons(peer: peer, cachedData: cachedData, isOpenedFromChat: self.isOpenedFromChat, isExpanded: true, videoCallsEnabled: width > 320.0 && self.videoCallsEnabled, isSecretChat: isSecretChat, isContact: isContact, threadInfo: threadData?.info)
         
-        let backgroundCoverSubject: PeerInfoCoverComponent.Subject?
+        var backgroundCoverSubject: PeerInfoCoverComponent.Subject?
         var backgroundCoverAnimateIn = false
         var backgroundDefaultHeight: CGFloat = 254.0
         var hasBackground = false
@@ -691,6 +750,29 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         } else {
             backgroundCoverSubject = nil
         }
+        // AstraGram: a touched bubble's gift lends the cover its pattern (the profile's colors kept).
+        if let astraBubbleTint = self.astraBubbleTint, !self.isSettings {
+            backgroundCoverSubject = .status(astraBubbleTint)
+            hasBackground = true
+        }
+        // AstraGram: the whole profile is one surface in the profile's own color (the cover's edge color), as in the
+        // concept; the gifts do not recolor it.
+        self.astraCurrentPeer = peer
+        var astraSurface: UIColor?
+        if !self.isSettings {
+            if let status = peer?.emojiStatus, case let .starGift(_, _, _, _, _, _, outerColor, _, _) = status.content {
+                astraSurface = UIColor(rgb: UInt32(bitPattern: outerColor))
+            } else if let profileColor = peer?.effectiveProfileColor {
+                astraSurface = self.context.peerNameColors.getProfile(profileColor, dark: presentationData.theme.overallDarkAppearance).main
+            }
+        }
+        if self.astraSurface != astraSurface || !self.astraSurfaceReported {
+            self.astraSurface = astraSurface
+            self.astraSurfaceReported = true
+            if self.astraMusicMoodColor == nil {
+                self.astraFlowTintUpdated?(astraSurface)
+            }
+        }
         
         let currentSavedMusic = self.profileMusic(peer: peer, screenData: screenData)
         let currentWalletBalance: Int64?
@@ -704,7 +786,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         // AstraGram "Profile Music as a Capsule": the music is a capsule under the status, above the buttons, as in the
         // concept (not a strip under the buttons). The expanded photo keeps the regular layout, and so does a profile
         // without buttons (your own): there is no room between the status and the buttons there.
-        let astraMusicAbove = AstraGramSettings.current.profileMusicCapsule && currentSavedMusic != nil && !self.isAvatarExpanded && !buttonKeys.isEmpty
+        // The capsule itself shows on every profile (on one's own, without buttons, it keeps the strip's place).
+        let astraMusicCapsule = AstraGramSettings.current.musicCapsule && currentSavedMusic != nil && !self.isAvatarExpanded
+        let astraMusicAbove = astraMusicCapsule && !buttonKeys.isEmpty
         // AstraGram: round buttons carry their labels under the circles, below the buttons' frame. The header leaves
         // room under them: its background ends lower, and over an expanded photo the name and the buttons stand higher.
         let astraRoundButtonsExtra: CGFloat = (AstraGramSettings.current.roundProfileButtons && !buttonKeys.isEmpty) ? 12.0 : 0.0
@@ -785,7 +869,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         var hasCoverColor = false
         let regularNavigationContentsSecondaryColor: UIColor
-        if let emojiStatus = peer?.emojiStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, _, _) = emojiStatus.content {
+        // AstraGram: a touched gift bubble's colors stand in for the worn gift's.
+        let astraColorStatus = self.isSettings ? peer?.emojiStatus : (self.astraBubbleTint ?? peer?.emojiStatus)
+        if let emojiStatus = astraColorStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, _, _) = emojiStatus.content {
             let mainColor = UIColor(rgb: UInt32(bitPattern: innerColor))
             let secondaryColor = UIColor(rgb: UInt32(bitPattern: outerColor))
             regularNavigationContentsSecondaryColor = UIColor(white: 1.0, alpha: 0.6).blitOver(mainColor.withMultiplied(hue: 1.0, saturation: 2.2, brightness: 1.5), alpha: 1.0)
@@ -982,7 +1068,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             
             headerButtonBackgroundColor = regularHeaderButtonBackgroundColor.mixedWith(collapsedHeaderButtonBackgroundColor, alpha: effectiveTransitionFraction)
             
-            if let status = peer?.emojiStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, patternColorValue, _) = status.content {
+            if let status = astraColorStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, patternColorValue, _) = status.content {
                 let _ = innerColor
                 ratingBackgroundColor = UIColor(white: 1.0, alpha: 1.0).mixedWith(accentRatingBackgroundColor, alpha: effectiveTransitionFraction)
                 
@@ -2541,7 +2627,17 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         guard let self, case let .unique(gift) = gift.gift else {
                             return
                         }
-                        self.openUniqueGift?(self.view, gift.slug)
+                        // An AstraGram gift has no page of its own.
+                        if !gift.slug.isEmpty {
+                            self.openUniqueGift?(self.view, gift.slug)
+                        }
+                    },
+                    astraBubbleGifts: self.isSettings ? nil : self.astraBubbleGiftsSignal(peerId: peer.id, giftsContext: profileGiftsContext),
+                    astraBubbleTouched: { [weak self] gift in
+                        self?.astraTintWithGift(gift)
+                    },
+                    astraTintChanged: { [weak self] color in
+                        self?.astraApplyFlowTint(color)
                     }
                 )),
                 environment: {},
@@ -2551,12 +2647,24 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 if giftsCoverView.superview == nil {
                     self.view.insertSubview(giftsCoverView, aboveSubview: self.backgroundBannerView)
                 }
+                // AstraGram: the bubbles float over the name and the buttons (the avatar's circle is cut out of them, so
+                // they pass behind it), and a sideways swipe around the avatar turns them.
+                if !self.isSettings, giftsCoverView.superview === self.view, self.view.subviews.last !== giftsCoverView {
+                    self.view.bringSubviewToFront(giftsCoverView)
+                }
+                if !self.isSettings {
+                    // On the whole profile screen: an empty spot of the header passes the touch to the scroll view
+                    // under it, so the header's own view would never see the swipe.
+                    giftsCoverView.astraAttachRotation(to: self.view.superview ?? self.view)
+                }
                 if additive {
                     transition.updateFrameAdditive(view: giftsCoverView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: giftsCoverSize))
                 } else {
                     transition.updateFrame(view: giftsCoverView, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: giftsCoverSize))
                 }
                 navigationTransition.updateAlpha(layer: giftsCoverView.layer, alpha: backgroundBannerAlpha)
+                // AstraGram: no bubbles over an expanded photo, as in the concept.
+                giftsCoverView.astraSetBubblesHidden(self.isAvatarExpanded)
                 if backgroundCoverAnimateIn {
                     if !self.isAvatarExpanded {
                         giftsCoverView.willAnimateIn()
@@ -2711,7 +2819,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
 
         if currentSavedMusic != nil {
             var musicTransition = transition
-            if (hasBackground || self.isAvatarExpanded) && !astraMusicAbove {
+            if (hasBackground || self.isAvatarExpanded) && !astraMusicCapsule {
                 if self.musicBackground == nil {
                     musicTransition = .immediate
                 }
@@ -2752,6 +2860,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         break
                     }
                 }
+                // AstraGram: while this profile's music plays, the capsule names the track playing now.
+                if let playing = self.astraNowPlaying {
+                    track = playing.title ?? track
+                    artist = playing.performer ?? artist
+                }
                 if track == nil {
                     if let fileName = currentSavedMusic.fileName {
                         track = fileName
@@ -2781,11 +2894,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                                 HStack([
                                     AnyComponentWithIdentity(
                                         id: "icon",
-                                        component: AnyComponent(BundleIconComponent(name: "Media Editor/SmallAudio", tintColor: isOverlay ? .white : presentationData.theme.list.itemAccentColor))
+                                        // In the capsule the note gives way to an equalizer, drawn over its place.
+                                        component: AnyComponent(BundleIconComponent(name: "Media Editor/SmallAudio", tintColor: astraMusicCapsule ? .clear : (isOverlay ? .white : presentationData.theme.list.itemAccentColor)))
                                     ),
                                     AnyComponentWithIdentity(
                                         id: "label",
-                                        component: AnyComponent(MarqueeComponent(attributedText: musicString, maxWidth: max(1.0, musicBandWidth - 96.0)))
+                                        component: AnyComponent(MarqueeComponent(attributedText: musicString, maxWidth: astraMusicCapsule ? max(1.0, min(musicBandWidth - 96.0, 200.0)) : max(1.0, musicBandWidth - 96.0)))
                                     ),
                                     AnyComponentWithIdentity(
                                         id: "arrow",
@@ -2805,6 +2919,13 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     containerSize: CGSize(width: musicBandWidth, height: musicHeight)
                 )
                 var musicFrame = CGRect(origin: CGPoint(x: stripLeft, y: (apparentBackgroundHeight - backgroundHeight) + backgroundHeight - musicHeight - (hasBackground || self.isAvatarExpanded ? 0.0 : 4.0) + 1.0 - UIScreenPixel), size: musicSize)
+                if astraMusicCapsule && !astraMusicAbove {
+                    // Without buttons (one's own profile) the capsule stands clear of the header's edge, between the
+                    // status and the bottom.
+                    musicFrame.origin.y -= 14.0
+                }
+                // The equalizer belongs to the capsule only (not to the strip under an expanded photo).
+                self.astraEqualizerLayer.isHidden = !astraMusicCapsule
                 if astraMusicAbove {
                     // The capsule stands in the middle of the gap between the status and the buttons; round buttons
                     // begin a little above their frame, so the middle is higher with them.
@@ -2812,7 +2933,12 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                     musicFrame.origin.y = (apparentBackgroundHeight - backgroundHeight) + buttonRightOrigin.y - floor((bottomInset + 16.0 + musicSize.height) / 2.0) - astraRoundButtonsOffset
                 }
                 if let musicView = music.view {
-                    if astraMusicAbove {
+                    // The mood, beat and groove follow the profile's music whether it is drawn as the capsule or
+                    // the strip.
+                    if let peer, self.astraMusicPlaybackPeerId != peer.id {
+                        self.astraObserveMusicPlayback(peerId: peer.id)
+                    }
+                    if astraMusicCapsule {
                         let pillLayer: CALayer
                         if let current = self.astraMusicPillLayer {
                             pillLayer = current
@@ -2823,14 +2949,47 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                         if pillLayer.superlayer !== musicView.layer {
                             musicView.layer.insertSublayer(pillLayer, at: 0)
                         }
-                        let textWidth = min(max(1.0, musicBandWidth - 96.0), ceil(musicString.boundingRect(with: CGSize(width: 10000.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).width))
-                        let pillSize = CGSize(width: min(musicSize.width, textWidth + 58.0), height: 24.0)
+                        // Compact, as in the concept: a long title scrolls inside.
+                        let textWidth = min(max(1.0, min(musicBandWidth - 96.0, 200.0)), ceil(musicString.boundingRect(with: CGSize(width: 10000.0, height: 100.0), options: .usesLineFragmentOrigin, context: nil).width))
+                        let pillSize = CGSize(width: min(musicSize.width, textWidth + 58.0), height: 26.0)
                         CATransaction.begin()
                         CATransaction.setDisableActions(true)
                         pillLayer.frame = CGRect(origin: CGPoint(x: floor((musicSize.width - pillSize.width) / 2.0), y: floor((musicSize.height - pillSize.height) / 2.0)), size: pillSize)
                         pillLayer.cornerRadius = pillSize.height / 2.0
                         pillLayer.backgroundColor = (isOverlay ? UIColor(white: 1.0, alpha: 0.16) : presentationData.theme.list.itemAccentColor.withAlphaComponent(0.1)).cgColor
+                        pillLayer.masksToBounds = true
+                        if self.astraMusicFillLayer.superlayer !== pillLayer {
+                            pillLayer.addSublayer(self.astraMusicFillLayer)
+                        }
+                        self.astraMusicFillLayer.backgroundColor = (isOverlay ? UIColor(white: 1.0, alpha: 0.3) : presentationData.theme.list.itemAccentColor.withAlphaComponent(0.14)).cgColor
                         CATransaction.commit()
+                        // The equalizer where the note was: the content is centered in the capsule.
+                        let iconWidth = UIImage(bundleImageName: "Media Editor/SmallAudio")?.size.width ?? 12.0
+                        let arrowWidth = UIImage(bundleImageName: "Item List/InlineTextRightArrow")?.size.width ?? 8.0
+                        let contentWidth = iconWidth + 4.0 + textWidth + 4.0 + arrowWidth
+                        let iconCenterX = musicSize.width / 2.0 - contentWidth / 2.0 + iconWidth / 2.0
+                        if self.astraEqualizerLayer.superlayer !== musicView.layer {
+                            musicView.layer.addSublayer(self.astraEqualizerLayer)
+                        }
+                        if self.astraEqualizerBars.isEmpty {
+                            for _ in 0 ..< 3 {
+                                let bar = CALayer()
+                                bar.anchorPoint = CGPoint(x: 0.5, y: 1.0)
+                                bar.cornerRadius = 1.0
+                                self.astraEqualizerLayer.addSublayer(bar)
+                                self.astraEqualizerBars.append(bar)
+                            }
+                        }
+                        CATransaction.begin()
+                        CATransaction.setDisableActions(true)
+                        self.astraEqualizerLayer.frame = CGRect(x: iconCenterX - 6.0, y: musicSize.height / 2.0 - 6.0, width: 12.0, height: 12.0)
+                        for (i, bar) in self.astraEqualizerBars.enumerated() {
+                            bar.backgroundColor = (isOverlay ? UIColor.white : presentationData.theme.list.itemAccentColor).cgColor
+                            bar.bounds = CGRect(x: 0.0, y: 0.0, width: 2.4, height: 12.0)
+                            bar.position = CGPoint(x: 1.6 + CGFloat(i) * 4.2, y: 12.0)
+                        }
+                        CATransaction.commit()
+                        self.astraUpdateMusicFill()
                     } else if let pillLayer = self.astraMusicPillLayer {
                         self.astraMusicPillLayer = nil
                         pillLayer.removeFromSuperlayer()
@@ -2940,6 +3099,10 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard let result = super.hitTest(point, with: event) else {
             return nil
+        }
+        // AstraGram: the gift bubbles float over the avatar and the name, and catch the touch first.
+        if !self.isSearching, !self.isSettings, let giftsCoverView = self.giftsCover.view, giftsCoverView.alpha > 0.0, self.editingContentNode.alpha == 0.0, giftsCoverView.point(inside: self.view.convert(point, to: giftsCoverView), with: event) {
+            return giftsCoverView.hitTest(self.view.convert(point, to: giftsCoverView), with: event) ?? giftsCoverView
         }
         
         if self.isSearching {
@@ -3056,5 +3219,447 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         
         let maskAnchorPoint = CGPoint(x: 0.5, y: self.isAvatarExpanded ? 0.37 : 0.5)
         transition.updateAnchorPoint(layer: self.avatarListNode.maskNode.layer, anchorPoint: maskAnchorPoint)
+    }
+}
+
+
+extension PeerInfoHeaderNode {
+    /// AstraGram: the profile's pinned gifts, Telegram's and AstraGram's, for the bubbles (made once per profile).
+    fileprivate func astraBubbleGiftsSignal(peerId: EnginePeer.Id, giftsContext: ProfileGiftsContext) -> Signal<[ProfileGiftsContext.State.StarGift], NoError> {
+        if let (currentPeerId, signal) = self.astraBubbleGifts, currentPeerId == peerId {
+            return signal
+        }
+        let signal = astraVisualGiftsState(context: self.context, peerId: peerId, state: giftsContext.state)
+        |> map { state -> [ProfileGiftsContext.State.StarGift] in
+            return state.gifts.filter { $0.pinnedToTop }
+        }
+        |> distinctUntilChanged(isEqual: { lhs, rhs in
+            return lhs == rhs
+        })
+        self.astraBubbleGifts = (peerId, signal)
+        return signal
+    }
+
+    /// AstraGram: the header takes on a touched bubble's colors: a unique gift's backdrop and pattern, or the bubble's.
+    fileprivate func astraTintWithGift(_ gift: ProfileGiftsContext.State.StarGift) {
+        var colors: (Int32, Int32, Int32, Int32)?
+        var patternFileId: Int64 = 0
+        var modelFileId: Int64 = 0
+        var title = ""
+        switch gift.gift {
+        case let .unique(unique):
+            title = unique.title
+            for attribute in unique.attributes {
+                switch attribute {
+                case let .backdrop(_, _, innerColor, outerColor, patternColor, textColor, _):
+                    colors = (innerColor, outerColor, patternColor, textColor)
+                case let .pattern(_, file, _):
+                    patternFileId = file.fileId.id
+                case let .model(_, file, _, _):
+                    modelFileId = file.fileId.id
+                default:
+                    break
+                }
+            }
+        case let .generic(generic):
+            title = generic.title ?? ""
+            modelFileId = generic.file.fileId.id
+        }
+        // The profile keeps its own colors; only the pattern is the gift's.
+        func value(_ color: UIColor) -> Int32 {
+            return Int32(bitPattern: color.rgb)
+        }
+        if let peer = self.astraCurrentPeer {
+            if let status = peer.emojiStatus, case let .starGift(_, _, _, _, _, innerColor, outerColor, patternColor, textColor) = status.content {
+                colors = (innerColor, outerColor, patternColor, textColor)
+            } else if let profileColor = peer.effectiveProfileColor {
+                let profile = self.context.peerNameColors.getProfile(profileColor, dark: self.presentationData?.theme.overallDarkAppearance ?? true)
+                let outer = profile.secondary ?? profile.main
+                colors = (value(profile.main), value(outer), value(outer.withMultipliedBrightnessBy(0.6)), value(.white))
+            }
+        }
+        if patternFileId == 0 {
+            // A plain gift has no pattern of its own: its picture makes one.
+            patternFileId = modelFileId
+        }
+        if colors == nil {
+            let (inner, outer) = astraGiftBubbleColors(gift: gift)
+            colors = (value(inner), value(outer), value(outer.withMultipliedBrightnessBy(0.7)), value(.white))
+        }
+        guard let colors else {
+            return
+        }
+        let status = PeerEmojiStatus(content: .starGift(id: 0, fileId: modelFileId, title: title, slug: "", patternFileId: patternFileId, innerColor: colors.0, outerColor: colors.1, patternColor: colors.2, textColor: colors.3), expirationDate: nil)
+        if self.astraBubbleTint != status {
+            self.astraBubbleTint = status
+            self.requestUpdateLayout?(true)
+        }
+    }
+}
+
+
+extension PeerInfoHeaderNode {
+    /// AstraGram: follows the player while it plays this profile's music.
+    fileprivate func astraObserveMusicPlayback(peerId: EnginePeer.Id) {
+        self.astraMusicPlaybackPeerId = peerId
+        self.astraMusicPlaybackDisposable?.dispose()
+        let accountPeerId = self.context.account.peerId
+        self.astraMusicPlaybackDisposable = (self.context.sharedContext.mediaManager.globalMediaPlayerState
+        |> deliverOnMainQueue).start(next: { [weak self] value in
+            guard let self else {
+                return
+            }
+            var playback: (fraction: Double, secondsLeft: Double, playing: Bool)?
+            var nowPlaying: (title: String?, performer: String?)?
+            if let (account, stateOrLoading, _) = value, account.peerId == accountPeerId, case let .state(state) = stateOrLoading, let location = state.playlistLocation as? PeerMessagesPlaylistLocation, case let .savedMusic(savedMusicContext, _, _) = location, savedMusicContext.peerId == peerId {
+                if case let .music(title, performer, _, _, _)? = state.item.displayData {
+                    nowPlaying = (title, performer)
+                }
+                let status = state.status
+                if status.duration > 0.0 {
+                    var timestamp = status.timestamp
+                    var playing = false
+                    if case .playing = status.status {
+                        playing = true
+                        timestamp += (CACurrentMediaTime() - status.generationTimestamp) * status.baseRate
+                    }
+                    let fraction = max(0.0, min(1.0, timestamp / status.duration))
+                    playback = (fraction, max(0.0, (status.duration - timestamp) / max(0.1, status.baseRate)), playing)
+                }
+            }
+            self.astraMusicPlayback = playback
+            if self.astraNowPlaying?.title != nowPlaying?.title || self.astraNowPlaying?.performer != nowPlaying?.performer {
+                self.astraNowPlaying = nowPlaying
+                self.requestUpdateLayout?(false)
+            }
+            self.astraUpdateMusicFill()
+            (self.giftsCover.view as? PeerInfoGiftsCoverComponent.View)?.astraSetMusicPlaying(playback?.playing == true)
+            self.astraSetMusicMood(playback?.playing == true)
+        })
+    }
+
+    /// AstraGram: while the profile's music plays the screen goes dark and drifts slowly through deep colors, the
+    /// bubbles glowing against it (as in the concept); it comes back to the profile's own color when the music stops.
+    fileprivate func astraSetMusicMood(_ playing: Bool) {
+        guard self.astraMusicMoodPlaying != playing else {
+            return
+        }
+        self.astraMusicMoodPlaying = playing
+        if playing {
+            self.astraMusicLevelDisposable.set((self.context.sharedContext.mediaManager.musicMediaPlayerAudioLevel
+            |> deliverOnMainQueue).startStrict(next: { [weak self] level in
+                self?.astraMusicLevel(CGFloat(level))
+            }))
+        } else {
+            self.astraMusicLevelDisposable.set(nil)
+            // The groove settles flat while it fades.
+            self.astraGrooveSamples = [CGFloat](repeating: 0.0, count: self.astraGrooveSamples.count)
+        }
+        if playing && self.astraMusicMoodAmount <= 0.0 {
+            self.astraMusicMoodTime = 0.0
+        }
+        if self.astraMusicMoodLink == nil {
+            let link = CADisplayLink(target: AstraMusicMoodTarget(self), selector: #selector(AstraMusicMoodTarget.tick(_:)))
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 20.0, maximum: 30.0, preferred: 30.0)
+            link.add(to: .main, forMode: .common)
+            self.astraMusicMoodLink = link
+        }
+    }
+
+    /// A beat is a jump in loudness well above the recent average (the kick drum, the snare), at most every 0.22 s.
+    fileprivate func astraMusicLevel(_ level: CGFloat) {
+        let previous = self.astraLevelPrevious
+        self.astraLevelPrevious = level
+        if self.astraLevelAverage <= 0.0 {
+            self.astraLevelAverage = level
+            return
+        }
+        // About the last second (levels come ~37 times a second).
+        self.astraLevelAverage = self.astraLevelAverage * 0.97 + level * 0.03
+        let now = CACurrentMediaTime()
+        let average = max(0.04, self.astraLevelAverage)
+        // Into the groove: loudness against the song's own average, smoothed so it is not a jagged comb.
+        let relative = min(1.0, max(0.0, (level / average - 0.6) / 1.2))
+        let count = self.astraGrooveSamples.count
+        let last = self.astraGrooveSamples[(self.astraGrooveHead - 1 + count) % count]
+        self.astraGrooveSamples[self.astraGrooveHead] = last * 0.4 + relative * 0.6
+        self.astraGrooveHead = (self.astraGrooveHead + 1) % count
+        if level > average * 1.3 && level > previous * 1.08 && now - self.astraLastBeat > 0.22 {
+            self.astraLastBeat = now
+            let strength = min(1.0, max(0.0, (level / average - 1.3) / 0.9))
+            self.astraBeatKick = max(self.astraBeatKick, 0.6 + 0.4 * strength)
+            (self.giftsCover.view as? PeerInfoGiftsCoverComponent.View)?.astraBeat(strength: strength)
+            // The avatar beats too: a quick swell and back, with a flash of light.
+            if !self.isAvatarExpanded {
+                let layer = self.avatarListNode.avatarContainerNode.layer
+                let scale = 1.0 + 0.05 + 0.05 * strength
+                let pulse = CAKeyframeAnimation(keyPath: "transform.scale")
+                pulse.values = [1.0, scale, 1.0]
+                pulse.keyTimes = [0.0, 0.25, 1.0]
+                pulse.duration = 0.32
+                pulse.timingFunctions = [CAMediaTimingFunction(name: .easeOut), CAMediaTimingFunction(name: .easeInEaseOut)]
+                pulse.isAdditive = false
+                layer.add(pulse, forKey: "astraBeat")
+                // The white ring sits on the avatar's edge and beats with it: it thickens and glows, no gap opens.
+                let ring = self.astraAvatarRing
+                let glow = CAKeyframeAnimation(keyPath: "shadowRadius")
+                glow.values = [6.0, 10.0 + 6.0 * strength, 6.0]
+                glow.keyTimes = [0.0, 0.22, 1.0]
+                glow.duration = 0.34
+                ring.add(glow, forKey: "astraBeat")
+                let width = CAKeyframeAnimation(keyPath: "lineWidth")
+                width.values = [3.0, 5.0 + 3.0 * strength, 3.0]
+                width.keyTimes = [0.0, 0.22, 1.0]
+                width.duration = 0.34
+                ring.add(width, forKey: "astraBeatWidth")
+                // A bright spike is born in the groove at the top and travels round with the song.
+                for back in 1 ... 3 {
+                    let index = (self.astraGrooveHead - back + count) % count
+                    self.astraGrooveSamples[index] = max(self.astraGrooveSamples[index], 0.8 + 0.2 * strength)
+                }
+                let grooveGlow = CAKeyframeAnimation(keyPath: "shadowRadius")
+                grooveGlow.values = [3.0, 6.0 + 4.0 * strength, 3.0]
+                grooveGlow.keyTimes = [0.0, 0.25, 1.0]
+                grooveGlow.duration = 0.3
+                self.astraGrooveLayer.add(grooveGlow, forKey: "astraBeat")
+            }
+        }
+    }
+
+    fileprivate func astraUpdateAvatarRing(amount: CGFloat) {
+        // The avatar's own frame: the transform container itself is a zero-size point at the avatar's centre.
+        let host = self.avatarListNode.avatarContainerNode.containerNode.layer
+        let ring = self.astraAvatarRing
+        if ring.superlayer !== host {
+            ring.fillColor = UIColor.clear.cgColor
+            ring.strokeColor = UIColor.white.cgColor
+            ring.lineWidth = 3.0
+            ring.shadowColor = UIColor.white.cgColor
+            ring.shadowOffset = .zero
+            ring.shadowRadius = 6.0
+            ring.shadowOpacity = 0.7
+            host.addSublayer(ring)
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let bounds = host.bounds
+        if ring.bounds.size != bounds.size || ring.path == nil {
+            ring.bounds = CGRect(origin: .zero, size: bounds.size)
+            ring.position = CGPoint(x: bounds.midX, y: bounds.midY)
+            ring.path = UIBezierPath(ovalIn: CGRect(origin: .zero, size: bounds.size)).cgPath
+        }
+        ring.opacity = self.isAvatarExpanded ? 0.0 : Float(amount)
+        CATransaction.commit()
+    }
+
+    fileprivate func astraUpdateGroove(amount: CGFloat) {
+        let host = self.avatarListNode.avatarContainerNode.containerNode.layer
+        let groove = self.astraGrooveLayer
+        if groove.superlayer !== host {
+            groove.fillColor = nil
+            groove.strokeColor = UIColor.white.withAlphaComponent(0.85).cgColor
+            groove.lineWidth = 1.5
+            groove.lineCap = .round
+            groove.shadowColor = UIColor.white.cgColor
+            groove.shadowOffset = .zero
+            groove.shadowRadius = 3.0
+            groove.shadowOpacity = 0.5
+            // Older grooves fade going clockwise from the top.
+            self.astraGrooveMask.type = .conic
+            self.astraGrooveMask.startPoint = CGPoint(x: 0.5, y: 0.5)
+            self.astraGrooveMask.endPoint = CGPoint(x: 0.5, y: 0.0)
+            self.astraGrooveMask.colors = [UIColor.white.cgColor, UIColor.white.withAlphaComponent(0.12).cgColor]
+            groove.mask = self.astraGrooveMask
+            host.insertSublayer(groove, below: self.astraAvatarRing)
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let bounds = host.bounds
+        let reach: CGFloat = 26.0
+        let frame = bounds.insetBy(dx: -reach, dy: -reach)
+        groove.frame = frame
+        self.astraGrooveMask.frame = CGRect(origin: .zero, size: frame.size)
+        let opacity: Float = self.isAvatarExpanded || bounds.width < 10.0 ? 0.0 : Float(amount)
+        groove.opacity = opacity
+        if opacity > 0.0 {
+            let count = self.astraGrooveSamples.count
+            let center = CGPoint(x: frame.width / 2.0, y: frame.height / 2.0)
+            let radius = bounds.width / 2.0 + 6.0
+            let path = CGMutablePath()
+            for i in 0 ..< count {
+                let age = (self.astraGrooveHead - 1 - i + count * 2) % count
+                let value = self.astraGrooveSamples[age]
+                let angle = -CGFloat.pi / 2.0 + CGFloat(i) / CGFloat(count) * 2.0 * CGFloat.pi
+                // Short at the bottom, clear of the name.
+                let damp = 1.0 - 0.7 * max(0.0, sin(angle))
+                let length = (1.5 + 10.0 * value) * damp
+                path.move(to: CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius))
+                path.addLine(to: CGPoint(x: center.x + cos(angle) * (radius + length), y: center.y + sin(angle) * (radius + length)))
+            }
+            groove.path = path
+        }
+        CATransaction.commit()
+    }
+
+    fileprivate func astraMusicMoodTick(_ link: CADisplayLink) {
+        // A profile covered by another screen leaves the window but stays alive; recolouring it there only drains
+        // the battery, so the link sleeps until didEnterHierarchy wakes it.
+        if self.view.window == nil {
+            link.isPaused = true
+            return
+        }
+        let dt = CGFloat(min(0.1, max(0.0, link.targetTimestamp - link.timestamp)))
+        let target: CGFloat = self.astraMusicMoodPlaying ? 1.0 : 0.0
+        if self.astraMusicMoodAmount < target {
+            self.astraMusicMoodAmount = min(target, self.astraMusicMoodAmount + dt / 1.0)
+        } else if self.astraMusicMoodAmount > target {
+            self.astraMusicMoodAmount = max(target, self.astraMusicMoodAmount - dt / 1.0)
+        }
+        self.astraMusicMoodTime += dt
+        // The screen's color goes round the concept's sequence (taken from it), starting and ending on the profile's own
+        // color; a vignette closes in around the avatar and flickers a little with the beat.
+        let base = self.astraSurface ?? UIColor(rgb: 0x232524)
+        let keys: [(CGFloat, UIColor?)] = [(0.0, nil), (2.0, UIColor(rgb: 0x243d5e)), (5.0, UIColor(rgb: 0x0f475a)), (7.5, UIColor(rgb: 0x114a38)), (9.0, UIColor(rgb: 0x4a4019)), (10.5, UIColor(rgb: 0x533b0f)), (12.0, UIColor(rgb: 0x1e2020)), (24.5, UIColor(rgb: 0x1e2020)), (26.0, UIColor(rgb: 0x6a2542)), (29.0, UIColor(rgb: 0x0f4166)), (30.5, UIColor(rgb: 0x333c74)), (32.0, nil)]
+        let total: CGFloat = 32.0
+        let position = self.astraMusicMoodTime.truncatingRemainder(dividingBy: total)
+        var mood = base
+        for k in 0 ..< keys.count - 1 where position >= keys[k].0 && position < keys[k + 1].0 {
+            let from = keys[k].1 ?? base, to = keys[k + 1].1 ?? base
+            // Each change takes about a second and a half, then the color holds.
+            let span = keys[k + 1].0 - keys[k].0
+            let f = min(1.0, (position - keys[k].0) / min(span, 1.5))
+            mood = from.mixedWith(to, alpha: f * f * (3.0 - 2.0 * f))
+        }
+        let moodAmount = self.astraMusicMoodAmount
+        let color = base.mixedWith(mood, alpha: moodAmount)
+        let overlay = self.astraFlowOverlay
+        if overlay.superview !== self.backgroundBannerView {
+            overlay.isUserInteractionEnabled = false
+            overlay.layer.compositingFilter = nil
+            self.backgroundBannerView.addSubview(overlay)
+        }
+        overlay.frame = self.backgroundBannerView.bounds
+        // The cover's pattern still shows through a little.
+        overlay.backgroundColor = color.withAlphaComponent(0.88 * moodAmount)
+        if moodAmount > 0.0 {
+            self.astraMusicMoodColor = color
+            self.astraFlowTintUpdated?(color)
+        } else if self.astraMusicMoodColor != nil {
+            self.astraMusicMoodColor = nil
+            self.astraFlowTintUpdated?(self.astraSurface)
+        }
+        let t = self.astraMusicMoodTime
+        // The vignette flickers on the song's own beats.
+        self.astraBeatKick *= exp(-dt * 7.0)
+        let flicker = 0.8 + 0.2 * self.astraBeatKick + 0.025 * sin(t * 23.0) + 0.015 * sin(t * 41.0 + 1.0)
+        self.astraMusicVignetteUpdated?(self.astraMusicMoodAmount * flicker)
+        self.astraUpdateAvatarRing(amount: self.astraMusicMoodAmount)
+        self.astraUpdateGroove(amount: self.astraMusicMoodAmount)
+        self.astraFlowOverlay.isHidden = moodAmount <= 0.0
+        if self.astraMusicMoodAmount <= 0.0 && !self.astraMusicMoodPlaying {
+            self.astraMusicMoodLink?.invalidate()
+            self.astraMusicMoodLink = nil
+        }
+    }
+
+    /// The fill under the capsule's text: where the track is now, running to the end while it plays.
+    fileprivate func astraUpdateMusicFill() {
+        guard let pillLayer = self.astraMusicPillLayer else {
+            return
+        }
+        // The equalizer bounces while the music plays, and rests in three steps while it does not.
+        let playing = self.astraMusicPlayback?.playing == true
+        for (i, bar) in self.astraEqualizerBars.enumerated() {
+            if playing {
+                if bar.animation(forKey: "eq") == nil {
+                    let animation = CAKeyframeAnimation(keyPath: "transform.scale.y")
+                    let values: [[CGFloat]] = [[0.35, 1.0, 0.55, 0.85, 0.4], [0.9, 0.45, 1.0, 0.3, 0.75], [0.5, 0.8, 0.3, 1.0, 0.6]]
+                    animation.values = (values[i % 3] + [values[i % 3][0]]).map { NSNumber(value: Double($0)) }
+                    animation.duration = 0.9 + Double(i) * 0.13
+                    animation.repeatCount = .infinity
+                    animation.calculationMode = .linear
+                    bar.add(animation, forKey: "eq")
+                }
+            } else {
+                bar.removeAnimation(forKey: "eq")
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                bar.transform = CATransform3DMakeScale(1.0, [0.45, 1.0, 0.7][i % 3], 1.0)
+                CATransaction.commit()
+            }
+        }
+        let fill = self.astraMusicFillLayer
+        let size = pillLayer.bounds.size
+        fill.removeAllAnimations()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        fill.anchorPoint = CGPoint(x: 0.0, y: 0.5)
+        fill.position = CGPoint(x: 0.0, y: size.height / 2.0)
+        guard let playback = self.astraMusicPlayback else {
+            fill.bounds = CGRect(origin: .zero, size: CGSize(width: 0.0, height: size.height))
+            CATransaction.commit()
+            return
+        }
+        let width = size.width * CGFloat(playback.fraction)
+        fill.bounds = CGRect(origin: .zero, size: CGSize(width: width, height: size.height))
+        CATransaction.commit()
+        if playback.playing && playback.secondsLeft > 0.05 {
+            let animation = CABasicAnimation(keyPath: "bounds.size.width")
+            animation.fromValue = width
+            animation.toValue = size.width
+            animation.duration = playback.secondsLeft
+            animation.timingFunction = CAMediaTimingFunction(name: .linear)
+            animation.fillMode = .forwards
+            animation.isRemovedOnCompletion = false
+            fill.add(animation, forKey: "progress")
+        }
+    }
+}
+
+
+extension PeerInfoHeaderNode {
+    /// AstraGram: the header's background and the rest of the profile in the flowing color.
+    fileprivate func astraApplyFlowTint(_ color: UIColor?) {
+        if let color, self.astraBubbleTint == nil, !self.isSettings {
+            // The header becomes a colored one (gradient, white texts) once; the flow then turns its hue.
+            func value(_ c: UIColor) -> Int32 {
+                return Int32(bitPattern: c.rgb)
+            }
+            let inner = color.withMultiplied(hue: 1.0, saturation: 0.9, brightness: 1.15)
+            let outer = color.withMultiplied(hue: 1.0, saturation: 1.1, brightness: 0.55)
+            self.astraBubbleTint = PeerEmojiStatus(content: .starGift(id: 0, fileId: 0, title: "", slug: "", patternFileId: 0, innerColor: value(inner), outerColor: value(outer), patternColor: value(outer.withMultipliedBrightnessBy(0.7)), textColor: value(.white)), expirationDate: nil)
+            self.requestUpdateLayout?(false)
+        }
+        let overlay = self.astraFlowOverlay
+        if let color {
+            if overlay.superview !== self.backgroundBannerView {
+                overlay.isUserInteractionEnabled = false
+                // Keeps what is under it (the gradient, the pattern) and gives it this color's hue.
+                overlay.layer.compositingFilter = "colorBlendMode"
+                self.backgroundBannerView.addSubview(overlay)
+            }
+            overlay.frame = self.backgroundBannerView.bounds
+            overlay.backgroundColor = color
+            overlay.isHidden = false
+        } else {
+            overlay.isHidden = true
+        }
+        self.astraFlowTintUpdated?(color)
+    }
+}
+
+private final class AstraMusicMoodTarget: NSObject {
+    private weak var node: PeerInfoHeaderNode?
+
+    init(_ node: PeerInfoHeaderNode) {
+        self.node = node
+    }
+
+    @objc func tick(_ link: CADisplayLink) {
+        if let node = self.node {
+            node.astraMusicMoodTick(link)
+        } else {
+            link.invalidate()
+        }
     }
 }

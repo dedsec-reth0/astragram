@@ -27,6 +27,7 @@ import LottieComponent
 import ButtonComponent
 import ContextUI
 import DustEffect
+import AstraGramUI
 
 final class GiftsListView: UIView {
     private let context: AccountContext
@@ -149,7 +150,8 @@ final class GiftsListView: UIView {
                                         
         self.dataDisposable = combineLatest(
             queue: Queue.mainQueue(),
-            profileGifts.state,
+            // AstraGram: the profile's visual gifts from AstraGram's gift shop come after the real ones.
+            astraVisualGiftsState(context: context, peerId: peerId, state: profileGifts.state),
             self.reorderedReferencesPromise.get()
         ).startStrict(next: { [weak self] state, reorderedReferences in
             guard let self else {
@@ -557,7 +559,9 @@ final class GiftsListView: UIView {
                 switch product.gift {
                 case let .generic(gift):
                     subject = .starGift(gift: gift, price: "# \(gift.price)")
-                    peer = product.fromPeer.flatMap { .peer($0) } ?? .anonymous
+                    // AstraGram: a visual gift has no sender, not even an anonymous one.
+                    // AstraGram: a visual gift shows its giver, or nobody when its owner put it on.
+                    peer = product.astraIsVisual ? product.fromPeer.flatMap { .peer($0) } : (product.fromPeer.flatMap { .peer($0) } ?? .anonymous)
                     
                     if let availability = gift.availability {
                         ribbonText = params.presentationData.strings.PeerInfo_Gifts_OneOf(compactNumericCountString(Int(availability.total), decimalSeparator: params.presentationData.dateTimeFormat.decimalSeparator)).string
@@ -588,6 +592,14 @@ final class GiftsListView: UIView {
                             }
                         }
                     }
+                }
+                
+                // AstraGram: a visual gift says so, so nobody takes it for a bought one.
+                if product.astraIsVisual {
+                    ribbonText = "AstraGram"
+                    ribbonFont = .generic
+                    ribbonColor = .purple
+                    ribbonOutline = nil
                 }
                 
                 let itemReferenceId = product.reference?.stringValue ?? ""
@@ -663,9 +675,13 @@ final class GiftsListView: UIView {
                                             self.reorderedReferences = reorderedReferences
                                         }
                                     }
+                                } else if product.astraIsVisual {
+                                    // AstraGram: a visual gift opens Telegram's gift screen on its own, with AstraGram's
+                                    // action (take it off, give one like it) in place of the purchase buttons.
+                                    self.astraOpenVisualGift(product)
                                 } else {
-                                    let allSubjects: [GiftViewScreen.Subject] = (self.starsProducts ?? []).map { .profileGift(self.peerId, $0) }
-                                    let index = self.starsProducts?.firstIndex(where: { $0 == product }) ?? 0
+                                    let allSubjects: [GiftViewScreen.Subject] = (self.starsProducts ?? []).filter { !$0.astraIsVisual }.map { .profileGift(self.peerId, $0) }
+                                    let index = self.starsProducts?.filter({ !$0.astraIsVisual }).firstIndex(where: { $0 == product }) ?? 0
                                     
                                     var dismissImpl: (() -> Void)?
                                     let controller = GiftViewScreen(
@@ -1341,5 +1357,24 @@ private final class ReorderGestureRecognizer: UIGestureRecognizer {
                 self.state = .failed
             }
         }
+    }
+}
+
+
+extension GiftsListView {
+    /// AstraGram: a visual gift opens Telegram's gift screen on its own, with AstraGram's action (manage it, give one
+    /// like it) in place of the purchase buttons.
+    func astraOpenVisualGift(_ product: ProfileGiftsContext.State.StarGift) {
+        let action = astraVisualGiftAction(context: self.context, peerId: self.peerId, item: product, push: { [weak self] controller in
+            self?.parentController?.push(controller)
+        }, open: { [weak self] item in
+            self?.astraOpenVisualGift(item)
+        })
+        let controller = GiftViewScreen(
+            context: self.context,
+            subject: .profileGift(self.peerId, product),
+            customAction: action.map { GiftViewScreen.CustomAction(title: $0.title, action: $0.action, wear: $0.wear, isWorn: $0.isWorn, setHidden: $0.setHidden, menu: $0.menu.map { GiftViewScreen.CustomAction.MenuItem(title: $0.title, icon: $0.icon, isDestructive: $0.isDestructive, action: $0.action) }, upgrade: $0.upgrade) }
+        )
+        self.parentController?.push(controller)
     }
 }

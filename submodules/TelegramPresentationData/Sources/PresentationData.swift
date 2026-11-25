@@ -136,29 +136,42 @@ public final class PresentationData: Equatable {
     }
 }
 
+// AstraGram: the bundled English strings say "AstraGram", but a language pack downloaded from Telegram's servers
+// (every language except the bundled English, and English too once a pack is loaded) replaces them and brings the brand
+// word back. Its strings are rebranded the same way as the bundled ones: the standalone word "Telegram" becomes
+// "AstraGram"; links (telegram.org, t.me), @-handles and words that only contain it (TelegramTips) stay as they are.
+private let astraBrandRegex = try? NSRegularExpression(pattern: "(?<![\\p{L}\\p{N}@./_-])Telegram(?![\\p{L}\\p{N}_]|[./-][\\p{L}\\p{N}])", options: [])
+
+public func astraRebrand(_ value: String) -> String {
+    guard value.contains("Telegram"), let regex = astraBrandRegex else {
+        return value
+    }
+    return regex.stringByReplacingMatches(in: value, options: [], range: NSRange(value.startIndex..., in: value), withTemplate: "AstraGram")
+}
+
 public func dictFromLocalization(_ value: Localization) -> [String: String] {
     var dict: [String: String] = [:]
     for entry in value.entries {
         switch entry {
             case let .string(key, value):
-                dict[key] = value
+                dict[key] = astraRebrand(value)
             case let .pluralizedString(key, zero, one, two, few, many, other):
                 if let zero = zero {
-                    dict["\(key)_zero"] = zero
+                    dict["\(key)_zero"] = astraRebrand(zero)
                 }
                 if let one = one {
-                    dict["\(key)_1"] = one
+                    dict["\(key)_1"] = astraRebrand(one)
                 }
                 if let two = two {
-                    dict["\(key)_2"] = two
+                    dict["\(key)_2"] = astraRebrand(two)
                 }
                 if let few = few {
-                    dict["\(key)_3_10"] = few
+                    dict["\(key)_3_10"] = astraRebrand(few)
                 }
                 if let many = many {
-                    dict["\(key)_many"] = many
+                    dict["\(key)_many"] = astraRebrand(many)
                 }
-                dict["\(key)_any"] = other
+                dict["\(key)_any"] = astraRebrand(other)
         }
     }
     return dict

@@ -8,26 +8,57 @@ import MtProtoKit
 /// ("Hide messages of blocked users"). The list is fetched while the option is on and refreshed every 10 minutes;
 /// blocking and unblocking from this device update it immediately.
 enum AstraBlockedPeers {
-    private static let peerIds = Atomic<Set<PeerId>>(value: Set())
+    /// Each account's list, by its network: with several accounts logged in, each poll replaced the one shared list
+    /// with its own account's, so the lists of the accounts kept overwriting each other. A message is hidden when its
+    /// author is blocked in any of the accounts (a message does not say which account shows it).
+    private static let peerIds = Atomic<[ObjectIdentifier: Set<PeerId>]>(value: [:])
 
     static func isBlocked(_ peerId: PeerId) -> Bool {
-        return AstraBlockedPeers.peerIds.with { $0.contains(peerId) }
+        return AstraBlockedPeers.peerIds.with { lists in
+            return lists.values.contains(where: { $0.contains(peerId) })
+        }
     }
 
     static func update(peerId: PeerId, isBlocked: Bool) {
         let _ = AstraBlockedPeers.peerIds.modify { current in
             var current = current
-            if isBlocked {
-                current.insert(peerId)
-            } else {
-                current.remove(peerId)
+            if current.isEmpty {
+                return current
+            }
+            for key in Array(current.keys) {
+                if isBlocked {
+                    current[key]?.insert(peerId)
+                } else {
+                    current[key]?.remove(peerId)
+                }
             }
             return current
         }
     }
 
-    fileprivate static func set(_ value: Set<PeerId>) {
-        let _ = AstraBlockedPeers.peerIds.swap(value)
+    fileprivate static func set(_ value: Set<PeerId>, network: Network) {
+        let id = ObjectIdentifier(network)
+        let _ = AstraBlockedPeers.peerIds.modify { current in
+            var current = current
+            current[id] = value
+            return current
+        }
+    }
+
+    /// Drops an account's list: when its account is logged out (the poll is disposed) or the option is turned off,
+    /// so peers blocked only there stop hiding messages in the other accounts.
+    fileprivate static func remove(network: Network) {
+        let id = ObjectIdentifier(network)
+        let _ = AstraBlockedPeers.peerIds.modify { current in
+            var current = current
+            current.removeValue(forKey: id)
+            return current
+        }
+    }
+
+    fileprivate static func hasList(network: Network) -> Bool {
+        let id = ObjectIdentifier(network)
+        return AstraBlockedPeers.peerIds.with { $0[id] != nil }
     }
 
     fileprivate static func fetch(network: Network, offset: Int32, collected: Set<PeerId>) -> Signal<Set<PeerId>?, NoError> {
@@ -38,7 +69,9 @@ enum AstraBlockedPeers {
         }
         |> mapToSignal { result -> Signal<Set<PeerId>?, NoError> in
             guard let result = result else {
-                return .single(offset == 0 ? nil : collected)
+                // A later page failed: the full list from an earlier poll is kept; the partial one is used only when
+                // nothing is stored yet, where it is better than none.
+                return .single(offset == 0 || AstraBlockedPeers.hasList(network: network) ? nil : collected)
             }
             let blocked: [Api.PeerBlocked]
             var totalCount: Int?
@@ -68,16 +101,22 @@ func managedAstraBlockedPeers(network: Network) -> Signal<Void, NoError> {
     let poll: Signal<Void, NoError> = (AstraBlockedPeers.fetch(network: network, offset: 0, collected: Set())
     |> map { value -> Void in
         if let value = value {
-            AstraBlockedPeers.set(value)
+            AstraBlockedPeers.set(value, network: network)
         }
     })
     |> then(Signal<Void, NoError>.complete() |> delay(10.0 * 60.0, queue: Queue.concurrentDefaultQueue()))
     |> restart
 
-    return AstraGramSettings.signal
+    return (AstraGramSettings.signal
     |> map { $0.hideBlockedUsersMessages }
     |> distinctUntilChanged
     |> mapToSignal { enabled -> Signal<Void, NoError> in
+        if !enabled {
+            AstraBlockedPeers.remove(network: network)
+        }
         return enabled ? poll : .complete()
+    })
+    |> afterDisposed {
+        AstraBlockedPeers.remove(network: network)
     }
 }
