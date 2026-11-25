@@ -121,6 +121,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var glassMaterial: Int
     /// Look: buttons answer a press with a spring, the chat list highlights a row as a rounded plate.
     public var springPresses: Bool
+    /// The "AstraGram" ribbon on AstraGram's free gifts (off: they look like any gift).
+    public var showAstraGiftRibbon: Bool
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -215,6 +217,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         streakBotURL: "",
         glassMaterial: 0,
         springPresses: false,
+        showAstraGiftRibbon: false,
         hideStickersFromOthers: false,
         hideGifsFromOthers: false,
         messageTemplates: [],
@@ -289,6 +292,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         streakBotURL: String,
         glassMaterial: Int,
         springPresses: Bool,
+        showAstraGiftRibbon: Bool,
         hideStickersFromOthers: Bool,
         hideGifsFromOthers: Bool,
         messageTemplates: [String],
@@ -361,6 +365,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.streakBotURL = streakBotURL
         self.glassMaterial = glassMaterial
         self.springPresses = springPresses
+        self.showAstraGiftRibbon = showAstraGiftRibbon
         self.hideStickersFromOthers = hideStickersFromOthers
         self.hideGifsFromOthers = hideGifsFromOthers
         self.messageTemplates = messageTemplates
@@ -438,6 +443,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.streakBotURL = try container.decodeIfPresent(String.self, forKey: .streakBotURL) ?? d.streakBotURL
         self.glassMaterial = try container.decodeIfPresent(Int.self, forKey: .glassMaterial) ?? d.glassMaterial
         self.springPresses = try container.decodeIfPresent(Bool.self, forKey: .springPresses) ?? d.springPresses
+        self.showAstraGiftRibbon = try container.decodeIfPresent(Bool.self, forKey: .showAstraGiftRibbon) ?? d.showAstraGiftRibbon
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

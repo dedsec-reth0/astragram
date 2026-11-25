@@ -272,6 +272,7 @@ public struct AstraStrings {
     public var glassMaterialClear: String { t("Прозрачный", "Clear") }
     public var glassMaterialMatte: String { t("Матовый", "Matte") }
     public var springPresses: String { t("Пружинящие нажатия", "Springy Presses") }
+    public var showAstraGiftRibbon: String { t("Надпись AstraGram на подарках", "AstraGram Label on Gifts") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }
     public var astraBadge: String { t("Значок AstraGram у имени", "AstraGram Badge by My Name") }
     public var streaks: String { t("🔥 Огоньки", "🔥 Streaks") }

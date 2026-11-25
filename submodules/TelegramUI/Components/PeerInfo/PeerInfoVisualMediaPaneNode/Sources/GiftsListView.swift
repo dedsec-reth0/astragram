@@ -594,8 +594,8 @@ final class GiftsListView: UIView {
                     }
                 }
                 
-                // AstraGram: a visual gift says so, so nobody takes it for a bought one.
-                if product.astraIsVisual {
+                // AstraGram: a visual gift says so when the user wants it to (AstraGram settings → Оформление).
+                if product.astraIsVisual && AstraGramSettings.current.showAstraGiftRibbon {
                     ribbonText = "AstraGram"
                     ribbonFont = .generic
                     ribbonColor = .purple
