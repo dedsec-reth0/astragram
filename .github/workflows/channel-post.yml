@@ -17,7 +17,10 @@ on:
     inputs:
       post:
         description: 'Folder under posts/ to post again (for example 1.0.29)'
-        required: true
+        required: false
+      buttons_for:
+        description: 'Instead: add the GitHub and AltStore buttons to an existing channel post (its message id, e.g. 17)'
+        required: false
 
 concurrency:
   group: channel-post
@@ -39,7 +42,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Add buttons to an existing post
+        if: github.event.inputs.buttons_for != ''
+        env:
+          MSG_ID: ${{ github.event.inputs.buttons_for }}
+        run: |
+          set -euo pipefail
+          [ -n "$BOT_TOKEN" ] || { echo "::error::STREAK_BOT_TOKEN secret is missing"; exit 1; }
+          case "$MSG_ID" in ''|*[!0-9]*) echo "::error::buttons_for must be a message id"; exit 1;; esac
+          res=$(curl -sS -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageReplyMarkup" \
+            --form-string "chat_id=$CHANNEL" --form-string "message_id=$MSG_ID" --form-string "reply_markup=$BUTTONS")
+          if echo "$res" | jq -e '.ok' >/dev/null; then echo "::notice::buttons added: https://t.me/astragram_news/$MSG_ID"
+          else echo "::error::$(echo "$res" | jq -r '.description')"; exit 1; fi
+
       - name: Find new posts
+        if: github.event.inputs.buttons_for == ''
         id: find
         env:
           BEFORE: ${{ github.event.before }}
