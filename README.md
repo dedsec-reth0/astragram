@@ -5,6 +5,10 @@
 <h1 align="center">AstraGram для iOS</h1>
 
 <p align="center">
+  <b>Русский</b> · <a href="README.en.md">English</a>
+</p>
+
+<p align="center">
   Telegram для iPhone с режимом призрака, сохранением удалённых сообщений и плагинами.<br>
   Собран из исходников Telegram-iOS, ставится через AltStore, без джейлбрейка.
 </p>
