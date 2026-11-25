@@ -357,12 +357,19 @@ public func relativeUserPresenceStatus(_ presence: EnginePeer.Presence, relative
         let activeUntil = presence.lastActivity + 30
         if activeUntil >= timestamp {
             return .online(at: activeUntil)
+        } else if presence.lastActivity > 0 {
+            // AstraGram: the last moment the app saw them (see stringAndActivityForUserPresence).
+            return .lastSeen(at: presence.lastActivity)
         } else {
             return .recently
         }
-    case .lastWeek:
-        return .lastWeek
-    case .lastMonth:
+    case .lastWeek, .lastMonth:
+        if presence.lastActivity > 0 && timestamp - presence.lastActivity < 30 * 24 * 60 * 60 {
+            return .lastSeen(at: presence.lastActivity)
+        }
+        if case .lastWeek = presence.status {
+            return .lastWeek
+        }
         return .lastMonth
     }
 }
@@ -619,12 +626,20 @@ public func stringAndActivityForUserPresence(strings: PresentationStrings, dateT
         let activeUntil = presence.lastActivity + 30
         if activeUntil >= timestamp {
             return (strings.Presence_online, true)
+        } else if presence.lastActivity > 0 {
+            // AstraGram: the time is hidden (by them, or because ours is hidden without Premium), but the app saw them
+            // last: a message from them, or them reading ours. That moment is shown instead of "recently".
+            return stringAndActivityForUserPresence(strings: strings, dateTimeFormat: dateTimeFormat, presence: EnginePeer.Presence(status: .present(until: presence.lastActivity), lastActivity: presence.lastActivity), relativeTo: timestamp, expanded: expanded)
         } else {
             return (strings.LastSeen_Lately, false)
         }
-    case .lastWeek:
-        return (strings.LastSeen_WithinAWeek, false)
-    case .lastMonth:
+    case .lastWeek, .lastMonth:
+        if presence.lastActivity > 0 && timestamp - presence.lastActivity < 30 * 24 * 60 * 60 {
+            return stringAndActivityForUserPresence(strings: strings, dateTimeFormat: dateTimeFormat, presence: EnginePeer.Presence(status: .present(until: presence.lastActivity), lastActivity: presence.lastActivity), relativeTo: timestamp, expanded: expanded)
+        }
+        if case .lastWeek = presence.status {
+            return (strings.LastSeen_WithinAWeek, false)
+        }
         return (strings.LastSeen_WithinAMonth, false)
     case .longTimeAgo:
         return (strings.LastSeen_ALongTimeAgo, false)
@@ -674,6 +689,9 @@ public func userPresenceStringRefreshTimeout(_ presence: TelegramUserPresence, r
         let activeUntil = presence.lastActivity + 30
         if activeUntil >= timestamp {
             return Double(activeUntil - timestamp + 1)
+        } else if presence.lastActivity > 0 && timestamp - presence.lastActivity < 60 * 60 {
+            // AstraGram: "N minutes ago" from the app's own last sighting is kept current.
+            return Double(((timestamp - presence.lastActivity) % 60) + 1)
         } else {
             return Double.infinity
         }
