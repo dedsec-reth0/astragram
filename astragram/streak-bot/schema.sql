@@ -215,3 +215,13 @@ CREATE TABLE IF NOT EXISTS notify_log (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS notify_log_owner ON notify_log(owner_id, created_at);
+
+-- Who an AstraGram account is, for the admin panel only: names as Telegram reports them when the user writes to the bot
+-- or links the app. Shown to nobody else.
+CREATE TABLE IF NOT EXISTS profiles (
+  tg_id INTEGER PRIMARY KEY,
+  first_name TEXT NOT NULL DEFAULT '',
+  last_name TEXT NOT NULL DEFAULT '',
+  username TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL
+);

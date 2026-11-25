@@ -48,7 +48,16 @@ let nextMessageId = 1000;
 // A chat whose copyMessage answers 429 (Telegram's rate limit), for the broadcast drain.
 let rateLimitedChat = null;
 globalThis.fetch = async (url, init) => {
+  if (url.startsWith('https://api.github.com/')) {
+    const week = new Date(Date.now() - 86400000).toISOString(), old = '2025-01-01T00:00:00Z';
+    return { ok: true, json: async () => (url.includes('page=1') ? [
+      { tag_name: 'v13.2.2', name: 'AstraGram 1.0.2', published_at: week, assets: [{ name: 'a.ipa', download_count: 7 }, { name: 'x.txt', download_count: 99 }] },
+      { tag_name: 'v13.2.1', name: 'AstraGram 1.0.1', published_at: old, assets: [{ name: 'a.ipa', download_count: 5 }] },
+      { tag_name: 'v13.2.0', draft: true, name: 'draft', published_at: week, assets: [] },
+    ] : []) };
+  }
   const body = JSON.parse(init.body);
+  if (url.endsWith('/getChat')) return { json: async () => ({ ok: true, result: { id: body.chat_id, first_name: 'Из', last_name: 'Телеграма', username: 'tg' + body.chat_id } }) };
   sent.push({ method: url.split('/').pop(), ...body });
   if (url.endsWith('/createInvoiceLink')) return { json: async () => ({ ok: true, result: 'https://t.me/$invoice' }) };
   if (url.endsWith('/createForumTopic')) return { json: async () => ({ ok: true, result: { message_thread_id: 500 + sent.length } }) };
@@ -602,6 +611,32 @@ const streaks = (r) => (r.body.streaks || []).map((s) => s.friend + ':' + s.star
   check('unlink clears list', q('SELECT COUNT(*) AS c FROM streak_list WHERE owner_id = 100')[0].c, 0);
   check('unlink clears visual gifts', q('SELECT COUNT(*) AS c FROM visual_gifts WHERE tg_id = 100')[0].c, 0);
   check('unlink clears given gifts', q('SELECT COUNT(*) AS c FROM visual_gift_received WHERE from_id = 100')[0].c, 0);
+
+  // 12. Admin panel: only Telegram-signed data from the admin's account opens it.
+  const ADMIN = 800000000 + 80000000 + 7000000 + 825713;
+  const adminApi = (initData) => post('/api/admin', { initData });
+  r = await adminApi(call({ op: 'webappdata', id: 300 }));
+  check('admin api: other user refused', [r.status, r.body.list], [403, undefined]);
+  r = await adminApi(call({ op: 'webappdata', id: 300, forge: ADMIN }));
+  check('admin api: forged admin refused', r.status, 403);
+  r = await adminApi('');
+  check('admin api: no data refused', r.status, 403);
+  q("INSERT INTO badges (tg_id, updated_at) VALUES (4242, 1)");
+  r = await adminApi(call({ op: 'webappdata', id: ADMIN }));
+  check('admin api: admin gets stats', r.status, 200);
+  check('releases counted', [r.body.releases.total, r.body.releases.week, r.body.releases.downloads, r.body.releases.downloadsWeek], [2, 1, 12, 7]);
+  check('users listed', r.body.list.length > 0 && r.body.list.every((x) => Number.isInteger(x.id)), true);
+  check('linked user named from login', (r.body.list.find((x) => x.id === 300) || {}).name, 'Тест');
+  check('unknown names looked up', (r.body.list.find((x) => x.id === 4242) || {}).username, 'tg4242');
+  r = await worker.fetch({ url: 'https://bot.example/admin', method: 'GET', headers: { get: () => null } }, env);
+  check('admin page served without data', [r.status, /api\/admin/.test(r.body), /887825713/.test(r.body)], [200, true, false]);
+  sent.length = 0;
+  await update({ message_id: 90, from: admin, chat: { id: ADMIN, type: 'private' }, text: '/admin' });
+  check('/admin sends the web-app button', sent.filter((m) => m.method === 'sendMessage').map((m) => m.reply_markup.inline_keyboard[0][0].web_app.url), ['https://bot.example/admin']);
+  sent.length = 0;
+  await update({ message_id: 91, from: { id: 5, first_name: 'X' }, chat: { id: 5, type: 'private' }, text: '/admin' });
+  check('/admin: no button for others', sent.some((m) => m.reply_markup && JSON.stringify(m.reply_markup).includes('/admin')), false);
+  check('profile remembered from a message', q('SELECT first_name FROM profiles WHERE tg_id = 5')[0].first_name, 'X');
 
   print(failures ? `${failures} FAILED` : 'all passed');
 })().catch((e) => print('Exception ' + e + '\n' + e.stack));

@@ -1048,6 +1048,7 @@ async function handleLogin(request, env) {
   const user = await verifiedWebAppUser(env, body && body.initData, t);
   if (!user) return json({ ok: false, error: 'signature' }, 403);
   if (!(await linkOwner(env, await sha256Hex(match[1]), user.id, user.first_name, t))) return json({ ok: false, error: 'token' }, 409);
+  await rememberProfile(env, user);
   return json({ ok: true, id: user.id });
 }
 
@@ -1369,6 +1370,7 @@ function adminPanel() {
     reply_markup: { inline_keyboard: [
       [{ text: '📢 Новый пост', callback_data: 'bc:new' }],
       [{ text: '📊 Статистика', callback_data: 'bc:stats' }],
+      ...(workerOrigin ? [[{ text: '🛡 Админ-панель', web_app: { url: `${workerOrigin}/admin` } }]] : []),
     ] },
   };
 }
@@ -1475,6 +1477,7 @@ async function handleAdminMessage(env, message) {
     await tg(env, 'setMyCommands', { scope: { type: 'chat', chat_id: ADMIN_ID }, commands: [
       { command: 'post', description: '📢 Новый пост (рассылка)' },
       { command: 'stats', description: '📊 Статистика' },
+      { command: 'admin', description: '🛡 Админ-панель (мини-приложение)' },
       { command: 'menu', description: 'Панель администратора' },
     ] });
     await tg(env, 'sendMessage', { chat_id: ADMIN_ID, ...adminPanel() });
@@ -1488,6 +1491,10 @@ async function handleAdminMessage(env, message) {
   }
   if (text === '/stats') {
     await tg(env, 'sendMessage', { chat_id: ADMIN_ID, ...(await adminStats(env)) });
+    return true;
+  }
+  if (text === '/admin') {
+    await tg(env, 'sendMessage', { chat_id: ADMIN_ID, ...adminAppButton() });
     return true;
   }
   if (text === '/post') {
@@ -1552,9 +1559,12 @@ async function handleTelegram(request, env) {
   if (!timingSafeEqual(request.headers.get('x-telegram-bot-api-secret-token') || '', await webhookSecret(env))) {
     return new Response('forbidden', { status: 403 });
   }
+  workerOrigin = new URL(request.url).origin;
   const update = await request.json().catch(() => null);
   if (update) {
     try {
+      const who = (update.message && update.message.from) || (update.callback_query && update.callback_query.from);
+      if (who && !who.is_bot) await rememberProfile(env, who);
       if (update.message) await handleMessage(env, update.message);
       else if (update.callback_query) await handleCallback(env, update.callback_query);
       else if (update.pre_checkout_query) await handlePreCheckout(env, update.pre_checkout_query);
@@ -1660,6 +1670,8 @@ export default {
     if (request.method === 'POST' && url.pathname === '/api/donate') return handleDonate(request, env);
     if (request.method === 'POST' && url.pathname === '/api/unlink') return handleUnlink(request, env);
     if (request.method === 'POST' && url.pathname === '/api/login') return handleLogin(request, env);
+    if (request.method === 'POST' && url.pathname === '/api/admin') return handleAdminApi(request, env);
+    if (request.method === 'GET' && url.pathname === '/admin') return new Response(ADMIN_PAGE, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'content-security-policy': "default-src 'none'; script-src 'unsafe-inline' https://telegram.org; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; frame-ancestors 'none'" } });
     // The page the signed web-app data is requested for: the app reads the data from the address and never opens it.
     if (url.pathname === '/webapp') return new Response('<!doctype html><title>AstraGram</title>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
     if (url.pathname === '/setup') return handleSetup(url, env);
@@ -1693,3 +1705,241 @@ export default {
     })());
   },
 };
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// Admin panel: a mini app (GET /admin) that only the admin can use. The page itself holds no data; it sends Telegram's
+// signed web-app data to /api/admin, which answers only when the signature names the admin's account.
+
+// The worker's own address, taken from Telegram's webhook calls, for the panel's web-app button.
+let workerOrigin = '';
+
+function adminAppButton() {
+  if (!workerOrigin) return { text: 'Адрес бота ещё не известен: пришлите любое сообщение и повторите /admin.' };
+  return {
+    text: '🛡 <b>Админ-панель</b>\n\nСтатистика AstraGram: выпуски, скачивания, пользователи. Открывается только у вас.',
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: [[{ text: '🛡 Открыть админ-панель', web_app: { url: `${workerOrigin}/admin` } }]] },
+  };
+}
+
+async function rememberProfile(env, user) {
+  if (!user || !Number.isSafeInteger(user.id) || user.id <= 0) return;
+  await env.DB.prepare(`INSERT INTO profiles (tg_id, first_name, last_name, username, updated_at) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (tg_id) DO UPDATE SET first_name = excluded.first_name, last_name = excluded.last_name, username = excluded.username, updated_at = excluded.updated_at`)
+    .bind(user.id, clip(user.first_name, 64), clip(user.last_name, 64), clip(user.username, 32), now()).run();
+}
+
+const GITHUB_REPO = 'dedsec-reth0/astragram';
+
+// Releases and downloads from GitHub, kept for ten minutes (every call is a subrequest on the free plan).
+async function releaseStats(env, t) {
+  const cached = await kvGet(env, 'admin_releases');
+  if (cached) {
+    try {
+      const value = JSON.parse(cached);
+      if (t - value.at < 600) return value;
+    } catch {}
+  }
+  const weekAgo = (t - 7 * 86400) * 1000;
+  const value = { at: t, total: 0, week: 0, downloads: 0, downloadsWeek: 0, latest: null, list: [] };
+  for (let page = 1; page <= 3; page++) {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=100&page=${page}`, { headers: { 'user-agent': 'astragram-streak-bot', accept: 'application/vnd.github+json' } }).catch(() => null);
+    if (!res || !res.ok) break;
+    const releases = await res.json().catch(() => []);
+    for (const release of releases) {
+      if (release.draft || !/^v\d/.test(release.tag_name || '')) continue;
+      const published = Date.parse(release.published_at || '') || 0;
+      const downloads = (release.assets || []).filter((a) => /\.ipa$/.test(a.name)).reduce((sum, a) => sum + (a.download_count || 0), 0);
+      value.total += 1;
+      value.downloads += downloads;
+      if (published >= weekAgo) {
+        value.week += 1;
+        value.downloadsWeek += downloads;
+      }
+      if (value.list.length < 10) value.list.push({ name: clip(release.name, 80), published: Math.floor(published / 1000), downloads });
+      if (!value.latest) value.latest = clip(release.name, 80);
+    }
+    if (releases.length < 100) break;
+  }
+  await kvSet(env, 'admin_releases', JSON.stringify(value));
+  return value;
+}
+
+async function handleAdminApi(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ ok: false, error: 'body' }, 400);
+  }
+  const t = now();
+  const user = await verifiedWebAppUser(env, body && body.initData, t);
+  if (!user) return json({ ok: false, error: 'signature' }, 403);
+  if (!isAdmin(user.id)) return json({ ok: false, error: 'forbidden' }, 403);
+
+  const count = async (sql, ...args) => ((await env.DB.prepare(sql).bind(...args).first()) || {}).c || 0;
+  const day = 86400;
+  // AstraGram accounts the server knows: those linked to the streak bot and those with the badge on.
+  const known = `(SELECT tg_id FROM owners UNION SELECT tg_id FROM badges)`;
+  const users = {
+    total: await count(`SELECT COUNT(*) AS c FROM ${known}`),
+    linked: await count('SELECT COUNT(DISTINCT tg_id) AS c FROM owners'),
+    active1: await count('SELECT COUNT(DISTINCT tg_id) AS c FROM owners WHERE last_sync >= ?', t - day),
+    active7: await count('SELECT COUNT(DISTINCT tg_id) AS c FROM owners WHERE last_sync >= ?', t - 7 * day),
+    new7: await count('SELECT COUNT(*) AS c FROM (SELECT tg_id FROM owners GROUP BY tg_id HAVING MIN(created_at) >= ?)', t - 7 * day),
+    badges: await count('SELECT COUNT(*) AS c FROM badges'),
+    botSubscribers: await count('SELECT COUNT(*) AS c FROM friends WHERE stopped = 0'),
+  };
+  const activity = {
+    streaks: await count('SELECT COUNT(*) AS c FROM pairs'),
+    gifts: await count('SELECT COUNT(*) AS c FROM visual_gift_received'),
+    gifts7: await count('SELECT COUNT(*) AS c FROM visual_gift_received WHERE created_at >= ?', t - 7 * day),
+    feedback: await count('SELECT COUNT(*) AS c FROM feedback'),
+  };
+  const rows = (await env.DB.prepare(`SELECT k.tg_id AS id, p.first_name, p.last_name, p.username,
+      (SELECT MAX(last_sync) FROM owners o WHERE o.tg_id = k.tg_id) AS last_seen,
+      (SELECT MIN(created_at) FROM owners o WHERE o.tg_id = k.tg_id) AS joined,
+      (SELECT name FROM owners o WHERE o.tg_id = k.tg_id ORDER BY created_at DESC LIMIT 1) AS owner_name,
+      EXISTS (SELECT 1 FROM badges b WHERE b.tg_id = k.tg_id) AS badge
+    FROM ${known} k LEFT JOIN profiles p ON p.tg_id = k.tg_id ORDER BY last_seen DESC LIMIT 1000`).all()).results || [];
+
+  // Fill in a few unknown names from Telegram (the bot sees users who wrote to it); the rest come later.
+  let lookups = 0;
+  for (const row of rows) {
+    if (lookups >= 15 || row.first_name || row.username) continue;
+    lookups += 1;
+    const chat = await tg(env, 'getChat', { chat_id: row.id }).catch(() => null);
+    if (chat && chat.ok && chat.result) {
+      row.first_name = clip(chat.result.first_name, 64);
+      row.last_name = clip(chat.result.last_name, 64);
+      row.username = clip(chat.result.username, 32);
+      await rememberProfile(env, { id: row.id, first_name: row.first_name, last_name: row.last_name, username: row.username });
+    }
+  }
+
+  return json({
+    ok: true,
+    at: t,
+    releases: await releaseStats(env, t),
+    users,
+    activity,
+    list: rows.map((r) => ({
+      id: r.id,
+      name: [r.first_name || r.owner_name || '', r.last_name || ''].join(' ').trim(),
+      username: r.username || '',
+      lastSeen: r.last_seen || 0,
+      joined: r.joined || 0,
+      badge: !!r.badge,
+    })),
+  });
+}
+
+const ADMIN_PAGE = String.raw`<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<title>AstraGram · Админ</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#000;--text:#f5f5f7;--muted:rgba(245,245,247,.62);--faint:rgba(245,245,247,.36);--glass:rgba(255,255,255,.06);--glass-2:rgba(255,255,255,.1);--edge:rgba(255,255,255,.12);--edge-top:rgba(255,255,255,.28);--violet:#8b5cf6;--blue:#38bdf8;--green:#34d399;--red:#f87171;
+--display:"SF Pro Display",-apple-system,BlinkMacSystemFont,"Inter",system-ui,sans-serif;--body:"SF Pro Text",-apple-system,BlinkMacSystemFont,"Inter",system-ui,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--ease:cubic-bezier(.16,1,.3,1)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);-webkit-font-smoothing:antialiased}
+body{min-height:100vh;padding:calc(env(safe-area-inset-top) + 18px) 16px calc(env(safe-area-inset-bottom) + 28px);overflow-x:hidden}
+.bgfx{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(40vmax 40vmax at 75% 10%,rgba(139,92,246,.28),transparent 70%),radial-gradient(35vmax 35vmax at 10% 60%,rgba(56,189,248,.16),transparent 70%)}
+.vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse at 50% 40%,transparent 45%,rgba(0,0,0,.7) 100%)}
+main{position:relative;z-index:2;max-width:760px;margin:0 auto}
+.glass{position:relative;background:var(--glass);-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);box-shadow:inset 0 1px 0 var(--edge-top),inset 0 0 0 1px var(--edge);border-radius:24px}
+.glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(160deg,rgba(255,255,255,.12),rgba(255,255,255,.015) 40%,transparent 62%)}
+.eyebrow{font:600 12px/1 var(--body);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+h1{margin:10px 0 4px;font:800 40px/1 var(--display);letter-spacing:-.045em}
+.grad{background:linear-gradient(100deg,#fff 0%,#d9d2ff 40%,#a5e4ff 75%,#fff 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--muted);font-size:14px;margin-bottom:22px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:10px}
+@media(min-width:620px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.stat{padding:16px 16px 14px;opacity:0;transform:translateY(10px);animation:in .7s var(--ease) forwards}
+.stat b{display:block;font:750 30px/1 var(--display);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.stat span{display:block;margin-top:8px;font-size:12.5px;color:var(--muted)}
+@keyframes in{to{opacity:1;transform:none}}
+h2{font:700 20px var(--display);letter-spacing:-.02em;margin:26px 4px 10px;display:flex;justify-content:space-between;align-items:baseline}
+h2 small{font:500 13px var(--body);color:var(--faint)}
+.card{padding:6px 0}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid rgba(255,255,255,.06)}
+.row:first-child{border-top:0}
+.av{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font:700 15px var(--display);color:#fff;background:linear-gradient(135deg,var(--violet),var(--blue))}
+.who{flex:1;min-width:0}
+.who .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who .m{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono)}
+.when{flex:none;text-align:right;font-size:12px;color:var(--faint)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;background:var(--faint)}
+.dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
+input{width:100%;height:44px;border-radius:14px;border:0;padding:0 14px;margin:0 0 10px;background:var(--glass-2);color:var(--text);font:500 15px var(--body);outline:none;box-shadow:inset 0 0 0 1px var(--edge)}
+.rel .row{justify-content:space-between}
+.rel .v{font-weight:600}.rel .d{font-size:12.5px;color:var(--muted)}
+.state{margin-top:40vh;text-align:center;color:var(--muted)}
+.state b{display:block;font:800 26px var(--display);color:var(--text);margin-bottom:8px}
+.badge{font:600 10px var(--body);letter-spacing:.06em;text-transform:uppercase;color:#d9d2ff;background:rgba(139,92,246,.25);padding:2px 6px;border-radius:6px;margin-left:6px}
+</style>
+</head>
+<body>
+<div class="bgfx"></div><div class="vignette"></div>
+<main id="app"><div class="state"><b>Загрузка…</b>Проверяем доступ</div></main>
+<script>
+const tgApp = window.Telegram && Telegram.WebApp;
+if (tgApp) { tgApp.ready(); tgApp.expand(); try { tgApp.setHeaderColor('#000000'); tgApp.setBackgroundColor('#000000'); } catch (e) {} }
+const app = document.getElementById('app');
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = (n) => Number(n || 0).toLocaleString('ru-RU');
+function ago(t, now) {
+  if (!t) return 'не был(а)';
+  const d = now - t;
+  if (d < 120) return 'сейчас';
+  if (d < 3600) return Math.floor(d / 60) + ' мин назад';
+  if (d < 86400) return Math.floor(d / 3600) + ' ч назад';
+  if (d < 30 * 86400) return Math.floor(d / 86400) + ' дн назад';
+  return new Date(t * 1000).toLocaleDateString('ru-RU');
+}
+function stat(value, label, i) { return '<div class="stat glass" style="animation-delay:' + (i * 50) + 'ms"><b>' + value + '</b><span>' + label + '</span></div>'; }
+function deny(title, text) { app.innerHTML = '<div class="state"><b>' + title + '</b>' + text + '</div>'; }
+async function load() {
+  const initData = tgApp ? tgApp.initData : '';
+  if (!initData) return deny('Только в Telegram', 'Откройте панель кнопкой в боте.');
+  let data;
+  try {
+    const res = await fetch('/api/admin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ initData }) });
+    data = await res.json();
+  } catch (e) { return deny('Нет связи', 'Попробуйте ещё раз.'); }
+  if (!data || !data.ok) return deny('Доступ запрещён', 'Эта страница только для администратора AstraGram.');
+  const r = data.releases, u = data.users, a = data.activity, now = data.at;
+  let html = '<div class="eyebrow">AstraGram · Админ-панель</div><h1 class="grad">Статистика</h1><div class="sub">Последняя версия: ' + esc(r.latest || '—') + '</div>';
+  html += '<div class="grid">' + [
+    [num(r.week), 'выпусков за неделю'], [num(r.total), 'выпусков всего'],
+    [num(r.downloadsWeek), 'скачиваний за неделю'], [num(r.downloads), 'скачиваний всего'],
+    [num(u.total), 'пользователей AstraGram'], [num(u.active1), 'активны за сутки'],
+    [num(u.active7), 'активны за неделю'], [num(u.new7), 'новых за неделю'],
+    [num(u.linked), 'подключили бота'], [num(u.badges), 'со значком'],
+    [num(a.streaks), 'огоньков'], [num(a.gifts7) + ' / ' + num(a.gifts), 'подарков нед / всего'],
+  ].map((s, i) => stat(s[0], s[1], i)).join('') + '</div>';
+  html += '<h2>Выпуски <small>последние ' + r.list.length + '</small></h2><div class="card glass rel">' + r.list.map((x) => '<div class="row"><div><div class="v">' + esc(x.name) + '</div><div class="d">' + new Date(x.published * 1000).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + '</div></div><div class="d">⬇ ' + num(x.downloads) + '</div></div>').join('') + '</div>';
+  html += '<h2>Пользователи <small>' + num(data.list.length) + '</small></h2><input id="q" placeholder="Поиск: имя, @юзернейм или ID" autocomplete="off"><div class="card glass" id="users"></div>';
+  app.innerHTML = html;
+  const box = document.getElementById('users');
+  const render = (q) => {
+    q = (q || '').trim().toLowerCase().replace(/^@/, '');
+    const list = data.list.filter((x) => !q || (x.name || '').toLowerCase().includes(q) || (x.username || '').toLowerCase().includes(q) || String(x.id).includes(q));
+    box.innerHTML = list.map((x) => {
+      const online = x.lastSeen && now - x.lastSeen < 86400;
+      return '<div class="row"><div class="av">' + esc((x.name || '?').trim().charAt(0).toUpperCase() || '?') + '</div><div class="who"><div class="n">' + esc(x.name || 'Без имени') + (x.badge ? '<span class="badge" title="значок AstraGram">★</span>' : '') + '</div><div class="m">' + (x.username ? '@' + esc(x.username) + ' · ' : '') + 'ID ' + x.id + '</div></div><div class="when"><span class="dot' + (online ? ' on' : '') + '"></span>' + ago(x.lastSeen, now) + '</div></div>';
+    }).join('') || '<div class="row"><div class="who"><div class="m">Никого не найдено</div></div></div>';
+  };
+  render('');
+  document.getElementById('q').addEventListener('input', (e) => render(e.target.value));
+}
+load();
+</script>
+</body>
+</html>`;
