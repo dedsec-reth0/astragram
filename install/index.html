@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Установить AstraGram</title>
+<meta name="description" content="Добавить источник AstraGram в AltStore или SideStore, или скачать IPA.">
+<meta name="theme-color" content="#0b1230">
+<style>
+:root{--bg:#0b1230;--card:rgba(255,255,255,.07);--line:rgba(255,255,255,.12);--text:#fff;--muted:rgba(255,255,255,.68);--accent:#3e9bf0}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;color:var(--text);
+ background:radial-gradient(900px 600px at 10% 0%,#0e4a8a 0%,transparent 60%),radial-gradient(800px 600px at 100% 60%,#4b2a9a 0%,transparent 60%),var(--bg);
+ background-attachment:fixed;-webkit-font-smoothing:antialiased;padding:max(28px,env(safe-area-inset-top)) 16px 40px}
+main{max-width:460px;margin:0 auto;text-align:center}
+.logo{width:112px;height:112px;border-radius:26px;box-shadow:0 18px 50px rgba(0,0,20,.5);margin-top:12px}
+h1{font-size:30px;letter-spacing:-.02em;margin:18px 0 6px}
+.lead{color:var(--muted);font-size:16px;line-height:1.45;margin:0 0 26px}
+.btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:56px;border-radius:16px;
+ font-size:17px;font-weight:650;text-decoration:none;color:#fff;margin:0 0 12px;border:0;cursor:pointer}
+.primary{background:var(--accent)}
+.secondary{background:var(--card);box-shadow:inset 0 0 0 1px var(--line)}
+.card{background:var(--card);box-shadow:inset 0 0 0 1px var(--line);border-radius:18px;padding:16px;text-align:left;margin-top:22px}
+.card h2{font-size:15px;margin:0 0 8px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.src{display:flex;gap:8px;align-items:center}
+.src code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;background:rgba(0,0,0,.25);padding:10px 12px;border-radius:10px}
+.copy{flex:none;background:var(--accent);color:#fff;border:0;border-radius:10px;padding:10px 14px;font-weight:650;font-size:14px}
+ol{margin:6px 0 0;padding-left:20px;color:var(--muted);line-height:1.55;font-size:15px}
+.small{color:var(--muted);font-size:13px;line-height:1.45;margin-top:22px}
+a.link{color:#8fd3ff}
+</style>
+</head>
+<body>
+<main>
+ <img class="logo" src="../icon.png" alt="AstraGram">
+ <h1>Установить AstraGram</h1>
+ <p class="lead">Нажмите кнопку — откроется AltStore и предложит добавить источник AstraGram. Обновления потом будут приходить туда же.</p>
+
+ <a class="btn primary" id="alt" href="#">📥 Открыть в AltStore</a>
+ <a class="btn secondary" id="side" href="#">Открыть в SideStore</a>
+ <a class="btn secondary" id="ipa" href="https://github.com/dedsec-reth0/astragram/releases/latest">📦 Скачать IPA</a>
+
+ <div class="card">
+  <h2>Если кнопка не сработала</h2>
+  <div class="src"><code id="srcurl"></code><button class="copy" id="copy">Копировать</button></div>
+  <ol>
+   <li>Откройте AltStore → <b>Browse</b> → <b>Sources</b> → <b>+</b>.</li>
+   <li>Вставьте скопированный адрес.</li>
+   <li>Найдите AstraGram и нажмите <b>Free</b>.</li>
+  </ol>
+ </div>
+
+ <p class="small">Нужен iPhone с iOS 15 или новее и установленный <a class="link" href="https://altstore.io">AltStore</a>.
+ AstraGram — неофициальный клиент Telegram с открытым кодом: <a class="link" href="https://github.com/dedsec-reth0/astragram">github.com/dedsec-reth0/astragram</a>.</p>
+</main>
+<script>
+(function(){
+ var SRC='https://github.com/dedsec-reth0/astragram/releases/download/sidestore-source/source.json';
+ var enc=encodeURIComponent(SRC);
+ document.getElementById('srcurl').textContent=SRC;
+ document.getElementById('alt').href='altstore://source?url='+enc;
+ document.getElementById('side').href='sidestore://source?url='+enc;
+ document.getElementById('copy').onclick=function(){
+  var b=this;function ok(){b.textContent='Готово';setTimeout(function(){b.textContent='Копировать'},1500)}
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(SRC).then(ok,function(){})}
+  else{var t=document.createElement('textarea');t.value=SRC;document.body.appendChild(t);t.select();try{document.execCommand('copy');ok()}catch(e){}document.body.removeChild(t)}
+ };
+ // Direct link to the latest IPA (free Apple ID build), so the button downloads the file instead of opening GitHub.
+ try{fetch('https://api.github.com/repos/dedsec-reth0/astragram/releases/latest').then(function(r){return r.json()}).then(function(j){
+  var a=(j.assets||[]).filter(function(x){return /\.ipa$/.test(x.name)&&!/-full\.ipa$/.test(x.name)})[0];
+  if(a)document.getElementById('ipa').href=a.browser_download_url;
+  if(location.hash==='#ipa'&&a)location.href=a.browser_download_url;
+ }).catch(function(){})}catch(e){}
+ // From the channel's AltStore button: offer to open AltStore at once (iOS asks "Open in AltStore?").
+ if(location.hash==='#altstore')setTimeout(function(){location.href=document.getElementById('alt').href},350);
+})();
+</script>
+</body>
+</html>
