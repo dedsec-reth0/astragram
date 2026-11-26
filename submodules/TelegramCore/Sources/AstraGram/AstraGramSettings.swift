@@ -156,6 +156,12 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var exactNumbers: Bool = false
     /// No "new message" button at the top of the chat list.
     public var hideComposeButton: Bool = false
+    /// Photos from the attachment menu are always sent in HD.
+    public var alwaysSendHD: Bool = false
+    /// No live camera tile in the attachment menu's photo grid.
+    public var hideCameraTile: Bool = false
+    /// Seconds a double tap on a video skips (Telegram's is 15).
+    public var videoSeekSeconds: Int = 15
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -494,6 +500,9 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.removeBubbleTail = try container.decodeIfPresent(Bool.self, forKey: .removeBubbleTail) ?? d.removeBubbleTail
         self.exactNumbers = try container.decodeIfPresent(Bool.self, forKey: .exactNumbers) ?? d.exactNumbers
         self.hideComposeButton = try container.decodeIfPresent(Bool.self, forKey: .hideComposeButton) ?? d.hideComposeButton
+        self.alwaysSendHD = try container.decodeIfPresent(Bool.self, forKey: .alwaysSendHD) ?? d.alwaysSendHD
+        self.hideCameraTile = try container.decodeIfPresent(Bool.self, forKey: .hideCameraTile) ?? d.hideCameraTile
+        self.videoSeekSeconds = try container.decodeIfPresent(Int.self, forKey: .videoSeekSeconds) ?? d.videoSeekSeconds
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

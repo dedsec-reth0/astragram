@@ -295,6 +295,10 @@ public struct AstraStrings {
     public var removeBubbleTail: String { t("Пузыри без «хвостика»", "No Bubble Tails") }
     public var exactNumbers: String { t("Точные числа вместо 12K", "Exact Numbers (12,345, Not 12K)") }
     public var hideComposeButton: String { t("Скрыть кнопку «Новое сообщение»", "Hide \u{201C}New Message\u{201D} Button") }
+    public var alwaysSendHD: String { t("Всегда отправлять фото в HD", "Always Send Photos in HD") }
+    public var hideCameraTile: String { t("Без камеры в меню вложений", "No Camera in Attachment Menu") }
+    public var videoSeek: String { t("Шаг перемотки видео", "Video Skip Step") }
+    public func seconds(_ value: Int) -> String { self.isRussian ? "\(value) сек" : "\(value) s" }
     public var saveToSavedMessages: String { t("В Избранное", "Save to Saved Messages") }
     public var savedToSavedMessages: String { t("Сохранено в Избранное", "Saved to Saved Messages") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }

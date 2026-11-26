@@ -49,7 +49,8 @@ final class MediaPickerChatMediaSendLegacyContext: MediaPickerChatMediaSendSelec
             disposable?.dispose()
         }
         self.forcedCaption = forcedCaption
-        self.isHighQualityPhoto = isPasteboard ? false : (editingContext?.isHighQualityPhoto() ?? false)
+        // AstraGram: "always send photos in HD" (Settings → AstraGram → Chats).
+        self.isHighQualityPhoto = isPasteboard ? false : ((editingContext?.isHighQualityPhoto() ?? false) || AstraGramSettings.current.alwaysSendHD)
     }
 
     func item(for uniqueId: String) -> NSObject? {

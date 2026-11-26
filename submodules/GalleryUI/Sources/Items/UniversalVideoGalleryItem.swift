@@ -1229,9 +1229,9 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         
         if case let .playback(_, seekable) = self.footerContentNode.content, seekable {
             if location.x >= self.bounds.width * 0.3 {
-                self.footerContentNode.seekForward?(15.0)
+                self.footerContentNode.seekForward?(Double(AstraGramSettings.current.videoSeekSeconds))
             } else {
-                self.footerContentNode.seekBackward?(15.0)
+                self.footerContentNode.seekBackward?(Double(AstraGramSettings.current.videoSeekSeconds))
             }
             return true
         }
@@ -1303,9 +1303,9 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                         return
                     }
                     if isForward {
-                        self.footerContentNode.seekForward?(15.0)
+                        self.footerContentNode.seekForward?(Double(AstraGramSettings.current.videoSeekSeconds))
                     } else {
-                        self.footerContentNode.seekBackward?(15.0)
+                        self.footerContentNode.seekBackward?(Double(AstraGramSettings.current.videoSeekSeconds))
                     }
                 },
                 accessibilityStrings: self.presentationData.strings

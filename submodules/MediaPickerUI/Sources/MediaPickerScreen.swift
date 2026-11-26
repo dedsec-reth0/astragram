@@ -279,7 +279,8 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             case .assets(_, .files), .assets(_, .passport), .assets(_, .qrCode):
                 return .noCamera
             case .assets(nil, .default):
-                return .chatAssets
+                // AstraGram: the camera tile can be hidden from the attachment menu.
+                return AstraGramSettings.current.hideCameraTile ? .noCamera : .chatAssets
             case .assets(nil, .createSticker):
                 return .sticker
             case .assets(nil, .createAvatar):

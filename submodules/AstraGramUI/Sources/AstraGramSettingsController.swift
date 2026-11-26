@@ -354,7 +354,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         let ids: [Int32] = [
             0, 1, 2, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
             20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 36, 37, 3, 4, 5,
-            40, 41, 42, 43, 44, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 45, 46, 47,
+            40, 41, 42, 43, 44, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 45, 46, 47,
             60, 61, 62, 63, 64, 65, 73, 74, 75, 76, 77, 78, 66, 67, 68, 69, 100, 101, 102, 103, 104, 70, 71, 72,
             80, 81, 82, 85, 105, 106, 90, 91, 92,
             130, 139, 134, 133, 131, 132, 135, 136, 137, 138, 140, 141,
@@ -514,7 +514,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openApiCredentials()
                 })
-            case .glassMaterial, .doubleTapAction, .stickerSize:
+            case .glassMaterial, .doubleTapAction, .stickerSize, .videoSeek:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, action: {
                     arguments.openTool(kind)
                 })
@@ -542,6 +542,7 @@ private enum AstraGramSettingsButtonKind: Equatable {
     case glassMaterial
     case doubleTapAction
     case stickerSize
+    case videoSeek
     case lockedChats
     case securityCheck
     case telegramPrivacy
@@ -694,6 +695,9 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.flag(id: 164, section: .chats, title: strings.removeBubbleTail, value: settings.removeBubbleTail, enabled: true, keyPath: \.removeBubbleTail))
     entries.append(.flag(id: 165, section: .chats, title: strings.exactNumbers, value: settings.exactNumbers, enabled: true, keyPath: \.exactNumbers))
     entries.append(.flag(id: 166, section: .chats, title: strings.hideComposeButton, value: settings.hideComposeButton, enabled: true, keyPath: \.hideComposeButton))
+    entries.append(.flag(id: 167, section: .chats, title: strings.alwaysSendHD, value: settings.alwaysSendHD, enabled: true, keyPath: \.alwaysSendHD))
+    entries.append(.flag(id: 168, section: .chats, title: strings.hideCameraTile, value: settings.hideCameraTile, enabled: true, keyPath: \.hideCameraTile))
+    entries.append(.button(id: 169, section: .chats, title: strings.videoSeek, label: strings.seconds(settings.videoSeekSeconds), kind: .videoSeek))
 
     entries.append(.filtersHeader(strings.filtersHeader))
     entries.append(.filters(strings.filters, settings.messageFiltersEnabled ? "\(settings.messageFilters.count)" : ""))
@@ -873,6 +877,21 @@ public func astraGramSettingsController(context: AccountContext, page: AstraGram
                 pushControllerImpl?(astraBookmarksController(context: context))
             case .glassMaterial:
                 AstraGramSettings.update { $0.glassMaterial = (max(0, $0.glassMaterial) + 1) % 3 }
+            case .videoSeek:
+                let actionSheet = ActionSheetController(presentationData: presentationData)
+                let current = AstraGramSettings.current.videoSeekSeconds
+                actionSheet.setItemGroups([ActionSheetItemGroup(items: [ActionSheetTextItem(title: strings.videoSeek)] + [5, 10, 15, 30].map { seconds in
+                    return ActionSheetButtonItem(title: seconds == current ? "✓ " + strings.seconds(seconds) : strings.seconds(seconds), color: .accent, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                        AstraHaptics.toggle()
+                        AstraGramSettings.update { $0.videoSeekSeconds = seconds }
+                    })
+                }), ActionSheetItemGroup(items: [
+                    ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                    })
+                ])])
+                presentControllerImpl?(actionSheet)
             case .stickerSize:
                 let actionSheet = ActionSheetController(presentationData: presentationData)
                 let current = AstraGramSettings.current.stickerSizePercent
