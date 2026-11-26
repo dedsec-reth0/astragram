@@ -489,12 +489,11 @@ html.pt-out body{opacity:0;filter:blur(10px);transition:opacity .38s cubic-bezie
   <div class="bento">
    <div class="card glass span2 rv"><span class="spot"></span><div class="art"><div class="mute"><span class="bell"><i></i></span><span class="bell"><i></i></span><span class="bell"><i></i></span><b>DEDSEC</b></div></div><h4 data-i="bento.cards.0.0"></h4><p data-i="bento.cards.0.1"></p></div>
    <div class="card glass tall rv d1"><span class="spot"></span><div class="art"><div class="code"><u data-i="bento.code"></u>
-<b>AstraGram</b>.onSend(<em>msg</em> =&gt; {
-  if (<em>msg</em>.text.startsWith(<em>".flip"</em>))
-    <em>msg</em>.text = <em>msg</em>.text
-      .slice(5).split(<em>""</em>)
-      .reverse().join(<em>""</em>)
-})</div></div><h4 data-i="bento.cards.1.0"></h4><p data-i="bento.cards.1.1"></p></div>
+<u>// @id   flip</u>
+plugin.commands.<b>flip</b> = <em>function</em> (args) {
+  <em>return</em> args.split(<em>""</em>)
+    .reverse().join(<em>""</em>)
+}</div></div><h4 data-i="bento.cards.1.0"></h4><p data-i="bento.cards.1.1"></p></div>
    <div class="card glass rv d2"><span class="spot"></span><div class="art"><div class="adx"><i></i><i data-ad=""></i><i></i></div></div><h4 data-i="bento.cards.2.0"></h4><p data-i="bento.cards.2.1"></p></div>
    <div class="card glass rv"><span class="spot"></span><div class="art"><div class="wave"><i style="animation-delay:0.0s"></i> <i style="animation-delay:0.1s"></i> <i style="animation-delay:0.2s"></i> <i style="animation-delay:0.3s"></i> <i style="animation-delay:0.4s"></i> <i style="animation-delay:0.5s"></i> <i style="animation-delay:0.6s"></i> <i style="animation-delay:0.7s"></i></div></div><h4 data-i="bento.cards.3.0"></h4><p data-i="bento.cards.3.1"></p></div>
    <div class="card glass rv d1"><span class="spot"></span><div class="art"><div class="chips" id="chipsF"></div></div><h4 data-i="bento.cards.4.0"></h4><p data-i="bento.cards.4.1"></p></div>
