@@ -1,36 +1,39 @@
-<a href="https://dedsec-reth0.github.io/astragram/?lang=en"><img src="astragram/assets/readme/en/hero.webp" alt="AstraGram — Telegram for iPhone that listens to you." width="100%"></a>
+<a href="https://dedsec-reth0.github.io/astragram/?lang=en"><img src="astragram/assets/readme/en/header.svg" alt="AstraGram — Telegram for iPhone that listens to you." width="100%"></a>
 
 <p align="center"><b>English</b> · <a href="README.ru.md">Русский</a> · <a href="README.uk.md">Українська</a> · <a href="README.es.md">Español</a> · <a href="README.pt.md">Português</a> · <a href="README.de.md">Deutsch</a> · <a href="README.fr.md">Français</a> · <a href="README.tr.md">Türkçe</a></p>
 
-<h1 align="center">AstraGram</h1>
-
-<p align="center"><b>Telegram for iPhone that listens to you.</b><br>AstraGram is an open-source, unofficial Telegram client for iPhone: ghost mode, deleted messages, Face ID chats, streaks, AI and plugins. Free via AltStore and SideStore.</p>
-
 <p align="center">
-  <a href="https://dedsec-reth0.github.io/astragram/install/?lang=en"><img alt="Install for free" src="https://img.shields.io/badge/Install%20for%20free-AltStore%20%C2%B7%20SideStore-ffffff?style=for-the-badge&labelColor=000000"></a>
-  <a href="https://github.com/dedsec-reth0/astragram/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/dedsec-reth0/astragram?style=for-the-badge&label=release&color=ffffff&labelColor=000000"></a>
-  <a href="https://github.com/dedsec-reth0/astragram/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/dedsec-reth0/astragram/total?style=for-the-badge&label=downloads&color=ffffff&labelColor=000000"></a>
-  <img alt="iOS 15+" src="https://img.shields.io/badge/iOS-15%2B-ffffff?style=for-the-badge&labelColor=000000">
-  <a href="LICENSE"><img alt="GPL-2.0" src="https://img.shields.io/badge/license-GPL--2.0-ffffff?style=for-the-badge&labelColor=000000"></a>
+  <a href="https://dedsec-reth0.github.io/astragram/install/?lang=en"><img alt="Install for free" height="44" src="https://img.shields.io/badge/Install%20for%20free-ffffff?style=for-the-badge&logo=apple&logoColor=black"></a>
+  <a href="https://dedsec-reth0.github.io/astragram/?lang=en"><img alt="Website" height="44" src="https://img.shields.io/badge/Website-000000?style=for-the-badge&logo=safari&logoColor=white"></a>
+  <a href="https://t.me/astragram_news"><img alt="Telegram channel" height="44" src="https://img.shields.io/badge/Telegram%20channel-000000?style=for-the-badge&logo=telegram&logoColor=white"></a>
 </p>
 
-<p align="center"><a href="https://dedsec-reth0.github.io/astragram/install/?lang=en"><b>Install for free</b></a> · <a href="https://dedsec-reth0.github.io/astragram/?lang=en"><b>Website</b></a> · <a href="https://t.me/astragram_news"><b>Telegram channel</b></a> · <a href="https://github.com/dedsec-reth0/astragram/releases/latest"><b>Download IPA</b></a></p>
+<p align="center">
+  <a href="https://github.com/dedsec-reth0/astragram/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/dedsec-reth0/astragram?label=release&style=for-the-badge&labelColor=000000&color=1c1c22"></a>
+  <a href="https://github.com/dedsec-reth0/astragram/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/dedsec-reth0/astragram/total?label=downloads&style=for-the-badge&labelColor=000000&color=1c1c22"></a>
+  <a href="https://github.com/dedsec-reth0/astragram/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/dedsec-reth0/astragram?label=stars&style=for-the-badge&labelColor=000000&color=1c1c22"></a>
+  <img alt="iOS 15+" src="https://img.shields.io/badge/iOS-15%2B-1c1c22?style=for-the-badge&labelColor=000000">
+  <a href="LICENSE"><img alt="GPL-2.0" src="https://img.shields.io/badge/license-GPL--2.0-1c1c22?style=for-the-badge&labelColor=000000"></a>
+</p>
 
-> We took Telegram and **removed** everything that **gets in the way.** You decide whether to send **“online”** and **“read”.** Deleted messages **stay** with you. Clutter **disappears.** And all the code is **in plain sight.**
+<br>
+
+<p align="center">AstraGram is an open-source, unofficial Telegram client for iPhone: ghost mode, deleted messages, Face ID chats, streaks, AI and plugins. Free via AltStore and SideStore.</p>
+
+<h3 align="center">We took Telegram and <b>removed</b> everything that <b>gets in the way.</b> You decide whether to send <b>“online”</b> and <b>“read”.</b> Deleted messages <b>stay</b> with you. Clutter <b>disappears.</b> And all the code is <b>in plain sight.</b></h3>
+
+<br>
 
 ## Features
 
-<a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/feature-1.webp" alt="Ghost mode: Read, listen and watch stories without sending “online”, “read” or “typing”. Turn it on with the ghost button above the chat list." width="100%"></a>
-
-<a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/feature-2.webp" alt="Deleted stays: Messages the other person deletes stay in the chat with a label. Every message keeps its edit history." width="100%"></a>
-
-<a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/feature-3.webp" alt="Chats behind Face ID: Chosen chats open only with your face. Their text is hidden right in the chat list, and the app switcher shows a cover." width="100%"></a>
-
-<a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/feature-4.webp" alt="Streaks with friends: Text every day and your streak grows: Spark, Flicker, Flame, Blaze, Star. The count is the same on all your devices." width="100%"></a>
-
-<a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/feature-5.webp" alt="AI with your own key: Translate, summarize a chat, draft a reply, transcribe voice messages and pull text from photos — through any OpenAI-compatible API." width="100%"></a>
-
-<a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/feature-6.webp" alt="Monochrome and glass: A look in black, white and greys only. Pick the glass material: standard, clear or frosted." width="100%"></a>
+<table>
+<tr><td width="42%" align="center"><a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/phone-1.webp" alt="Ghost mode" width="300"></a></td><td width="58%" valign="middle"><sub><code>01 / 06</code></sub><h3>Ghost mode</h3><p>Read, listen and watch stories without sending “online”, “read” or “typing”. Turn it on with the ghost button above the chat list.</p><ul><li>No view receipts for stories, voice and video messages</li><li>Messages are marked read only when you reply</li><li>Telegram’s server still sees your connection: it’s not invisibility</li></ul></td></tr>
+<tr><td width="58%" valign="middle"><sub><code>02 / 06</code></sub><h3>Deleted stays</h3><p>Messages the other person deletes stay in the chat with a label. Every message keeps its edit history.</p><ul><li>Works in channels too</li><li>View-once photos and videos don’t burn</li><li>A log of everything deleted, across all chats</li></ul></td><td width="42%" align="center"><a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/phone-2.webp" alt="Deleted stays" width="300"></a></td></tr>
+<tr><td width="42%" align="center"><a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/phone-3.webp" alt="Chats behind Face ID" width="300"></a></td><td width="58%" valign="middle"><sub><code>03 / 06</code></sub><h3>Chats behind Face ID</h3><p>Chosen chats open only with your face. Their text is hidden right in the chat list, and the app switcher shows a cover.</p><ul><li>Face ID for AstraGram settings</li><li>Block third-party keyboards</li><li>The clipboard clears after a minute</li></ul></td></tr>
+<tr><td width="58%" valign="middle"><sub><code>04 / 06</code></sub><h3>Streaks with friends</h3><p>Text every day and your streak grows: Spark, Flicker, Flame, Blaze, Star. The count is the same on all your devices.</p><ul><li>A buddy with a wardrobe of outfits</li><li>Restore a missed day</li><li>An AstraGram badge your AstraGram friends can see</li></ul></td><td width="42%" align="center"><a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/phone-4.webp" alt="Streaks with friends" width="300"></a></td></tr>
+<tr><td width="42%" align="center"><a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/phone-5.webp" alt="AI with your own key" width="300"></a></td><td width="58%" valign="middle"><sub><code>05 / 06</code></sub><h3>AI with your own key</h3><p>Translate, summarize a chat, draft a reply, transcribe voice messages and pull text from photos — through any OpenAI-compatible API.</p><ul><li>Text goes to the service only when you ask</li><li>No key? A free service with a rate limit</li><li>JavaScript plugins</li></ul></td></tr>
+<tr><td width="58%" valign="middle"><sub><code>06 / 06</code></sub><h3>Monochrome and glass</h3><p>A look in black, white and greys only. Pick the glass material: standard, clear or frosted.</p><ul><li>Springy button feedback</li><li>Profile music as a capsule</li><li>No stories bar and no ads in channels</li></ul></td><td width="42%" align="center"><a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/phone-6.webp" alt="Monochrome and glass" width="300"></a></td></tr>
+</table>
 
 ## Everything you were missing.
 
@@ -44,9 +47,11 @@ One tap, and AltStore offers to add the AstraGram source. Updates will arrive th
 
 <p><a href="https://dedsec-reth0.github.io/astragram/install/?lang=en"><img alt="Open in AltStore" src="https://img.shields.io/badge/Open%20in%20AltStore-000000?style=for-the-badge&logo=apple&logoColor=white"></a> <a href="https://dedsec-reth0.github.io/astragram/install/?lang=en"><img alt="Open in SideStore" src="https://img.shields.io/badge/Open%20in%20SideStore-000000?style=for-the-badge&logo=apple&logoColor=white"></a> <a href="https://github.com/dedsec-reth0/astragram/releases/latest"><img alt="Download IPA" src="https://img.shields.io/badge/Download%20IPA-ffffff?style=for-the-badge&logo=github&logoColor=black"></a></p>
 
-1. **Install AltStore or SideStore** — They sign the app with your Apple ID. No jailbreak needed. [Get AltStore](https://altstore.io) · [SideStore](https://sidestore.io)
-2. **Add the AstraGram source** — The “Open in AltStore” button does it for you. Or paste the address by hand.
-3. **Tap Free** — AltStore installs AstraGram. On first launch, enter your own API ID and Hash from my.telegram.org.
+<table><tr>
+<td width="33%" valign="top"><h1>01</h1><b>Install AltStore or SideStore</b><br><sub>They sign the app with your Apple ID. No jailbreak needed.<br><a href="https://altstore.io">Get AltStore</a> · <a href="https://sidestore.io">SideStore</a></sub></td>
+<td width="33%" valign="top"><h1>02</h1><b>Add the AstraGram source</b><br><sub>The “Open in AltStore” button does it for you. Or paste the address by hand.</sub></td>
+<td width="33%" valign="top"><h1>03</h1><b>Tap Free</b><br><sub>AltStore installs AstraGram. On first launch, enter your own API ID and Hash from my.telegram.org.</sub></td>
+</tr></table>
 
 **By hand** — Source address:
 
@@ -102,9 +107,17 @@ Telegram’s servers send push only to apps with a certificate they know. “Not
 
 ## Don’t take our word. Check it yourself.
 
-- **The code is open. All of it** — The source is on [GitHub](https://github.com/dedsec-reth0/astragram) under GPL-2.0, built on Telegram-iOS’s open code.
-- **GitHub builds it, not us** — Every build runs on GitHub Actions, and its log is public. Each release is tagged on the commit it was built from.
-- **The API keys are yours** — On first launch you enter your own API ID and Hash from my.telegram.org.
+<table><tr>
+<td width="33%" valign="top"><b>The code is open. All of it</b><br><sub>The source is on <a href="https://github.com/dedsec-reth0/astragram">GitHub</a> under GPL-2.0, built on Telegram-iOS’s open code.</sub></td>
+<td width="33%" valign="top"><b>GitHub builds it, not us</b><br><sub>Every build runs on GitHub Actions, and its log is public. Each release is tagged on the commit it was built from.</sub></td>
+<td width="33%" valign="top"><b>The API keys are yours</b><br><sub>On first launch you enter your own API ID and Hash from my.telegram.org.</sub></td>
+</tr></table>
+
+```console
+$ git clone https://github.com/dedsec-reth0/astragram
+$ gh release view --repo dedsec-reth0/astragram --json tagName,targetCommitish
+# the release was built from this commit — check it yourself
+```
 
 ### Building from source
 
