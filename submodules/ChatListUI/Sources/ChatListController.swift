@@ -7425,7 +7425,9 @@ private final class ChatListLocationContext {
         switch location {
         case let .chatList(groupId):
             if groupId == .root {
-                defaultTitle = presentationData.strings.DialogList_Title
+                // AstraGram: a title of the user's own (Settings → AstraGram → Chats).
+                let astraTitle = AstraGramSettings.current.chatListTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                defaultTitle = astraTitle.isEmpty ? presentationData.strings.DialogList_Title : String(astraTitle.prefix(32))
             } else {
                 defaultTitle = presentationData.strings.ChatList_ArchivedChatsTitle
             }

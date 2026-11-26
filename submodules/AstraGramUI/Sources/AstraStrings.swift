@@ -301,6 +301,10 @@ public struct AstraStrings {
     public func seconds(_ value: Int) -> String { self.isRussian ? "\(value) сек" : "\(value) s" }
     public var inlineCalculator: String { t("Калькулятор в поле ввода (2+2=)", "Calculator in Message Field (2+2=)") }
     public var pauseMediaOnMinimize: String { t("Пауза медиа при сворачивании", "Pause Media When Minimized") }
+    public var relativeLastSeen: String { t("«Был(а) 3 ч. назад»", "\u{201C}Last Seen 3 Hours Ago\u{201D}") }
+    public var chatListTitle: String { t("Заголовок списка чатов", "Chat List Title") }
+    public var chatListTitleDefault: String { t("Чаты", "Chats") }
+    public var chatListTitleHint: String { t("Пусто — обычный «Чаты». До 32 символов.", "Empty for the usual \u{201C}Chats\u{201D}. Up to 32 characters.") }
     public var saveToSavedMessages: String { t("В Избранное", "Save to Saved Messages") }
     public var savedToSavedMessages: String { t("Сохранено в Избранное", "Saved to Saved Messages") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }

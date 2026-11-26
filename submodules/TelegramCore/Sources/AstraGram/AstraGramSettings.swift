@@ -166,6 +166,10 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var inlineCalculator: Bool = false
     /// Voice messages, round videos and music pause when the app is minimized.
     public var pauseMediaOnMinimize: Bool = false
+    /// "Last seen 3 hours ago", "2 days ago" instead of a time or a date, for up to a week.
+    public var relativeLastSeen: Bool = false
+    /// The chat list's title instead of "Chats" (empty: Telegram's).
+    public var chatListTitle: String = ""
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -509,6 +513,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.videoSeekSeconds = try container.decodeIfPresent(Int.self, forKey: .videoSeekSeconds) ?? d.videoSeekSeconds
         self.inlineCalculator = try container.decodeIfPresent(Bool.self, forKey: .inlineCalculator) ?? d.inlineCalculator
         self.pauseMediaOnMinimize = try container.decodeIfPresent(Bool.self, forKey: .pauseMediaOnMinimize) ?? d.pauseMediaOnMinimize
+        self.relativeLastSeen = try container.decodeIfPresent(Bool.self, forKey: .relativeLastSeen) ?? d.relativeLastSeen
+        self.chatListTitle = try container.decodeIfPresent(String.self, forKey: .chatListTitle) ?? d.chatListTitle
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

@@ -590,6 +590,17 @@ public func stringAndActivityForUserPresence(strings: PresentationStrings, dateT
             } else if difference < 60 * 60 && !expanded {
                 let minutes = difference / 60
                 return (strings.LastSeen_MinutesAgo(minutes), false)
+            } else if AstraGramSettings.current.relativeLastSeen && difference < 7 * 24 * 60 * 60 {
+                // AstraGram: "last seen 3 hours ago", "2 days ago" instead of a time or a date (Settings → AstraGram →
+                // Chats), also on the profile.
+                if difference < 60 * 60 {
+                    return (strings.LastSeen_MinutesAgo(difference / 60), false)
+                } else if difference < 24 * 60 * 60 {
+                    return (strings.LastSeen_HoursAgo(difference / (60 * 60)), false)
+                }
+                let days = difference / (24 * 60 * 60)
+                let isRussian = ["ru", "uk", "be"].contains(where: { strings.baseLanguageCode.lowercased().hasPrefix($0) })
+                return (isRussian ? "был(а) \(days) дн. назад" : (days == 1 ? "last seen 1 day ago" : "last seen \(days) days ago"), false)
             } else {
                 var t: time_t = time_t(statusTimestamp)
                 var timeinfo: tm = tm()
