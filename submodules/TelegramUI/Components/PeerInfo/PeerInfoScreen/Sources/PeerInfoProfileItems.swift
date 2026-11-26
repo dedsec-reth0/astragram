@@ -994,6 +994,24 @@ func infoItems(
         }, requestLayout: { animated in
             interaction.requestLayout(animated)
         }))
+        // AstraGram: the data center that keeps the account (from the profile photo's location).
+        if AstraGramSettings.current.showDataCenter, let resource = peer.largeProfileImage?.resource as? CloudPeerPhotoSizeMediaResource {
+            let dc = resource.datacenterId
+            let place: String
+            switch dc {
+            case 1, 3:
+                place = "Miami"
+            case 2, 4:
+                place = "Amsterdam"
+            case 5:
+                place = "Singapore"
+            default:
+                place = ""
+            }
+            items[.astraInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.dc", label: "DC", text: place.isEmpty ? "DC\(dc)" : "DC\(dc) · \(place)", textColor: .primary, action: nil, requestLayout: { animated in
+                interaction.requestLayout(animated)
+            }))
+        }
         // AstraGram: the approximate registration date, derived from the user ID.
         if AstraGramSettings.current.showRegistrationDate, peer.id.namespace == Namespaces.Peer.CloudUser, let registrationText = astraApproximateRegistrationDate(userId: rawId) {
             items[.astraInfo]!.append(PeerInfoScreenLabeledValueItem(id: "astragram.registration", label: AstraStrings(presentationData.strings).registrationDate, text: registrationText, textColor: .primary, action: nil, requestLayout: { animated in

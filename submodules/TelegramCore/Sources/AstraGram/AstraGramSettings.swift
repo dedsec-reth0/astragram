@@ -170,6 +170,12 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var relativeLastSeen: Bool = false
     /// The chat list's title instead of "Chats" (empty: Telegram's).
     public var chatListTitle: String = ""
+    /// The own phone number is not shown at the top of Settings.
+    public var hideOwnPhone: Bool = false
+    /// Profiles show the data center (DC) that keeps the account.
+    public var showDataCenter: Bool = false
+    /// Avatars are rounded squares instead of circles.
+    public var squareAvatars: Bool = false
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -515,6 +521,9 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.pauseMediaOnMinimize = try container.decodeIfPresent(Bool.self, forKey: .pauseMediaOnMinimize) ?? d.pauseMediaOnMinimize
         self.relativeLastSeen = try container.decodeIfPresent(Bool.self, forKey: .relativeLastSeen) ?? d.relativeLastSeen
         self.chatListTitle = try container.decodeIfPresent(String.self, forKey: .chatListTitle) ?? d.chatListTitle
+        self.hideOwnPhone = try container.decodeIfPresent(Bool.self, forKey: .hideOwnPhone) ?? d.hideOwnPhone
+        self.showDataCenter = try container.decodeIfPresent(Bool.self, forKey: .showDataCenter) ?? d.showDataCenter
+        self.squareAvatars = try container.decodeIfPresent(Bool.self, forKey: .squareAvatars) ?? d.squareAvatars
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

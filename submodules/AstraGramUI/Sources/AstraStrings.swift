@@ -305,6 +305,9 @@ public struct AstraStrings {
     public var chatListTitle: String { t("Заголовок списка чатов", "Chat List Title") }
     public var chatListTitleDefault: String { t("Чаты", "Chats") }
     public var chatListTitleHint: String { t("Пусто — обычный «Чаты». До 32 символов.", "Empty for the usual \u{201C}Chats\u{201D}. Up to 32 characters.") }
+    public var hideOwnPhone: String { t("Скрыть свой номер в настройках", "Hide My Number in Settings") }
+    public var showDataCenter: String { t("Показывать DC в профиле", "Show DC in Profiles") }
+    public var squareAvatars: String { t("Квадратные аватарки (с перезапуска)", "Square Avatars (After Restart)") }
     public var saveToSavedMessages: String { t("В Избранное", "Save to Saved Messages") }
     public var savedToSavedMessages: String { t("Сохранено в Избранное", "Saved to Saved Messages") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }

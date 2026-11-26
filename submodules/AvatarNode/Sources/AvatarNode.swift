@@ -305,17 +305,18 @@ public func drawAvatarNodeContent(bounds: CGRect, parameters: Any?, isRasterizin
     let colors: [UIColor]
     if let parameters = parameters as? AvatarNodeParameters {
         colors = parameters.colors
+        let astraClipStyle = astraAvatarClipStyle(parameters.clipStyle)
         
-        if case .round = parameters.clipStyle {
+        if case .round = astraClipStyle {
             context.beginPath()
             context.addEllipse(in: CGRect(x: 0.0, y: 0.0, width: bounds.size.width, height:
                 bounds.size.height))
             context.clip()
-        } else if case .roundedRect = parameters.clipStyle {
+        } else if case .roundedRect = astraClipStyle {
             context.beginPath()
             context.addPath(UIBezierPath(roundedRect: CGRect(x: 0.0, y: 0.0, width: bounds.size.width, height: bounds.size.height), cornerRadius: floor(bounds.size.width * 0.25)).cgPath)
             context.clip()
-        } else if case .bubble = parameters.clipStyle {
+        } else if case .bubble = astraClipStyle {
             context.beginPath()
             AvatarNode.addAvatarBubblePath(context: context, rect: CGRect(x: 0.0, y: 0.0, width: bounds.size.width, height: bounds.size.height))
             context.clip()
@@ -1004,11 +1005,12 @@ public final class AvatarNode: ASDisplayNode {
             authorOfMessage: MessageReference? = nil,
             overrideImage: AvatarNodeImageOverride? = nil,
             emptyColor: UIColor? = nil,
-            clipStyle: AvatarNodeClipStyle = .round,
+            clipStyle requestedClipStyle: AvatarNodeClipStyle = .round,
             synchronousLoad: Bool = false,
             displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0),
             storeUnrounded: Bool = false
         ) {
+            let clipStyle = astraAvatarClipStyle(requestedClipStyle)
             let smallProfileImage = peer?.smallProfileImage
             let params = Params(
                 peerId: peer?.id,

@@ -354,7 +354,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         let ids: [Int32] = [
             0, 1, 2, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
             20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 36, 37, 3, 4, 5,
-            40, 41, 42, 43, 44, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 45, 46, 47,
+            40, 41, 42, 43, 44, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 45, 46, 47,
             60, 61, 62, 63, 64, 65, 73, 74, 75, 76, 77, 78, 66, 67, 68, 69, 100, 101, 102, 103, 104, 70, 71, 72,
             80, 81, 82, 85, 105, 106, 90, 91, 92,
             130, 139, 134, 133, 131, 132, 135, 136, 137, 138, 140, 141,
@@ -702,6 +702,9 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.flag(id: 170, section: .chats, title: strings.inlineCalculator, value: settings.inlineCalculator, enabled: true, keyPath: \.inlineCalculator))
     entries.append(.flag(id: 171, section: .chats, title: strings.pauseMediaOnMinimize, value: settings.pauseMediaOnMinimize, enabled: true, keyPath: \.pauseMediaOnMinimize))
     entries.append(.flag(id: 172, section: .chats, title: strings.relativeLastSeen, value: settings.relativeLastSeen, enabled: true, keyPath: \.relativeLastSeen))
+    entries.append(.flag(id: 174, section: .chats, title: strings.hideOwnPhone, value: settings.hideOwnPhone, enabled: true, keyPath: \.hideOwnPhone))
+    entries.append(.flag(id: 176, section: .chats, title: strings.squareAvatars, value: settings.squareAvatars, enabled: true, keyPath: \.squareAvatars))
+    entries.append(.flag(id: 175, section: .chats, title: strings.showDataCenter, value: settings.showDataCenter, enabled: true, keyPath: \.showDataCenter))
     entries.append(.button(id: 173, section: .chats, title: strings.chatListTitle, label: settings.chatListTitle.isEmpty ? strings.chatListTitleDefault : settings.chatListTitle, kind: .chatListTitle))
 
     entries.append(.filtersHeader(strings.filtersHeader))

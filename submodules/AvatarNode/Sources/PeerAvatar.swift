@@ -183,7 +183,8 @@ public func peerAvatarImage(account: Account, peerReference: PeerReference?, aut
     )
 }
     
-public func peerAvatarImage(postbox: Postbox, peerReference: PeerReference?, authorOfMessage: MessageReference?, representation: TelegramMediaImageRepresentation?, displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0), clipStyle: AvatarNodeClipStyle = .round, blurred: Bool = false, inset: CGFloat = 0.0, emptyColor: UIColor? = nil, synchronousLoad: Bool = false, provideUnrounded: Bool = false, cutoutRect: CGRect? = nil) -> Signal<(UIImage, UIImage)?, NoError>? {
+public func peerAvatarImage(postbox: Postbox, peerReference: PeerReference?, authorOfMessage: MessageReference?, representation: TelegramMediaImageRepresentation?, displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0), clipStyle requestedClipStyle: AvatarNodeClipStyle = .round, blurred: Bool = false, inset: CGFloat = 0.0, emptyColor: UIColor? = nil, synchronousLoad: Bool = false, provideUnrounded: Bool = false, cutoutRect: CGRect? = nil) -> Signal<(UIImage, UIImage)?, NoError>? {
+    let clipStyle = astraAvatarClipStyle(requestedClipStyle)
     if let imageData = peerAvatarImageData(postbox: postbox, peerReference: peerReference, authorOfMessage: authorOfMessage, representation: representation, synchronousLoad: synchronousLoad) {
         return imageData
         |> mapToSignal { data -> Signal<(UIImage, UIImage)?, NoError> in
@@ -537,4 +538,14 @@ public func generateAvatarImage(size: CGSize, icon: UIImage?, iconScale: CGFloat
             context.draw(icon.cgImage!, in: iconFrame)
         }
     })
+}
+
+
+/// AstraGram: "square avatars" (Settings → AstraGram → Chats) draws round avatars as rounded squares, the shape forums
+/// use. Read when an avatar is drawn, so it applies to avatars drawn after the change (all of them after a restart).
+public func astraAvatarClipStyle(_ style: AvatarNodeClipStyle) -> AvatarNodeClipStyle {
+    if case .round = style, AstraGramSettings.current.squareAvatars {
+        return .roundedRect
+    }
+    return style
 }
