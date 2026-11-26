@@ -314,6 +314,8 @@ public struct AstraStrings {
     public var sendSilentlyByDefault: String { t("Отправлять без звука", "Send Silently by Default") }
     public var hidePremiumStatuses: String { t("Скрыть эмодзи-статусы у имён", "Hide Emoji Statuses") }
     public var allMessagesFromUser: String { t("Все сообщения участника", "All Messages from Member") }
+    public var copyPhoto: String { t("Копировать фото", "Copy Photo") }
+    public var hideAppBadge: String { t("Без цифры на иконке приложения", "No Badge on App Icon") }
     public var saveToSavedMessages: String { t("В Избранное", "Save to Saved Messages") }
     public var savedToSavedMessages: String { t("Сохранено в Избранное", "Saved to Saved Messages") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }

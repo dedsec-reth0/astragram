@@ -186,6 +186,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var sendSilentlyByDefault: Bool = false
     /// Other people's emoji statuses beside names are not shown.
     public var hidePremiumStatuses: Bool = false
+    /// No unread count on the app icon.
+    public var hideAppBadge: Bool = false
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -539,6 +541,7 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.revealSpoilers = try container.decodeIfPresent(Bool.self, forKey: .revealSpoilers) ?? d.revealSpoilers
         self.sendSilentlyByDefault = try container.decodeIfPresent(Bool.self, forKey: .sendSilentlyByDefault) ?? d.sendSilentlyByDefault
         self.hidePremiumStatuses = try container.decodeIfPresent(Bool.self, forKey: .hidePremiumStatuses) ?? d.hidePremiumStatuses
+        self.hideAppBadge = try container.decodeIfPresent(Bool.self, forKey: .hideAppBadge) ?? d.hideAppBadge
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

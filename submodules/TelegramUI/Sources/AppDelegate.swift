@@ -2173,7 +2173,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                     //UIApplication.shared.applicationIconBadgeNumber = 1
                 }
             }
-            UIApplication.shared.applicationIconBadgeNumber = Int(count)
+            // AstraGram: no unread count on the app icon (Settings → AstraGram → Chats).
+            UIApplication.shared.applicationIconBadgeNumber = AstraGramSettings.current.hideAppBadge ? 0 : Int(count)
         }))
     }
 

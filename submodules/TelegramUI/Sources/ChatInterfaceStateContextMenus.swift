@@ -1440,6 +1440,23 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         controllerInteraction.displayUndo(.info(title: nil, text: astraStrings.savedToSavedMessages, timeout: 2.0, customUndoText: nil))
                     })))
                 }
+                // AstraGram: copy a photo even when it has a caption (Telegram's Copy then copies the caption).
+                if !astraIsCopyProtected, let astraImage = astraMessage.media.first(where: { $0 is TelegramMediaImage }) as? TelegramMediaImage, let astraLargest = largestImageRepresentation(astraImage.representations) {
+                    subItems.append(.action(ContextMenuActionItem(text: astraStrings.copyPhoto, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { _, f in
+                        f(.default)
+                        let _ = (context.engine.resources.data(resource: EngineMediaResource(astraLargest.resource), incremental: true)
+                        |> filter { $0.isComplete }
+                        |> take(1)
+                        |> deliverOnMainQueue).startStandalone(next: { data in
+                            if let imageData = try? Data(contentsOf: URL(fileURLWithPath: data.path)), let image = UIImage(data: imageData) {
+                                UIPasteboard.general.image = image
+                                controllerInteraction.displayUndo(.copy(text: astraStrings.copied))
+                            }
+                        })
+                    })))
+                }
                 // AstraGram: every message of this sender in the chat (groups), through the chat's search by member.
                 if astraMessage.id.peerId.namespace != Namespaces.Peer.CloudUser, let astraAuthor = astraMessage.author {
                     subItems.append(.action(ContextMenuActionItem(text: astraStrings.allMessagesFromUser, icon: { theme in

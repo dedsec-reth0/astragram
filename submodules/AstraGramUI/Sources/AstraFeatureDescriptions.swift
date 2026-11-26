@@ -73,6 +73,7 @@ extension AstraStrings {
         case 180: return ru ? "Текст под спойлером показывается сразу, без тапа." : "Spoiler text is shown at once, without a tap."
         case 181: return ru ? "Все сообщения уходят без звука — у собеседника не будет звукового уведомления." : "Every message is sent silently: the other person gets no notification sound."
         case 182: return ru ? "Не показывать эмодзи-статусы рядом с именами других людей — вместо них обычная звёздочка Premium. Ваши аккаунты свои статусы сохраняют. Полностью применяется после перезапуска." : "Hides the emoji statuses beside other people's names. Yours stays."
+        case 183: return ru ? "На иконке AstraGram не будет красного кружка с числом непрочитанных. Уведомления приходят как обычно." : "No red unread count on the AstraGram icon. Notifications still arrive."
         case 61: return ru ? "Скрывает сообщения со словами или по регулярным выражениям, которые вы зададите." : "Hides messages matching words or regular expressions you set."
         case 62: return ru ? "Возвращает сообщения, которые вы скрыли на этом устройстве." : "Brings back messages you hid on this device."
         case 64: return ru ? "Сообщения занимают всю ширину экрана." : "Messages use the full screen width."
