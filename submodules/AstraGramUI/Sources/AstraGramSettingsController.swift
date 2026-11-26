@@ -354,7 +354,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         let ids: [Int32] = [
             0, 1, 2, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
             20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 36, 37, 3, 4, 5,
-            40, 41, 42, 43, 44, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 45, 46, 47,
+            40, 41, 42, 43, 44, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 45, 46, 47,
             60, 61, 62, 63, 64, 65, 73, 74, 75, 76, 77, 78, 66, 67, 68, 69, 100, 101, 102, 103, 104, 70, 71, 72,
             80, 81, 82, 85, 105, 106, 90, 91, 92,
             130, 139, 134, 133, 131, 132, 135, 136, 137, 138, 140, 141,
@@ -698,6 +698,8 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.flag(id: 167, section: .chats, title: strings.alwaysSendHD, value: settings.alwaysSendHD, enabled: true, keyPath: \.alwaysSendHD))
     entries.append(.flag(id: 168, section: .chats, title: strings.hideCameraTile, value: settings.hideCameraTile, enabled: true, keyPath: \.hideCameraTile))
     entries.append(.button(id: 169, section: .chats, title: strings.videoSeek, label: strings.seconds(settings.videoSeekSeconds), kind: .videoSeek))
+    entries.append(.flag(id: 170, section: .chats, title: strings.inlineCalculator, value: settings.inlineCalculator, enabled: true, keyPath: \.inlineCalculator))
+    entries.append(.flag(id: 171, section: .chats, title: strings.pauseMediaOnMinimize, value: settings.pauseMediaOnMinimize, enabled: true, keyPath: \.pauseMediaOnMinimize))
 
     entries.append(.filtersHeader(strings.filtersHeader))
     entries.append(.filters(strings.filters, settings.messageFiltersEnabled ? "\(settings.messageFilters.count)" : ""))

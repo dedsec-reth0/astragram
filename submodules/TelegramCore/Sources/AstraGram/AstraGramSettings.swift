@@ -162,6 +162,10 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var hideCameraTile: Bool = false
     /// Seconds a double tap on a video skips (Telegram's is 15).
     public var videoSeekSeconds: Int = 15
+    /// Typing "=" after an arithmetic expression in the message field adds its result.
+    public var inlineCalculator: Bool = false
+    /// Voice messages, round videos and music pause when the app is minimized.
+    public var pauseMediaOnMinimize: Bool = false
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -503,6 +507,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.alwaysSendHD = try container.decodeIfPresent(Bool.self, forKey: .alwaysSendHD) ?? d.alwaysSendHD
         self.hideCameraTile = try container.decodeIfPresent(Bool.self, forKey: .hideCameraTile) ?? d.hideCameraTile
         self.videoSeekSeconds = try container.decodeIfPresent(Int.self, forKey: .videoSeekSeconds) ?? d.videoSeekSeconds
+        self.inlineCalculator = try container.decodeIfPresent(Bool.self, forKey: .inlineCalculator) ?? d.inlineCalculator
+        self.pauseMediaOnMinimize = try container.decodeIfPresent(Bool.self, forKey: .pauseMediaOnMinimize) ?? d.pauseMediaOnMinimize
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

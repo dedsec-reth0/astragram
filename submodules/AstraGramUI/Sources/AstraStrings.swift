@@ -299,6 +299,8 @@ public struct AstraStrings {
     public var hideCameraTile: String { t("Без камеры в меню вложений", "No Camera in Attachment Menu") }
     public var videoSeek: String { t("Шаг перемотки видео", "Video Skip Step") }
     public func seconds(_ value: Int) -> String { self.isRussian ? "\(value) сек" : "\(value) s" }
+    public var inlineCalculator: String { t("Калькулятор в поле ввода (2+2=)", "Calculator in Message Field (2+2=)") }
+    public var pauseMediaOnMinimize: String { t("Пауза медиа при сворачивании", "Pause Media When Minimized") }
     public var saveToSavedMessages: String { t("В Избранное", "Save to Saved Messages") }
     public var savedToSavedMessages: String { t("Сохранено в Избранное", "Saved to Saved Messages") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }

@@ -95,6 +95,15 @@ final class AstraBackgroundNotifier {
         }
         let _ = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main, using: { [weak self] _ in
             self?.scheduleRefresh()
+            // AstraGram: voice messages, round videos and music stop when the app is minimized (Settings → AstraGram
+            // → Chats).
+            if AstraGramSettings.current.pauseMediaOnMinimize, let self {
+                let _ = (self.sharedContext
+                |> take(1)
+                |> deliverOnMainQueue).startStandalone(next: { sharedApplicationContext in
+                    sharedApplicationContext.sharedContext.mediaManager.playlistControl(.playback(.pause), type: nil)
+                })
+            }
         })
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound], completionHandler: { _, _ in })
     }

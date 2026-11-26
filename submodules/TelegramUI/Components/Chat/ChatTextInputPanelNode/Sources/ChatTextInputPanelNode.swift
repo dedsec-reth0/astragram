@@ -4306,13 +4306,26 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             // overlays) now; the panel hands it the current theme/energy inputs and then reads interface state back.
             richTextInputNode.decorateAfterTextChange(context: context, baseFontSize: baseFontSize, textColor: presentationInterfaceState.theme.chat.inputPanel.inputTextColor, primaryTextColor: presentationInterfaceState.theme.chat.inputPanel.primaryTextColor, accentTextColor: presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor, spoilersRevealed: richTextInputNode.spoilersRevealed, fullTranslucency: fullTranslucency, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider)
 
-            let inputTextState = self.inputTextState
+            var inputTextState = self.inputTextState
+            // AstraGram: the inline calculator. Typing "=" after an expression ("2+2*3=") adds its result. Only on
+            // typing (the text grew by one character, the caret at the end), so deleting the result does not bring
+            // it back.
+            let astraLength = inputTextState.inputText.length
+            if AstraGramSettings.current.inlineCalculator, astraLength == self.astraLastInputLength + 1, inputTextState.selectionRange.upperBound == astraLength, let result = astraCalculatorResult(inputTextState.inputText.string) {
+                let updatedText = NSMutableAttributedString(attributedString: inputTextState.inputText)
+                updatedText.append(NSAttributedString(string: result))
+                inputTextState = ChatTextInputState(inputText: updatedText, selectionRange: updatedText.length ..< updatedText.length)
+            }
+            self.astraLastInputLength = inputTextState.inputText.length
             
             self.interfaceInteraction?.updateTextInputStateAndMode({ _, inputMode in return (inputTextState, inputMode) })
             self.interfaceInteraction?.updateInputLanguage({ _ in return self.richTextInputNode?.primaryLanguage })
             self.updateTextNodeText(animated: true)
         }
     }
+    
+    /// AstraGram: the input's length after the last change, for the inline calculator.
+    private var astraLastInputLength = 0
     
     @objc public func editableTextNodeDidUpdateText(_ editableTextNode: ASEditableTextNode) {
         self.chatInputTextNodeDidUpdateText()
