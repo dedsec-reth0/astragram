@@ -1,187 +1,123 @@
-<p align="center">
-  <img src="astragram/assets/hero.webp" alt="AstraGram для iOS" width="100%">
-</p>
+<a href="https://dedsec-reth0.github.io/astragram/?lang=en"><img src="astragram/assets/readme/en/hero.webp" alt="AstraGram — Telegram for iPhone that listens to you." width="100%"></a>
 
-<h1 align="center">AstraGram для iOS</h1>
+<p align="center"><b>English</b> · <a href="README.ru.md">Русский</a> · <a href="README.uk.md">Українська</a> · <a href="README.es.md">Español</a> · <a href="README.pt.md">Português</a> · <a href="README.de.md">Deutsch</a> · <a href="README.fr.md">Français</a> · <a href="README.tr.md">Türkçe</a></p>
 
-<p align="center">
-  <b>Русский</b> · <a href="README.en.md">English</a>
-</p>
+<h1 align="center">AstraGram</h1>
+
+<p align="center"><b>Telegram for iPhone that listens to you.</b><br>AstraGram is an open-source, unofficial Telegram client for iPhone: ghost mode, deleted messages, Face ID chats, streaks, AI and plugins. Free via AltStore and SideStore.</p>
 
 <p align="center">
-  Telegram для iPhone с режимом призрака, сохранением удалённых сообщений и плагинами.<br>
-  Собран из исходников Telegram-iOS, ставится через AltStore, без джейлбрейка.
+  <a href="https://dedsec-reth0.github.io/astragram/install/?lang=en"><img alt="Install for free" src="https://img.shields.io/badge/Install%20for%20free-AltStore%20%C2%B7%20SideStore-ffffff?style=for-the-badge&labelColor=000000"></a>
+  <a href="https://github.com/dedsec-reth0/astragram/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/dedsec-reth0/astragram?style=for-the-badge&label=release&color=ffffff&labelColor=000000"></a>
+  <a href="https://github.com/dedsec-reth0/astragram/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/dedsec-reth0/astragram/total?style=for-the-badge&label=downloads&color=ffffff&labelColor=000000"></a>
+  <img alt="iOS 15+" src="https://img.shields.io/badge/iOS-15%2B-ffffff?style=for-the-badge&labelColor=000000">
+  <a href="LICENSE"><img alt="GPL-2.0" src="https://img.shields.io/badge/license-GPL--2.0-ffffff?style=for-the-badge&labelColor=000000"></a>
 </p>
 
-<p align="center">
-  <a href="https://github.com/dedsec-reth0/astragram/releases/latest"><img alt="Версия" src="https://img.shields.io/github/v/release/dedsec-reth0/astragram?style=flat-square&label=%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F&color=7C3AED&labelColor=1E1B4B"></a>
-  <a href="https://github.com/dedsec-reth0/astragram/actions/workflows/build.yml"><img alt="Сборка" src="https://img.shields.io/github/actions/workflow/status/dedsec-reth0/astragram/build.yml?branch=master&style=flat-square&label=%D1%81%D0%B1%D0%BE%D1%80%D0%BA%D0%B0&labelColor=1E1B4B"></a>
-  <a href="https://github.com/dedsec-reth0/astragram/releases"><img alt="Загрузки" src="https://img.shields.io/github/downloads/dedsec-reth0/astragram/total?style=flat-square&label=%D0%B7%D0%B0%D0%B3%D1%80%D1%83%D0%B7%D0%BA%D0%B8&color=7C3AED&labelColor=1E1B4B"></a>
-  <img alt="iOS 15+" src="https://img.shields.io/badge/iOS-15%2B-7C3AED?style=flat-square&labelColor=1E1B4B">
-</p>
+<p align="center"><a href="https://dedsec-reth0.github.io/astragram/install/?lang=en"><b>Install for free</b></a> · <a href="https://dedsec-reth0.github.io/astragram/?lang=en"><b>Website</b></a> · <a href="https://t.me/astragram_news"><b>Telegram channel</b></a> · <a href="https://github.com/dedsec-reth0/astragram/releases/latest"><b>Download IPA</b></a></p>
 
-<p align="center">
-  <a href="#установка"><b>Установка</b></a> ·
-  <a href="#возможности"><b>Возможности</b></a> ·
-  <a href="#все-версии"><b>Все версии</b></a> ·
-  <a href="#первый-запуск"><b>Первый запуск</b></a> ·
-  <a href="#ограничения"><b>Ограничения</b></a> ·
-  <a href="#сборка-из-исходников"><b>Сборка</b></a>
-</p>
+> We took Telegram and **removed** everything that **gets in the way.** You decide whether to send **“online”** and **“read”.** Deleted messages **stay** with you. Clutter **disappears.** And all the code is **in plain sight.**
 
-<p align="center">
-  <img src="astragram/assets/showcase.webp" alt="Визуальный стиль AstraGram: стекло, монохром, движение" width="100%">
-</p>
+## Features
+
+<a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/feature-1.webp" alt="Ghost mode: Read, listen and watch stories without sending “online”, “read” or “typing”. Turn it on with the ghost button above the chat list." width="100%"></a>
+
+<a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/feature-2.webp" alt="Deleted stays: Messages the other person deletes stay in the chat with a label. Every message keeps its edit history." width="100%"></a>
+
+<a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/feature-3.webp" alt="Chats behind Face ID: Chosen chats open only with your face. Their text is hidden right in the chat list, and the app switcher shows a cover." width="100%"></a>
+
+<a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/feature-4.webp" alt="Streaks with friends: Text every day and your streak grows: Spark, Flicker, Flame, Blaze, Star. The count is the same on all your devices." width="100%"></a>
+
+<a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/feature-5.webp" alt="AI with your own key: Translate, summarize a chat, draft a reply, transcribe voice messages and pull text from photos — through any OpenAI-compatible API." width="100%"></a>
+
+<a href="https://dedsec-reth0.github.io/astragram/?lang=en#features"><img src="astragram/assets/readme/en/feature-6.webp" alt="Monochrome and glass: A look in black, white and greys only. Pick the glass material: standard, clear or frosted." width="100%"></a>
+
+## Everything you were missing.
+
+<a href="https://dedsec-reth0.github.io/astragram/?lang=en#more"><img src="astragram/assets/readme/en/more.webp" alt="Silence in one tap; JavaScript plugins; No ads; Notifications without push; Filters; Small things that matter" width="100%"></a>
+
+How to write a plugin: [astragram/plugins/README.md](astragram/plugins/README.md) · [examples](astragram/plugins/examples)
+
+## Install
+
+One tap, and AltStore offers to add the AstraGram source. Updates will arrive there too.
+
+<p><a href="https://dedsec-reth0.github.io/astragram/install/?lang=en"><img alt="Open in AltStore" src="https://img.shields.io/badge/Open%20in%20AltStore-000000?style=for-the-badge&logo=apple&logoColor=white"></a> <a href="https://dedsec-reth0.github.io/astragram/install/?lang=en"><img alt="Open in SideStore" src="https://img.shields.io/badge/Open%20in%20SideStore-000000?style=for-the-badge&logo=apple&logoColor=white"></a> <a href="https://github.com/dedsec-reth0/astragram/releases/latest"><img alt="Download IPA" src="https://img.shields.io/badge/Download%20IPA-ffffff?style=for-the-badge&logo=github&logoColor=black"></a></p>
+
+1. **Install AltStore or SideStore** — They sign the app with your Apple ID. No jailbreak needed. [Get AltStore](https://altstore.io) · [SideStore](https://sidestore.io)
+2. **Add the AstraGram source** — The “Open in AltStore” button does it for you. Or paste the address by hand.
+3. **Tap Free** — AltStore installs AstraGram. On first launch, enter your own API ID and Hash from my.telegram.org.
+
+**By hand** — Source address:
+
+```
+https://github.com/dedsec-reth0/astragram/releases/download/sidestore-source/source.json
+```
+
+1. Open AltStore → **Browse** → **Sources** → **+**.
+2. Paste the copied address.
+3. Find AstraGram and tap **Free**.
 
 > [!NOTE]
-> Проект в разработке. Сборки выходят часто и проверяются автоматически (сборка, целостность IPA), но не на всех
-> устройствах и версиях iOS. Это неофициальный клиент: он не связан с Telegram.
+> AstraGram’s own screens are in Russian and English; the rest of the app is Telegram’s interface in any of its languages.
 
-## Установка
+### Which IPA to pick
 
-Нужен iPhone с iOS 15 или новее и [AltStore](https://altstore.io).
-
-1. Откройте AltStore → **Browse** → **Sources** → **+**.
-2. Вставьте адрес источника:
-
-   ```
-   https://github.com/dedsec-reth0/astragram/releases/download/sidestore-source/source.json
-   ```
-
-3. Откройте **AstraGram** в списке и нажмите **Free**. AltStore подпишет приложение вашим Apple ID.
-4. Обновления приходят туда же: когда выходит новая сборка, в AltStore появляется кнопка **Update**.
-
-Можно поставить и вручную: скачайте IPA со страницы [последнего релиза](https://github.com/dedsec-reth0/astragram/releases/latest)
-и откройте его в AltStore через **My Apps** → **+**.
-
-| Файл | Для кого | App ID |
+| | IPA | App ID |
 | --- | --- | --- |
-| `AstraGram-<версия>-<сборка>.ipa` | Бесплатный Apple ID. Без расширений (виджеты, «Поделиться»). | 1 |
-| `AstraGram-<версия>-<сборка>-full.ipa` | Платный аккаунт разработчика. Со всеми расширениями. | 7 |
+| **Standard** | `AstraGram-<version>-<build>.ipa` | Free Apple ID. No extensions — no widgets or Share. Needs 1 App ID. |
+| **Full** | `AstraGram-<version>-<build>-full.ipa` | Paid developer account. All extensions included. Needs 7 App IDs. |
 
-## Все версии
+### All versions
 
-В источнике AltStore перечислены все выпущенные сборки, а не только последняя: у каждой свой номер, дата и список
-изменений. Новая сборка приходит как обновление, а прежние остаются в истории версий на странице приложения.
+Every build is in [Releases](https://github.com/dedsec-reth0/astragram/releases), and the AltStore source lists all of them, not only the latest: a new build arrives as an update, earlier ones stay in the version history.
 
-Поставить любую сборку можно и вручную:
+### Questions
 
-1. Откройте [список релизов](https://github.com/dedsec-reth0/astragram/releases) и выберите нужную сборку.
-2. Скачайте её IPA.
-3. В AltStore: **My Apps** → **+** → выберите файл. При обновлении данные и вход сохраняются; откат на прежнюю сборку на устройстве не проверялся.
+<details><summary><b>Do I need a jailbreak?</b></summary>
 
-Сборки до 103756 выходили одним файлом с расширениями: им нужно 7 App ID.
+No. AstraGram installs through AltStore or SideStore, like any app from a source.
 
-## Первый запуск
+</details>
+<details><summary><b>Why every 7 days?</b></summary>
 
-В сборке нет ключей Telegram API: у каждого они свои.
+With a free Apple ID the signature lasts 7 days. Once a week, tap “Refresh All” in AltStore.
 
-1. Откройте [my.telegram.org](https://my.telegram.org), войдите по номеру и выберите **API development tools**.
-2. Создайте приложение и скопируйте **api_id** и **api_hash**.
-3. Введите их в AstraGram при первом запуске. Потом их можно сменить: **Настройки → AstraGram → API ID и Hash**.
+</details>
+<details><summary><b>Do I keep my data when I update?</b></summary>
 
-Все функции AstraGram лежат в **Настройки → AstraGram**. Каждая включается отдельно.
+Yes. Updating through AltStore keeps your data and your login.
 
-## Возможности
+</details>
+<details><summary><b>Where do I get an API ID and Hash?</b></summary>
 
-<table>
-<tr>
-<td width="50%" valign="top">
+At my.telegram.org, under API development tools. You can change them later in Settings → AstraGram → API ID and Hash.
 
-**Режим призрака**
+</details>
+<details><summary><b>Why don’t push notifications arrive?</b></summary>
 
-- не отправлять «в сети», прочтение и «печатает»
-- не отмечать просмотр историй, прослушивание голосовых и кружков
-- прочитать при ответе, реакции или голосовании
-- включается и с иконки на домашнем экране
+Telegram’s servers send push only to apps with a certificate they know. “Notifications without push” in AstraGram settings helps in part.
 
-</td>
-<td width="50%" valign="top">
+</details>
 
-**История сообщений**
+## Don’t take our word. Check it yourself.
 
-- сохранять удалённые сообщения, в том числе в каналах
-- оставлять их в чате с меткой
-- история правок каждого сообщения
-- не сжигать одноразовые фото и видео
-- журнал удалённого по всем чатам
+- **The code is open. All of it** — The source is on [GitHub](https://github.com/dedsec-reth0/astragram) under GPL-2.0, built on Telegram-iOS’s open code.
+- **GitHub builds it, not us** — Every build runs on GitHub Actions, and its log is public. Each release is tagged on the commit it was built from.
+- **The API keys are yours** — On first launch you enter your own API ID and Hash from my.telegram.org.
 
-</td>
-</tr>
-<tr>
-<td valign="top">
+### Building from source
 
-**Чаты**
+The app is built with Bazel from the Telegram-iOS sources; each release is tagged on the commit it was built from.
 
-- фильтры по словам и регулярным выражениям
-- скрывать стикеры и GIF других, сообщения заблокированных
-- подтверждение перед отправкой стикеров, GIF и сообщений
-- закладки, шаблоны, уведомления по словам
-- детали сообщения, ID в профиле, секунды во времени
+[astragram/INSTALL.md](astragram/INSTALL.md) — building and publishing (in Russian) · [docs/telegram-ios-build.md](docs/telegram-ios-build.md) — Telegram’s original guide
 
-</td>
-<td valign="top">
+### License
 
-**Меньше лишнего**
+Based on [Telegram-iOS](https://github.com/TelegramMessenger/Telegram-iOS), published under GPL-2.0. The changes here are under the same license: [LICENSE](LICENSE), third-party components: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-- без рекламы в каналах
-- без историй над списком чатов
-- без похожих каналов и счётчиков на папках
-- DEDSEC: тишина всех групп и каналов одной кнопкой
-- режим стримера, скриншоты и копирование без запретов
+---
 
-</td>
-</tr>
-<tr>
-<td valign="top">
+<p align="center"><a href="https://dedsec-reth0.github.io/astragram/?lang=en"><img src="astragram/assets/icon-rounded.png" width="64" alt="AstraGram"></a></p>
 
-**AI и плагины**
-
-- AI через любой OpenAI-совместимый API со своим ключом: перевод, пересказ чата, ответ, расшифровка голосовых, текст с фото
-- плагины на JavaScript: [как писать](astragram/plugins/README.md), [примеры](astragram/plugins/examples)
-
-</td>
-<td valign="top">
-
-**Вид**
-
-- монохромное оформление: только чёрный, белый и серые
-- материал стекла: стандартный, прозрачный, матовый
-- пружинящий отклик кнопок
-- круглые кнопки и музыка капсулой в профиле
-- вкладки «Контакты» и «Звонки» по выбору
-
-</td>
-</tr>
-</table>
-
-Ещё: проверка обновлений из приложения, экспорт и импорт настроек, уведомления без push, перезапуск одной кнопкой.
-
-## Ограничения
-
-- **Подпись на 7 дней.** С бесплатным Apple ID приложение нужно обновлять в AltStore раз в неделю (**Refresh All**).
-- **Push-уведомления.** Серверы Telegram шлют push только приложениям с известным им сертификатом, поэтому при
-  закрытом приложении уведомления не приходят. Частично помогает **Настройки → AstraGram → Уведомления без push**.
-- **Перезапуск.** iOS не даёт приложению открыть себя заново: кнопка перезапуска закрывает AstraGram и оставляет
-  уведомление, по которому он открывается.
-- **Режим призрака не всесилен.** Собеседник не видит прочтения, пока вы сами его не отправите, но сервер Telegram
-  знает о вашем подключении.
-
-## Сборка из исходников
-
-Сборка идёт на GitHub Actions: каждый push в `master` запускает [Build AstraGram](.github/workflows/build.yml), а по
-окончании релиз и источник AltStore обновляются сами.
-
-- [astragram/INSTALL.md](astragram/INSTALL.md) — как устроена сборка и публикация;
-- [docs/telegram-ios-build.md](docs/telegram-ios-build.md) — исходная инструкция Telegram по сборке в Xcode.
-
-## Лицензия
-
-Основано на [Telegram-iOS](https://github.com/TelegramMessenger/Telegram-iOS), исходный код которого опубликован под
-GPL-2.0. Изменения этого репозитория распространяются на тех же условиях: полный текст — в [LICENSE](LICENSE),
-сторонние компоненты и их лицензии — в [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Каждый релиз помечен тегом на
-коммит, из которого он собран, так что исходный код любой сборки можно получить отсюда. Название и логотип Telegram
-принадлежат их владельцу, AstraGram с Telegram не связан.
-
-`Random.txt` в корне пришёл из Telegram-iOS вместе с остальным кодом: там лежит тот же файл с той же строкой. Сборка
-AstraGram его не читает, секретом он не является.
+<p align="center"><sub>AstraGram is an unofficial Telegram client and is not affiliated with Telegram; the Telegram name and logo belong to their owner.<br>Builds from AltStore don’t get push notifications; ghost mode doesn’t hide your connection from Telegram’s server.</sub></p>
