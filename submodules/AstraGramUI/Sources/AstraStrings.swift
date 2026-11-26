@@ -273,6 +273,20 @@ public struct AstraStrings {
     public var glassMaterialMatte: String { t("Матовый", "Matte") }
     public var springPresses: String { t("Пружинящие нажатия", "Springy Presses") }
     public var showAstraGiftRibbon: String { t("Надпись AstraGram на подарках", "AstraGram Label on Gifts") }
+    public var doubleTapAction: String { t("Двойной тап по сообщению", "Double Tap on a Message") }
+    public var doubleTapActionNames: [String] {
+        return self.isRussian
+            ? ["Реакция", "Ответить", "Копировать", "Переслать", "В Избранное", "Изменить", "Ничего"]
+            : ["Reaction", "Reply", "Copy", "Forward", "Save to Saved Messages", "Edit", "Nothing"]
+    }
+    public var hideShareButton: String { t("Скрыть кнопку «Поделиться» у постов", "Hide Share Button on Posts") }
+    public var hideKeyboardOnScroll: String { t("Скрывать клавиатуру при прокрутке", "Hide Keyboard on Scroll") }
+    public var commaAfterMention: String { t("Запятая после упоминания", "Comma After Mention") }
+    public var disableMarkdown: String { t("Отправлять **разметку** как есть", "Send **Markdown** as Typed") }
+    public var hideSendAsPeer: String { t("Скрыть кнопку «Отправить как»", "Hide \u{201C}Send As\u{201D} Button") }
+    public var disableGreetingSticker: String { t("Без приветственного стикера", "No Greeting Sticker") }
+    public var saveToSavedMessages: String { t("В Избранное", "Save to Saved Messages") }
+    public var savedToSavedMessages: String { t("Сохранено в Избранное", "Saved to Saved Messages") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }
     public var astraBadge: String { t("Значок AstraGram у имени", "AstraGram Badge by My Name") }
     public var streaks: String { t("🔥 Огоньки", "🔥 Streaks") }

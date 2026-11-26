@@ -40,7 +40,8 @@ public struct ChatComposerTextMessages {
 /// at the message length limit, and each piece's entities generated. `businessLinkSetup` is the business
 /// link editor's variant, which generates no links of its own.
 public func chatComposerTextMessages(effectiveInputText: NSAttributedString, businessLinkSetup: Bool = false) -> ChatComposerTextMessages {
-    let inputText = convertMarkdownToAttributes(effectiveInputText)
+    // AstraGram: typed markdown can be sent as it is.
+    let inputText = AstraGramSettings.current.disableMarkdown ? effectiveInputText : convertMarkdownToAttributes(effectiveInputText)
     var pieces: [(text: NSAttributedString, entities: [MessageTextEntity])] = []
     for text in breakChatInputText(trimChatInputText(inputText)) {
         if text.length == 0 {

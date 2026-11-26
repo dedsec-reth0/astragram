@@ -1682,7 +1682,7 @@ public final class ChatEmptyNode: ASDisplayNode {
                     } else if interfaceState.isPremiumRequiredForMessaging {
                         contentType = .premiumRequired
                     } else {
-                        if peer.isDeleted || peer.botInfo != nil || peer.flags.contains(.isSupport) || peer.isScam || interfaceState.peerIsBlocked {
+                        if peer.isDeleted || peer.botInfo != nil || peer.flags.contains(.isSupport) || peer.isScam || interfaceState.peerIsBlocked || (AstraGramSettings.current.disableGreetingSticker && interfaceState.businessIntro == nil) {
                             contentType = .regular
                         } else {
                             contentType = .greeting

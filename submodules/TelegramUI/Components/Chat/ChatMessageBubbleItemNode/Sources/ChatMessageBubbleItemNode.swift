@@ -2209,6 +2209,10 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         if bubbleStyle.isBubbleless && !isAd {
             needsShareButton = false
         }
+        // AstraGram: sharing stays in the message menu.
+        if AstraGramSettings.current.hideShareButton && !isAd {
+            needsShareButton = false
+        }
 
         var tmpWidth: CGFloat
         if allowFullWidth {

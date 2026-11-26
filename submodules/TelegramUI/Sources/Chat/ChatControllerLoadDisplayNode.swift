@@ -884,6 +884,11 @@ extension ChatControllerImpl {
                 } else {
                     currentSendAsPeerId = nil
                 }
+                // AstraGram: no "send as" button, unless another identity is chosen (it stays visible then, so the
+                // user can see who they send as).
+                if AstraGramSettings.current.hideSendAsPeer && (currentSendAsPeerId == nil || currentSendAsPeerId == strongSelf.context.account.peerId) {
+                    allPeers = nil
+                }
                 
                 strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
                     return $0.updatedSendAsPeers(allPeers).updatedCurrentSendAsPeerId(currentSendAsPeerId)
@@ -2237,7 +2242,8 @@ extension ChatControllerImpl {
                     }
                 }
                 
-                let text = trimChatInputText(convertMarkdownToAttributes(expandedInputStateAttributedString(editMessage.inputState.inputText)))
+                let astraEditText = expandedInputStateAttributedString(editMessage.inputState.inputText)
+                let text = trimChatInputText(AstraGramSettings.current.disableMarkdown ? astraEditText : convertMarkdownToAttributes(astraEditText))
 
                 let content = editMessage.inputState.content
                 let richText: RichTextMessageAttribute? = content.isEntityExpressible() ? nil : RichTextMessageAttribute(instantPage: instantPage(from: content), fullInstantPage: nil)
@@ -5715,6 +5721,8 @@ extension ChatControllerImpl {
                     
                     self.chatDisplayNode.dismissInput()
                 }
+            } else if AstraGramSettings.current.hideKeyboardOnScroll {
+                self.chatDisplayNode.dismissInput()
             }
         }
     

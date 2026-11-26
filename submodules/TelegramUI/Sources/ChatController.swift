@@ -1968,6 +1968,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             if Namespaces.Message.allEphemeral.contains(message.id.namespace) {
                 return
             }
+            // AstraGram: `.default` comes only from a double tap; it may be set to do something else.
+            if case .default = reaction, strongSelf.astraHandleDoubleTap(message: message) {
+                return
+            }
             if case .default = reaction, strongSelf.chatLocation.peerId == strongSelf.context.account.peerId {
                 return
             }

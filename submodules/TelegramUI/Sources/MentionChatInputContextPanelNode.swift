@@ -160,12 +160,14 @@ final class MentionChatInputContextPanelNode: ChatInputContextPanelNode {
                             }
                             
                             if let range = mentionQueryRange {
+                                // AstraGram: a mention that opens the message is followed by a comma.
+                                let astraSuffix = AstraGramSettings.current.commaAfterMention && range.location <= 1 ? ", " : " "
                                 if let addressName = peer.addressName, !addressName.isEmpty {
-                                    return (textInputState.replacingFlatRange(range, with: addressName + " "), inputMode)
+                                    return (textInputState.replacingFlatRange(range, with: addressName + astraSuffix), inputMode)
                                 } else if !peer.compactDisplayTitle.isEmpty {
                                     let replacementText = NSMutableAttributedString()
                                     replacementText.append(NSAttributedString(string: peer.compactDisplayTitle, attributes: [ChatTextInputAttributes.textMention: ChatTextInputTextMentionAttribute(peerId: peer.id)]))
-                                    replacementText.append(NSAttributedString(string: " "))
+                                    replacementText.append(NSAttributedString(string: astraSuffix))
 
                                     // The widened range eats the leading "@" as well as the query.
                                     let updatedRange = NSRange(location: range.location - 1, length: range.length + 1)

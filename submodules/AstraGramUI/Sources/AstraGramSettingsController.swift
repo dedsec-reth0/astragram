@@ -354,7 +354,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         let ids: [Int32] = [
             0, 1, 2, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
             20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 36, 37, 3, 4, 5,
-            40, 41, 42, 43, 44, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 45, 46, 47,
+            40, 41, 42, 43, 44, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 150, 151, 152, 153, 154, 155, 156, 157, 45, 46, 47,
             60, 61, 62, 63, 64, 65, 73, 74, 75, 76, 77, 78, 66, 67, 68, 69, 100, 101, 102, 103, 104, 70, 71, 72,
             80, 81, 82, 85, 105, 106, 90, 91, 92,
             130, 139, 134, 133, 131, 132, 135, 136, 137, 138, 140, 141,
@@ -514,7 +514,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
                     arguments.openApiCredentials()
                 })
-            case .glassMaterial:
+            case .glassMaterial, .doubleTapAction:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, action: {
                     arguments.openTool(kind)
                 })
@@ -540,6 +540,7 @@ private enum AstraGramSettingsButtonKind: Equatable {
     case backupImport
     case restartApp
     case glassMaterial
+    case doubleTapAction
     case lockedChats
     case securityCheck
     case telegramPrivacy
@@ -675,6 +676,13 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.flag(id: 57, section: .chats, title: strings.showServiceTime, value: settings.showServiceMessageTime, enabled: true, keyPath: \.showServiceMessageTime))
     entries.append(.flag(id: 58, section: .chats, title: strings.simpleReplies, value: settings.simpleReplies, enabled: true, keyPath: \.simpleReplies))
     entries.append(.flag(id: 59, section: .chats, title: strings.confirmMessageSend, value: settings.confirmMessageSend, enabled: true, keyPath: \.confirmMessageSend))
+    entries.append(.button(id: 150, section: .chats, title: strings.doubleTapAction, label: strings.doubleTapActionNames[max(0, min(strings.doubleTapActionNames.count - 1, settings.doubleTapAction))], kind: .doubleTapAction))
+    entries.append(.flag(id: 151, section: .chats, title: strings.hideShareButton, value: settings.hideShareButton, enabled: true, keyPath: \.hideShareButton))
+    entries.append(.flag(id: 152, section: .chats, title: strings.hideKeyboardOnScroll, value: settings.hideKeyboardOnScroll, enabled: true, keyPath: \.hideKeyboardOnScroll))
+    entries.append(.flag(id: 153, section: .chats, title: strings.commaAfterMention, value: settings.commaAfterMention, enabled: true, keyPath: \.commaAfterMention))
+    entries.append(.flag(id: 154, section: .chats, title: strings.disableMarkdown, value: settings.disableMarkdown, enabled: true, keyPath: \.disableMarkdown))
+    entries.append(.flag(id: 155, section: .chats, title: strings.hideSendAsPeer, value: settings.hideSendAsPeer, enabled: true, keyPath: \.hideSendAsPeer))
+    entries.append(.flag(id: 156, section: .chats, title: strings.disableGreetingSticker, value: settings.disableGreetingSticker, enabled: true, keyPath: \.disableGreetingSticker))
 
     entries.append(.filtersHeader(strings.filtersHeader))
     entries.append(.filters(strings.filters, settings.messageFiltersEnabled ? "\(settings.messageFilters.count)" : ""))
@@ -854,6 +862,21 @@ public func astraGramSettingsController(context: AccountContext, page: AstraGram
                 pushControllerImpl?(astraBookmarksController(context: context))
             case .glassMaterial:
                 AstraGramSettings.update { $0.glassMaterial = (max(0, $0.glassMaterial) + 1) % 3 }
+            case .doubleTapAction:
+                let actionSheet = ActionSheetController(presentationData: presentationData)
+                let current = AstraGramSettings.current.doubleTapAction
+                actionSheet.setItemGroups([ActionSheetItemGroup(items: [ActionSheetTextItem(title: strings.doubleTapAction)] + strings.doubleTapActionNames.enumerated().map { index, name in
+                    return ActionSheetButtonItem(title: index == current ? "✓ " + name : name, color: .accent, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                        AstraHaptics.toggle()
+                        AstraGramSettings.update { $0.doubleTapAction = index }
+                    })
+                }), ActionSheetItemGroup(items: [
+                    ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                    })
+                ])])
+                presentControllerImpl?(actionSheet)
             case .securityCheck:
                 let resultController = AstraTextResultController(title: strings.securityCheck, isRussian: strings.isRussian, load: { completion in
                     astraSecurityReport(context: context, isRussian: strings.isRussian, completion: { text in

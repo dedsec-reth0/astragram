@@ -123,6 +123,21 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var springPresses: Bool
     /// The "AstraGram" ribbon on AstraGram's free gifts (off: they look like any gift).
     public var showAstraGiftRibbon: Bool
+    /// No share button beside channel posts and forwarded messages (sharing stays in the message menu).
+    public var hideShareButton: Bool = false
+    /// An empty private chat shows no greeting sticker.
+    public var disableGreetingSticker: Bool = false
+    /// Scrolling a chat hides the keyboard.
+    public var hideKeyboardOnScroll: Bool = false
+    /// A mention chosen at the start of a message is followed by a comma ("@name, ").
+    public var commaAfterMention: Bool = false
+    /// No "send as" button in groups (shown again while another identity is chosen).
+    public var hideSendAsPeer: Bool = false
+    /// Typed markdown (**bold**, __italic__, `code`…) is sent as it is, not turned into formatting.
+    public var disableMarkdown: Bool = false
+    /// What a double tap on a message does: 0 the quick reaction (Telegram's), 1 reply, 2 copy, 3 forward,
+    /// 4 save to Saved Messages, 5 edit (own messages; reply to others), 6 nothing.
+    public var doubleTapAction: Int = 0
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -444,6 +459,13 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.glassMaterial = try container.decodeIfPresent(Int.self, forKey: .glassMaterial) ?? d.glassMaterial
         self.springPresses = try container.decodeIfPresent(Bool.self, forKey: .springPresses) ?? d.springPresses
         self.showAstraGiftRibbon = try container.decodeIfPresent(Bool.self, forKey: .showAstraGiftRibbon) ?? d.showAstraGiftRibbon
+        self.hideShareButton = try container.decodeIfPresent(Bool.self, forKey: .hideShareButton) ?? d.hideShareButton
+        self.disableGreetingSticker = try container.decodeIfPresent(Bool.self, forKey: .disableGreetingSticker) ?? d.disableGreetingSticker
+        self.hideKeyboardOnScroll = try container.decodeIfPresent(Bool.self, forKey: .hideKeyboardOnScroll) ?? d.hideKeyboardOnScroll
+        self.commaAfterMention = try container.decodeIfPresent(Bool.self, forKey: .commaAfterMention) ?? d.commaAfterMention
+        self.hideSendAsPeer = try container.decodeIfPresent(Bool.self, forKey: .hideSendAsPeer) ?? d.hideSendAsPeer
+        self.disableMarkdown = try container.decodeIfPresent(Bool.self, forKey: .disableMarkdown) ?? d.disableMarkdown
+        self.doubleTapAction = try container.decodeIfPresent(Int.self, forKey: .doubleTapAction) ?? d.doubleTapAction
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

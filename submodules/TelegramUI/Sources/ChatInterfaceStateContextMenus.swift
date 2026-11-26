@@ -1428,6 +1428,17 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         controllerInteraction.displayUndo(.copy(text: astraStrings.copied))
                     })))
                 }
+                if astraMessage.id.peerId != context.account.peerId && !astraIsCopyProtected && astraMessage.id.namespace == Namespaces.Message.Cloud {
+                    subItems.append(.action(ContextMenuActionItem(text: astraStrings.saveToSavedMessages, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Fave"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { _, f in
+                        f(.default)
+                        let _ = enqueueMessages(account: context.account, peerId: context.account.peerId, messages: [
+                            .forward(source: astraMessage.id, threadId: nil, grouping: .auto, attributes: [], correlationId: nil)
+                        ]).startStandalone()
+                        controllerInteraction.displayUndo(.info(title: nil, text: astraStrings.savedToSavedMessages, timeout: 2.0, customUndoText: nil))
+                    })))
+                }
                 if astraMessage.flags.contains(.Incoming) {
                     subItems.append(.action(ContextMenuActionItem(text: astraStrings.readUntil, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Read"), color: theme.actionSheet.primaryTextColor)

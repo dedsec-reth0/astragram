@@ -16,7 +16,7 @@ struct ChatMediaSendCaption {
 }
 
 func chatMediaSendCaption(_ caption: NSAttributedString?) -> ChatMediaSendCaption {
-    let text = trimChatInputText(convertMarkdownToAttributes(caption ?? NSAttributedString()))
+    let text = trimChatInputText(AstraGramSettings.current.disableMarkdown ? (caption ?? NSAttributedString()) : convertMarkdownToAttributes(caption ?? NSAttributedString()))
     let entities = generateTextEntities(text.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(text))
 
     var bubbleUpEmojiOrStickersetsById: [Int64: EngineItemCollectionId] = [:]
