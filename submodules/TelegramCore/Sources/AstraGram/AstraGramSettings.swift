@@ -138,6 +138,18 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     /// What a double tap on a message does: 0 the quick reaction (Telegram's), 1 reply, 2 copy, 3 forward,
     /// 4 save to Saved Messages, 5 edit (own messages; reply to others), 6 nothing.
     public var doubleTapAction: Int = 0
+    /// Poll percentages show before voting (unless the poll hides them until it closes).
+    public var showPollResultsBeforeVoting: Bool = false
+    /// Stickers and big emoji have no time under them (reactions still show).
+    public var hideStickerTime: Bool = false
+    /// Size of stickers in chats, in percent of Telegram's.
+    public var stickerSizePercent: Int = 100
+    /// Letters buried under stacks of combining marks ("zalgo") are drawn with at most two.
+    public var filterZalgo: Bool = false
+    /// Reactions under messages are not drawn in private chats, groups, channels.
+    public var hideReactionsPrivate: Bool = false
+    public var hideReactionsGroups: Bool = false
+    public var hideReactionsChannels: Bool = false
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -466,6 +478,13 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.hideSendAsPeer = try container.decodeIfPresent(Bool.self, forKey: .hideSendAsPeer) ?? d.hideSendAsPeer
         self.disableMarkdown = try container.decodeIfPresent(Bool.self, forKey: .disableMarkdown) ?? d.disableMarkdown
         self.doubleTapAction = try container.decodeIfPresent(Int.self, forKey: .doubleTapAction) ?? d.doubleTapAction
+        self.showPollResultsBeforeVoting = try container.decodeIfPresent(Bool.self, forKey: .showPollResultsBeforeVoting) ?? d.showPollResultsBeforeVoting
+        self.hideStickerTime = try container.decodeIfPresent(Bool.self, forKey: .hideStickerTime) ?? d.hideStickerTime
+        self.stickerSizePercent = try container.decodeIfPresent(Int.self, forKey: .stickerSizePercent) ?? d.stickerSizePercent
+        self.filterZalgo = try container.decodeIfPresent(Bool.self, forKey: .filterZalgo) ?? d.filterZalgo
+        self.hideReactionsPrivate = try container.decodeIfPresent(Bool.self, forKey: .hideReactionsPrivate) ?? d.hideReactionsPrivate
+        self.hideReactionsGroups = try container.decodeIfPresent(Bool.self, forKey: .hideReactionsGroups) ?? d.hideReactionsGroups
+        self.hideReactionsChannels = try container.decodeIfPresent(Bool.self, forKey: .hideReactionsChannels) ?? d.hideReactionsChannels
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

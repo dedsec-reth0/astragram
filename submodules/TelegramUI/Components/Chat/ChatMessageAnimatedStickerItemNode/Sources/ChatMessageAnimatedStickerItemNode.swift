@@ -858,7 +858,9 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
     }
         
     override public func asyncLayout() -> (_ item: ChatMessageItem, _ params: ListViewItemLayoutParams, _ mergedTop: ChatMessageMerge, _ mergedBottom: ChatMessageMerge, _ dateHeaderAtBottom: ChatMessageHeaderSpec) -> (ListViewItemNodeLayout, (ListViewItemUpdateAnimation, ListViewItemApply, Bool) -> Void) {
-        var displaySize = CGSize(width: 180.0, height: 180.0)
+        // AstraGram: sticker size from Settings → AstraGram → Chats.
+        let astraStickerScale = CGFloat(max(50, min(150, AstraGramSettings.current.stickerSizePercent))) / 100.0
+        var displaySize = CGSize(width: floor(180.0 * astraStickerScale), height: floor(180.0 * astraStickerScale))
         let telegramFile = self.telegramFile
         let emojiFile = self.emojiFile
         let telegramDice = self.telegramDice
@@ -1499,7 +1501,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
             if shouldDisplayInlineDateReactions(message: EngineMessage(item.message), isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions) {
                 reactions = ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
             } else {
-                reactions = mergedMessageReactions(attributes: item.message.attributes, isTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId)) ?? ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
+                reactions = (astraHidesReactions(message: item.message, accountPeerId: item.context.account.peerId) ? nil : mergedMessageReactions(attributes: item.message.attributes, isTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId))) ?? ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
             }
             var reactionButtonsFinalize: ((CGFloat) -> (CGSize, (_ animation: ListViewItemUpdateAnimation) -> ChatMessageReactionButtonsNode))?
             if !reactions.reactions.isEmpty {
@@ -1556,7 +1558,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                 additionalTopHeight += chatMessageBubblelessStickerHeaderSpacing.above + bubblelessHeader.size.height + chatMessageBubblelessStickerHeaderSpacing.below
             }
             // Without bubbles the time is in the header (or the menu); it stays by the reactions when there are some.
-            let hidesStatusForBubbleless = isBubbleless && dateReactionsAndPeers.reactions.isEmpty
+            let hidesStatusForBubbleless = (isBubbleless || AstraGramSettings.current.hideStickerTime) && dateReactionsAndPeers.reactions.isEmpty
             layoutSize.height += additionalTopHeight
             imageFrame.origin.y += additionalTopHeight
             

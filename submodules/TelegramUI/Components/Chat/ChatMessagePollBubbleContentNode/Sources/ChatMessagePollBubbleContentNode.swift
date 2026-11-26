@@ -2967,7 +2967,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
                             }
                         }
                         totalVoterCount = totalVoters
-                        if didVote || isClosed || isPreviewingResults || isRestricted {
+                        if didVote || isClosed || isPreviewingResults || isRestricted || (AstraGramSettings.current.showPollResultsBeforeVoting && !poll.hideResultsUntilClose) {
                             for i in 0 ..< poll.options.count {
                                 inner: for optionVoters in voters {
                                     if optionVoters.opaqueIdentifier == poll.options[i].opaqueIdentifier {

@@ -498,7 +498,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
         }
     }
     
-    if !reactionsAreInline && !hideAllAdditionalInfo, let reactionsAttribute = mergedMessageReactions(attributes: firstMessage.attributes, isTags: firstMessage.areReactionsTags(accountPeerId: item.context.account.peerId)), !reactionsAttribute.reactions.isEmpty {
+    if !reactionsAreInline && !hideAllAdditionalInfo, let reactionsAttribute = (astraHidesReactions(message: firstMessage, accountPeerId: item.context.account.peerId) ? nil : mergedMessageReactions(attributes: firstMessage.attributes, isTags: firstMessage.areReactionsTags(accountPeerId: item.context.account.peerId))), !reactionsAttribute.reactions.isEmpty {
         if result.last?.1 == ChatMessageTextBubbleContentNode.self {
         } else if item.bubbleStyle == .bubblelessCard && result.last?.1 != ChatMessageCommentFooterContentNode.self {
             // Without bubbles a card keeps its reactions under its outline, as a message without a card does.
@@ -536,7 +536,7 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
     // into a reactions footer above a comments row or after an album of files.
     if item.bubbleStyle.isBubbleless && !reactionsAreInline && !isAction && !hideAllAdditionalInfo {
         let statusReactionClasses: [AnyClass] = [ChatMessageTextBubbleContentNode.self, ChatMessageWebpageBubbleContentNode.self, ChatMessageRichDataBubbleContentNode.self, ChatMessageFactCheckBubbleContentNode.self, ChatMessageFileBubbleContentNode.self, ChatMessageGameBubbleContentNode.self, ChatMessageInvoiceBubbleContentNode.self, ChatMessageRestrictedBubbleContentNode.self]
-        let hasReactions = mergedMessageReactions(attributes: firstMessage.attributes, isTags: firstMessage.areReactionsTags(accountPeerId: item.context.account.peerId))?.reactions.isEmpty == false
+        let hasReactions = (astraHidesReactions(message: firstMessage, accountPeerId: item.context.account.peerId) ? nil : mergedMessageReactions(attributes: firstMessage.attributes, isTags: firstMessage.areReactionsTags(accountPeerId: item.context.account.peerId)))?.reactions.isEmpty == false
         let endsWithComments = result.last?.1 == ChatMessageCommentFooterContentNode.self
         switch chatMessageBubblelessReactionsPlacement(
             style: item.bubbleStyle,
@@ -2658,7 +2658,7 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         
         let bubbleReactions: ReactionsMessageAttribute
         if needReactions || forceReactionsOutside {
-            bubbleReactions = mergedMessageReactions(attributes: item.message.attributes, isTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId)) ?? ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
+            bubbleReactions = (astraHidesReactions(message: item.message, accountPeerId: item.context.account.peerId) ? nil : mergedMessageReactions(attributes: item.message.attributes, isTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId))) ?? ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
         } else {
             bubbleReactions = ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
         }

@@ -285,6 +285,13 @@ public struct AstraStrings {
     public var disableMarkdown: String { t("Отправлять **разметку** как есть", "Send **Markdown** as Typed") }
     public var hideSendAsPeer: String { t("Скрыть кнопку «Отправить как»", "Hide \u{201C}Send As\u{201D} Button") }
     public var disableGreetingSticker: String { t("Без приветственного стикера", "No Greeting Sticker") }
+    public var showPollResultsBeforeVoting: String { t("Результаты опроса до голосования", "Poll Results Before Voting") }
+    public var stickerSize: String { t("Размер стикеров", "Sticker Size") }
+    public var hideStickerTime: String { t("Без времени на стикерах", "No Time on Stickers") }
+    public var filterZalgo: String { t("Фильтр «zalgo»-текста", "Filter \u{201C}Zalgo\u{201D} Text") }
+    public var hideReactionsPrivate: String { t("Скрыть реакции в личных чатах", "Hide Reactions in Private Chats") }
+    public var hideReactionsGroups: String { t("Скрыть реакции в группах", "Hide Reactions in Groups") }
+    public var hideReactionsChannels: String { t("Скрыть реакции в каналах", "Hide Reactions in Channels") }
     public var saveToSavedMessages: String { t("В Избранное", "Save to Saved Messages") }
     public var savedToSavedMessages: String { t("Сохранено в Избранное", "Saved to Saved Messages") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }

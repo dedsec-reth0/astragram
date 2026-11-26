@@ -431,6 +431,9 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 if incoming && item.associatedData.isSuspiciousPeer, let entities = messageEntities {
                     messageEntities = entities.filter(\.isShownFromSuspiciousPeer)
                 }
+                if AstraGramSettings.current.filterZalgo {
+                    rawText = astraFilterZalgo(rawText)
+                }
                 
                 var formattedDateUpdatePeriod: Int32?
                 if let messageEntities {
