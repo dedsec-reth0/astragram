@@ -292,6 +292,9 @@ public struct AstraStrings {
     public var hideReactionsPrivate: String { t("Скрыть реакции в личных чатах", "Hide Reactions in Private Chats") }
     public var hideReactionsGroups: String { t("Скрыть реакции в группах", "Hide Reactions in Groups") }
     public var hideReactionsChannels: String { t("Скрыть реакции в каналах", "Hide Reactions in Channels") }
+    public var removeBubbleTail: String { t("Пузыри без «хвостика»", "No Bubble Tails") }
+    public var exactNumbers: String { t("Точные числа вместо 12K", "Exact Numbers (12,345, Not 12K)") }
+    public var hideComposeButton: String { t("Скрыть кнопку «Новое сообщение»", "Hide \u{201C}New Message\u{201D} Button") }
     public var saveToSavedMessages: String { t("В Избранное", "Save to Saved Messages") }
     public var savedToSavedMessages: String { t("Сохранено в Избранное", "Saved to Saved Messages") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }

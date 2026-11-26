@@ -150,6 +150,12 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var hideReactionsPrivate: Bool = false
     public var hideReactionsGroups: Bool = false
     public var hideReactionsChannels: Bool = false
+    /// Chat bubbles have no tail (applies after a restart: the bubble images are made once per theme).
+    public var removeBubbleTail: Bool = false
+    /// Views, subscribers and other counts are shown exactly (12 345, not 12.3K).
+    public var exactNumbers: Bool = false
+    /// No "new message" button at the top of the chat list.
+    public var hideComposeButton: Bool = false
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -485,6 +491,9 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.hideReactionsPrivate = try container.decodeIfPresent(Bool.self, forKey: .hideReactionsPrivate) ?? d.hideReactionsPrivate
         self.hideReactionsGroups = try container.decodeIfPresent(Bool.self, forKey: .hideReactionsGroups) ?? d.hideReactionsGroups
         self.hideReactionsChannels = try container.decodeIfPresent(Bool.self, forKey: .hideReactionsChannels) ?? d.hideReactionsChannels
+        self.removeBubbleTail = try container.decodeIfPresent(Bool.self, forKey: .removeBubbleTail) ?? d.removeBubbleTail
+        self.exactNumbers = try container.decodeIfPresent(Bool.self, forKey: .exactNumbers) ?? d.exactNumbers
+        self.hideComposeButton = try container.decodeIfPresent(Bool.self, forKey: .hideComposeButton) ?? d.hideComposeButton
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

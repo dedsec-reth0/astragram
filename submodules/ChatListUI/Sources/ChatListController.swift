@@ -6971,7 +6971,7 @@ private final class ChatListLocationContext {
 
     /// Turns the whole ghost mode on and off from the chat list header (bright: on, faded: off).
     private var astraGhostButton: NavigationBarComponent.Button? {
-        guard case .chatList(.root) = self.location, self.rightButton != nil else {
+        guard case .chatList(.root) = self.location, self.rightButton != nil || AstraGramSettings.current.hideComposeButton else {
             return nil
         }
         let enabled = AstraGramSettings.current.isGhostModeFullyEnabled
@@ -7496,6 +7496,9 @@ private final class ChatListLocationContext {
                             self?.parentController?.editPressed()
                         }
                     )
+                } else if AstraGramSettings.current.hideComposeButton {
+                    // AstraGram: a new chat starts from Contacts instead.
+                    self.rightButton = nil
                 } else {
                     self.rightButton = NavigationBarComponent.Button(id: "compose",
                         content: .icon(imageName: "Chat List/ComposeIcon"),

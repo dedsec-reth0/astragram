@@ -354,7 +354,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         let ids: [Int32] = [
             0, 1, 2, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
             20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 36, 37, 3, 4, 5,
-            40, 41, 42, 43, 44, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 45, 46, 47,
+            40, 41, 42, 43, 44, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 45, 46, 47,
             60, 61, 62, 63, 64, 65, 73, 74, 75, 76, 77, 78, 66, 67, 68, 69, 100, 101, 102, 103, 104, 70, 71, 72,
             80, 81, 82, 85, 105, 106, 90, 91, 92,
             130, 139, 134, 133, 131, 132, 135, 136, 137, 138, 140, 141,
@@ -691,6 +691,9 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.flag(id: 161, section: .chats, title: strings.hideReactionsPrivate, value: settings.hideReactionsPrivate, enabled: true, keyPath: \.hideReactionsPrivate))
     entries.append(.flag(id: 162, section: .chats, title: strings.hideReactionsGroups, value: settings.hideReactionsGroups, enabled: true, keyPath: \.hideReactionsGroups))
     entries.append(.flag(id: 163, section: .chats, title: strings.hideReactionsChannels, value: settings.hideReactionsChannels, enabled: true, keyPath: \.hideReactionsChannels))
+    entries.append(.flag(id: 164, section: .chats, title: strings.removeBubbleTail, value: settings.removeBubbleTail, enabled: true, keyPath: \.removeBubbleTail))
+    entries.append(.flag(id: 165, section: .chats, title: strings.exactNumbers, value: settings.exactNumbers, enabled: true, keyPath: \.exactNumbers))
+    entries.append(.flag(id: 166, section: .chats, title: strings.hideComposeButton, value: settings.hideComposeButton, enabled: true, keyPath: \.hideComposeButton))
 
     entries.append(.filtersHeader(strings.filtersHeader))
     entries.append(.filters(strings.filters, settings.messageFiltersEnabled ? "\(settings.messageFilters.count)" : ""))

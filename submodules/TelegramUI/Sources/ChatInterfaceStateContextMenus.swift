@@ -1363,8 +1363,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
         
-        // AstraGram: the saved earlier versions of an edited message.
-        if message.attributes.contains(where: { $0 is EditedMessageAttribute }) {
+        // AstraGram: the saved earlier versions of an edited message. A hidden edit mark is not an edit: the server sets
+        // one when a reaction or a button changes, and the text stays as it was.
+        if message.attributes.contains(where: { ($0 as? EditedMessageAttribute)?.isHidden == false }) {
             actions.append(.action(ContextMenuActionItem(text: AstraStrings(chatPresentationInterfaceState.strings).editHistory, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in

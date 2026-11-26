@@ -3,6 +3,16 @@ import PresentationStrings
 import TelegramCore
 
 public func compactNumericCountString(_ count: Int, decimalSeparator: String = ".", showDecimalPart: Bool = true) -> String {
+    // AstraGram: exact numbers (Settings → AstraGram → Chats), 12 345 instead of 12.3K.
+    if AstraGramSettings.current.exactNumbers && count >= 1000 {
+        var digits = Array(String(count))
+        var index = digits.count - 3
+        while index > 0 {
+            digits.insert("\u{202F}", at: index)
+            index -= 3
+        }
+        return String(digits)
+    }
     if count >= 1000 * 1000 {
         let remainder = (count % (1000 * 1000)) / (1000 * 100)
         if remainder != 0 && showDecimalPart {
