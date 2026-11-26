@@ -71,6 +71,8 @@ public class ItemListDisclosureItem: ListViewItem, ItemListItem, ListItemCompone
     let minimumLabelSpacing: CGFloat?
     let noInsets: Bool
     let action: (() -> Void)?
+    /// A long press on the row (nil: none). AstraGram shows a setting's description with it.
+    let longTapAction: (() -> Void)?
     let clearHighlightAutomatically: Bool
     public let tag: ItemListItemTag?
     public let shimmeringIndex: Int?
@@ -98,11 +100,13 @@ public class ItemListDisclosureItem: ListViewItem, ItemListItem, ListItemCompone
         disclosureStyle: ItemListDisclosureStyle = .arrow,
         minimumLabelSpacing: CGFloat? = nil,
         noInsets: Bool = false,
+        longTapAction: (() -> Void)? = nil,
         action: (() -> Void)?,
         clearHighlightAutomatically: Bool = true,
         tag: ItemListItemTag? = nil,
         shimmeringIndex: Int? = nil
     ) {
+        self.longTapAction = longTapAction
         self.presentationData = presentationData
         self.systemStyle = systemStyle
         self.icon = icon
@@ -224,6 +228,14 @@ public class ItemListDisclosureItemNode: ListViewItemNode, ItemListItemNode {
     private let activateArea: AccessibilityAreaNode
     
     private var item: ItemListDisclosureItem?
+    private var astraLongPress: UILongPressGestureRecognizer?
+    
+    @objc fileprivate func astraLongPressGesture(_ recognizer: UILongPressGestureRecognizer) {
+        if case .began = recognizer.state, let longTapAction = self.item?.longTapAction {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            longTapAction()
+        }
+    }
     
     override public var canBeSelected: Bool {
         if let item = self.item, let _ = item.action {
@@ -581,6 +593,12 @@ public class ItemListDisclosureItemNode: ListViewItemNode, ItemListItemNode {
             return (ListViewItemNodeLayout(contentSize: contentSize, insets: insets), { [weak self] in
                 if let strongSelf = self {
                     strongSelf.item = item
+                    if item.longTapAction != nil && strongSelf.astraLongPress == nil {
+                        // Recognizing it cancels the touch, so the list does not also open the row.
+                        let recognizer = UILongPressGestureRecognizer(target: strongSelf, action: #selector(strongSelf.astraLongPressGesture(_:)))
+                        strongSelf.view.addGestureRecognizer(recognizer)
+                        strongSelf.astraLongPress = recognizer
+                    }
                     
                     strongSelf.activateArea.frame = CGRect(origin: CGPoint(x: params.leftInset, y: 0.0), size: CGSize(width: params.width - params.leftInset - params.rightInset, height: layout.contentSize.height))
                     strongSelf.activateArea.accessibilityLabel = item.title

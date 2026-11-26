@@ -1425,6 +1425,11 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 if let mainUsername = user.addressName, !mainUsername.isEmpty {
                     subtitle = subtitle.isEmpty ? "@\(mainUsername)" : "\(subtitle) • @\(mainUsername)"
                 }
+                if subtitle.isEmpty {
+                    // Without a username the line would be empty, the star level badge left on its own under the name.
+                    let isRussian = ["ru", "uk", "be"].contains(where: { presentationData.strings.baseLanguageCode.lowercased().hasPrefix($0) })
+                    subtitle = isRussian ? "Номер скрыт" : "Number hidden"
+                }
                 subtitleStringText = subtitle
                 subtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(17.0), color: .white)
                 smallSubtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(16.0), color: .white, shadowColor: titleShadowColor)

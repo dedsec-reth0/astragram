@@ -39,9 +39,12 @@ public class ItemListSwitchItem: ListViewItem, ItemListItem {
     let updated: (Bool) -> Void
     let activatedWhileDisabled: () -> Void
     let action: (() -> Void)?
+    /// A long press on the row (nil: none). AstraGram shows a setting's description with it.
+    let longTapAction: (() -> Void)?
     public let tag: ItemListItemTag?
     
-    public init(presentationData: ItemListPresentationData, systemStyle: ItemListSystemStyle = .legacy, icon: UIImage? = nil, title: String, text: String? = nil, textColor: TextColor = .primary, titleBadgeComponent: AnyComponent<Empty>? = nil, value: Bool, type: ItemListSwitchItemNodeType = .regular, enableInteractiveChanges: Bool = true, enabled: Bool = true, displayLocked: Bool = false, disableLeadingInset: Bool = false, maximumNumberOfLines: Int = 1, noCorners: Bool = false, sectionId: ItemListSectionId, style: ItemListStyle, updated: @escaping (Bool) -> Void, activatedWhileDisabled: @escaping () -> Void = {}, action: (() -> Void)? = nil, tag: ItemListItemTag? = nil) {
+    public init(presentationData: ItemListPresentationData, systemStyle: ItemListSystemStyle = .legacy, icon: UIImage? = nil, title: String, text: String? = nil, textColor: TextColor = .primary, titleBadgeComponent: AnyComponent<Empty>? = nil, value: Bool, type: ItemListSwitchItemNodeType = .regular, enableInteractiveChanges: Bool = true, enabled: Bool = true, displayLocked: Bool = false, disableLeadingInset: Bool = false, maximumNumberOfLines: Int = 1, noCorners: Bool = false, sectionId: ItemListSectionId, style: ItemListStyle, updated: @escaping (Bool) -> Void, activatedWhileDisabled: @escaping () -> Void = {}, action: (() -> Void)? = nil, longTapAction: (() -> Void)? = nil, tag: ItemListItemTag? = nil) {
+        self.longTapAction = longTapAction
         self.presentationData = presentationData
         self.systemStyle = systemStyle
         self.icon = icon
@@ -248,6 +251,15 @@ public class ItemListSwitchItemNode: ListViewItemNode, ItemListItemNode {
         // would be a second, unlabelled element.
         self.switchNode.view.accessibilityElementsHidden = true
         self.switchGestureNode.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:))))
+        // Recognizing it fails the row's tap, so a long press never also toggles the switch.
+        self.view.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(self.longPressGesture(_:))))
+    }
+    
+    @objc private func longPressGesture(_ recognizer: UILongPressGestureRecognizer) {
+        if case .began = recognizer.state, let longTapAction = self.item?.longTapAction {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            longTapAction()
+        }
     }
     
     public func displayHighlight() {

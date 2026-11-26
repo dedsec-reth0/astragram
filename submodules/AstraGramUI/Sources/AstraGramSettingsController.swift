@@ -55,6 +55,7 @@ private final class AstraGramSettingsArguments {
     let checkUpdates: () -> Void
     let openTool: (AstraGramSettingsButtonKind) -> Void
     let openPage: (AstraGramSettingsPage) -> Void
+    var showDescription: (String, String) -> Void = { _, _ in }
 
     init(
         update: @escaping ((inout AstraGramSettingsValues) -> Void) -> Void,
@@ -367,6 +368,18 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         return order
     }()
 
+    /// The row's title, for the long-press description.
+    fileprivate var astraRowTitle: String? {
+        switch self {
+        case let .ghostMaster(title, _), let .hideOnline(title, _), let .hideRead(title, _), let .hideStories(title, _), let .hideTyping(title, _), let .hideContents(title, _), let .markReadAfterSend(title, _, _), let .saveDeleted(title, _), let .keepInChat(title, _), let .saveInChannels(title, _, _), let .saveEdits(title, _), let .keepSelfDestructing(title, _), let .deletedMessages(title, _), let .showSeconds(title, _), let .showPeerId(title, _), let .hideSponsored(title, _), let .hideStoriesInList(title, _), let .confirmSticker(title, _), let .haptics(title, _), let .filters(title, _), let .translator(title):
+            return title
+        case let .flag(_, _, title, _, _, _), let .button(_, _, title, _, _), let .rootRow(_, _, _, title, _, _):
+            return title
+        default:
+            return nil
+        }
+    }
+
     private var displayIndex: Int {
         return AstraGramSettingsEntry.displayOrder[self.stableId] ?? (100000 + Int(self.stableId))
     }
@@ -378,6 +391,11 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! AstraGramSettingsArguments
         let section = self.section
+        // AstraGram: a long press on a row explains the setting.
+        let astraTitleAndDescription: (String, String)? = AstraStrings(presentationData.strings).featureDescription(self.stableId).map { (self.astraRowTitle ?? "", $0) }
+        let astraLongTap: (() -> Void)? = astraTitleAndDescription.map { titleAndDescription in
+            return { arguments.showDescription(titleAndDescription.0, titleAndDescription.1) }
+        }
 
         func toggle(_ title: String, _ value: Bool, enabled: Bool = true, _ apply: @escaping (inout AstraGramSettingsValues, Bool) -> Void) -> ListViewItem {
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enabled: enabled, sectionId: section, style: .blocks, updated: { value in
@@ -385,7 +403,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                 arguments.update { settings in
                     apply(&settings, value)
                 }
-            })
+            }, longTapAction: astraLongTap)
         }
 
         switch self {
@@ -420,11 +438,11 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         case let .keepSelfDestructing(title, value):
             return toggle(title, value) { $0.keepSelfDestructingMedia = $1 }
         case let .deletedMessages(title, label):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, longTapAction: astraLongTap, action: {
                 arguments.openDeletedMessages()
             })
         case let .storageSize(title, label):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, action: nil)
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, longTapAction: astraLongTap, action: nil)
         case let .clearHistory(title):
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: title, kind: .destructive, alignment: .natural, sectionId: section, style: .blocks, action: {
                 arguments.clearHistory()
@@ -450,15 +468,15 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         case let .haptics(title, value):
             return toggle(title, value) { $0.hapticFeedback = $1 }
         case let .openAppearance(title):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: "", sectionId: section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: "", sectionId: section, style: .blocks, longTapAction: astraLongTap, action: {
                 arguments.openLinked(.appearance)
             })
         case let .filters(title, label):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, longTapAction: astraLongTap, action: {
                 arguments.openFilters()
             })
         case let .translator(title):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: "", sectionId: section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: "", sectionId: section, style: .blocks, longTapAction: astraLongTap, action: {
                 arguments.openLinked(.language)
             })
         case let .reset(title):
@@ -476,7 +494,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         case let .footer(_, _, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: section)
         case let .rootRow(_, _, icon, title, label, target):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, title: title, label: label, sectionId: section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: icon, title: title, label: label, sectionId: section, style: .blocks, longTapAction: astraLongTap, action: {
                 switch target {
                 case let .page(page):
                     arguments.openPage(page)
@@ -495,11 +513,11 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
         case let .button(_, _, title, label, kind):
             switch kind {
             case .plugins:
-                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, longTapAction: astraLongTap, action: {
                     arguments.openPlugins()
                 })
             case .ai, .templates, .keywordAlerts, .bookmarks, .lockedChats, .securityCheck, .telegramPrivacy, .streaks, .giftShop, .feedback, .donate:
-                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, longTapAction: astraLongTap, action: {
                     arguments.openTool(kind)
                 })
             case .backupExport, .backupImport, .restartApp, .clearBadge:
@@ -511,15 +529,15 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                     arguments.checkUpdates()
                 })
             case .apiCredentials:
-                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, longTapAction: astraLongTap, action: {
                     arguments.openApiCredentials()
                 })
             case .glassMaterial, .doubleTapAction, .stickerSize, .videoSeek, .chatListTitle:
-                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, longTapAction: astraLongTap, action: {
                     arguments.openTool(kind)
                 })
             case .unhideMessages:
-                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, action: {
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, longTapAction: astraLongTap, action: {
                     arguments.unhideMessages()
                 })
             }
@@ -1032,6 +1050,12 @@ public func astraGramSettingsController(context: AccountContext, page: AstraGram
             pushControllerImpl?(astraGramSettingsController(context: context, page: page, makeLinked: makeLinked))
         }
     )
+    arguments.showDescription = { title, text in
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        presentControllerImpl?(textAlertController(context: context, title: title, text: text, actions: [
+            TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+        ]))
+    }
 
     let statistics: Signal<AstraMessageStoreStatistics?, NoError> = .single(nil) |> then(store.statistics() |> map(Optional.init))
 
