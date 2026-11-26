@@ -308,6 +308,12 @@ public struct AstraStrings {
     public var hideOwnPhone: String { t("Скрыть свой номер в настройках", "Hide My Number in Settings") }
     public var showDataCenter: String { t("Показывать DC в профиле", "Show DC in Profiles") }
     public var squareAvatars: String { t("Квадратные аватарки (с перезапуска)", "Square Avatars (After Restart)") }
+    public var confirmVoiceSend: String { t("Подтверждать голосовые и кружки", "Confirm Voice and Round Videos") }
+    public var dimDeletedMessages: String { t("Удалённые — полупрозрачные", "Dim Deleted Messages") }
+    public var revealSpoilers: String { t("Показывать спойлеры сразу", "Reveal Spoilers") }
+    public var sendSilentlyByDefault: String { t("Отправлять без звука", "Send Silently by Default") }
+    public var hidePremiumStatuses: String { t("Скрыть эмодзи-статусы у имён", "Hide Emoji Statuses") }
+    public var allMessagesFromUser: String { t("Все сообщения участника", "All Messages from Member") }
     public var saveToSavedMessages: String { t("В Избранное", "Save to Saved Messages") }
     public var savedToSavedMessages: String { t("Сохранено в Избранное", "Saved to Saved Messages") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }

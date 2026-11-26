@@ -660,7 +660,8 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                     cutout: nil,
                     insets: textInsets,
                     lineColor: messageTheme.accentControlColor,
-                    displayContentsUnderSpoilers: displayContentsUnderSpoilers.value,
+                    // AstraGram: spoilers can be shown at once (Settings → AstraGram → Chats).
+                    displayContentsUnderSpoilers: displayContentsUnderSpoilers.value || AstraGramSettings.current.revealSpoilers,
                     customTruncationToken: customTruncationToken,
                     expandedBlocks: expandedBlockIds,
                     computeCharacterRects: true

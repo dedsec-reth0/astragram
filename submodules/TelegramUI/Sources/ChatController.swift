@@ -9391,7 +9391,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.present(UndoOverlayController(presentationData: self.presentationData, content: .info(title: nil, text: text, timeout: 3.0, customUndoText: nil), action: { _ in return false }), in: .current)
     }
 
-    func transformEnqueueMessages(_ messages: [EnqueueMessage], silentPosting: Bool, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false) -> [EnqueueMessage] {
+    func transformEnqueueMessages(_ messages: [EnqueueMessage], silentPosting astraRequestedSilent: Bool, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false) -> [EnqueueMessage] {
+        // AstraGram: "send without sound" by default (Settings → AstraGram → Chats).
+        let silentPosting = astraRequestedSilent || AstraGramSettings.current.sendSilentlyByDefault
         // AstraGram ghost mode: "Send via schedule" sends a message as scheduled a few seconds ahead, so sending it does
         // not show the account online.
         var scheduleTime = scheduleTime

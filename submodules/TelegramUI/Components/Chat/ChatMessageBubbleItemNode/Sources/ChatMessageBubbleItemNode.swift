@@ -4428,6 +4428,8 @@ public class ChatMessageBubbleItemNode: ChatMessageItemView, ChatMessagePreviewI
         strongSelf.mainContainerNode.frame = CGRect(origin: CGPoint(x: 0.0, y: strongSelf.trailingItemSpaceOffset), size: layout.contentSize)
         strongSelf.mainContextSourceNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
         strongSelf.mainContextSourceNode.contentNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
+        // AstraGram: deleted messages kept in the chat are drawn half transparent, to stand out at a glance.
+        strongSelf.mainContextSourceNode.contentNode.alpha = (AstraGramSettings.current.dimDeletedMessages && item.message.astraDeletedAt != nil) ? 0.5 : 1.0
         strongSelf.contentContainersWrapperNode.frame = CGRect(origin: CGPoint(), size: layout.contentSize)
         
         strongSelf.appliedItem = item

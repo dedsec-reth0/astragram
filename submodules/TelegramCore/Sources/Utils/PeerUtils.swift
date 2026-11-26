@@ -410,6 +410,11 @@ public extension Peer {
     }
     
     var emojiStatus: PeerEmojiStatus? {
+        // AstraGram: other people's emoji statuses can be hidden (Settings → AstraGram → Chats); the accounts of this
+        // device keep theirs.
+        if AstraGramSettings.current.hidePremiumStatuses && !AstraLocalPremium.isAccount(self.id) {
+            return nil
+        }
         switch self {
         case let user as TelegramUser:
             return user.emojiStatus

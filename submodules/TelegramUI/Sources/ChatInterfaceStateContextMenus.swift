@@ -1440,6 +1440,15 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         controllerInteraction.displayUndo(.info(title: nil, text: astraStrings.savedToSavedMessages, timeout: 2.0, customUndoText: nil))
                     })))
                 }
+                // AstraGram: every message of this sender in the chat (groups), through the chat's search by member.
+                if astraMessage.id.peerId.namespace != Namespaces.Peer.CloudUser, let astraAuthor = astraMessage.author {
+                    subItems.append(.action(ContextMenuActionItem(text: astraStrings.allMessagesFromUser, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Search"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { _, f in
+                        f(.default)
+                        interfaceInteraction.beginMessageSearch(.member(astraAuthor), "")
+                    })))
+                }
                 if astraMessage.flags.contains(.Incoming) {
                     subItems.append(.action(ContextMenuActionItem(text: astraStrings.readUntil, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Read"), color: theme.actionSheet.primaryTextColor)

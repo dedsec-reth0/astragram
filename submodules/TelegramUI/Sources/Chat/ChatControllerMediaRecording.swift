@@ -256,6 +256,10 @@ extension ChatControllerImpl {
         if let _ = self.presentationInterfaceState.slowmodeState, !isScheduledMessages {
             updatedAction = .preview
         }
+        // AstraGram: "confirm voice and round videos" opens the preview instead of sending at once; it is sent from there.
+        if AstraGramSettings.current.confirmVoiceSend, case .send = action {
+            updatedAction = .preview
+        }
         
         var sendImmediately = false
         if let _ = self.presentationInterfaceState.sendPaidMessageStars, case .send = action {

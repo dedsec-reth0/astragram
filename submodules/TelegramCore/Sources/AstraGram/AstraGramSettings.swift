@@ -176,6 +176,16 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var showDataCenter: Bool = false
     /// Avatars are rounded squares instead of circles.
     public var squareAvatars: Bool = false
+    /// Voice messages and round videos open their preview instead of being sent at once.
+    public var confirmVoiceSend: Bool = false
+    /// Deleted messages kept in the chat are drawn half transparent.
+    public var dimDeletedMessages: Bool = false
+    /// Spoilers in messages are shown without a tap.
+    public var revealSpoilers: Bool = false
+    /// Messages are sent without sound unless the user chooses otherwise.
+    public var sendSilentlyByDefault: Bool = false
+    /// Other people's emoji statuses beside names are not shown.
+    public var hidePremiumStatuses: Bool = false
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -524,6 +534,11 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.hideOwnPhone = try container.decodeIfPresent(Bool.self, forKey: .hideOwnPhone) ?? d.hideOwnPhone
         self.showDataCenter = try container.decodeIfPresent(Bool.self, forKey: .showDataCenter) ?? d.showDataCenter
         self.squareAvatars = try container.decodeIfPresent(Bool.self, forKey: .squareAvatars) ?? d.squareAvatars
+        self.confirmVoiceSend = try container.decodeIfPresent(Bool.self, forKey: .confirmVoiceSend) ?? d.confirmVoiceSend
+        self.dimDeletedMessages = try container.decodeIfPresent(Bool.self, forKey: .dimDeletedMessages) ?? d.dimDeletedMessages
+        self.revealSpoilers = try container.decodeIfPresent(Bool.self, forKey: .revealSpoilers) ?? d.revealSpoilers
+        self.sendSilentlyByDefault = try container.decodeIfPresent(Bool.self, forKey: .sendSilentlyByDefault) ?? d.sendSilentlyByDefault
+        self.hidePremiumStatuses = try container.decodeIfPresent(Bool.self, forKey: .hidePremiumStatuses) ?? d.hidePremiumStatuses
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates
