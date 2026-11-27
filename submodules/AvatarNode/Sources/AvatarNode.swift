@@ -876,12 +876,14 @@ public final class AvatarNode: ASDisplayNode {
             authorOfMessage: MessageReference? = nil,
             overrideImage: AvatarNodeImageOverride? = nil,
             emptyColor: UIColor? = nil,
-            clipStyle: AvatarNodeClipStyle = .round,
+            clipStyle requestedClipStyle: AvatarNodeClipStyle = .round,
             synchronousLoad: Bool = false,
             displayDimensions: CGSize = CGSize(width: 60.0, height: 60.0),
             storeUnrounded: Bool = false,
             cutoutRect: CGRect? = nil
         ) {
+            // AstraGram: square avatars, only where an avatar node draws them (its own frame takes the shape).
+            let clipStyle = astraAvatarClipStyle(requestedClipStyle)
             var synchronousLoad = synchronousLoad
             var representation: TelegramMediaImageRepresentation?
             var icon = AvatarNodeIcon.none

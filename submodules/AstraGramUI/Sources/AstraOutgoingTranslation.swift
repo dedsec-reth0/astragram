@@ -50,12 +50,13 @@ public enum AstraOutgoingTranslation {
     /// that itself says so is translated to the same words, so the original is checked too.
     public static func isRefusal(original: String, translated: String) -> Bool {
         let answer = translated.lowercased()
-        let markers = ["cannot translate", "can't translate", "can’t translate", "unable to translate", "not able to translate", "gibberish", "random characters", "random string", "language i do not recognize", "language i don't recognize", "language i don’t recognize"]
+        let markers = ["cannot translate", "can't translate", "can’t translate", "unable to translate", "not able to translate", "gibberish", "random characters", "random string", "language i do not recognize", "language i don't recognize", "language i don’t recognize", "the input text", "the text you provided", "the provided text", "appears to be gib", "appears to be nonsense", "does not appear to be", "doesn't appear to be", "doesn’t appear to be", "as an ai", "i'm sorry, but", "i’m sorry, but", "i am sorry, but", "sorry, but i"]
         guard markers.contains(where: { answer.contains($0) }) else {
             return false
         }
         let source = original.lowercased()
-        return !["translat", "gibberish", "random", "перев", "бессмысл"].contains(where: { source.contains($0) })
+        // A message that itself apologizes or talks about text and translation may translate to such words.
+        return !["translat", "gibberish", "random", "перев", "бессмысл", "извин", "прост", "sorry", "текст", "text", "input"].contains(where: { source.contains($0) })
     }
 
     public static func languageName(_ code: String, russian: Bool) -> String {
