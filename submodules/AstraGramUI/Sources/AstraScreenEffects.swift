@@ -279,34 +279,34 @@ func astraConfigureEmitter(_ layer: CAEmitterLayer, effect: AstraScreenEffect, s
     case .snow:
         layer.emitterCells = [
             // Big crystals in front, slowly turning; soft flakes behind them.
-            cell(AstraParticleImages.crystal, color: UIColor(white: 1.0, alpha: 0.95), birthRate: 1.3, lifetime: fallLifetime, velocity: 54.0, velocityRange: 16.0, scale: 0.75, scaleRange: 0.25, spin: 0.25, spinRange: 0.9, emissionRange: .pi / 9.0, xAcceleration: 4.0, yAcceleration: 3.0),
-            cell(AstraParticleImages.snowflake, color: UIColor(white: 1.0, alpha: 0.9), birthRate: 3.0, lifetime: fallLifetime, velocity: 42.0, velocityRange: 16.0, scale: 0.6, scaleRange: 0.25, emissionRange: .pi / 8.0, xAcceleration: 3.0, yAcceleration: 3.0),
-            cell(AstraParticleImages.snowflake, color: UIColor(white: 1.0, alpha: 0.5), birthRate: 3.5, lifetime: fallLifetime * 1.4, velocity: 26.0, velocityRange: 10.0, scale: 0.3, scaleRange: 0.12, emissionRange: .pi / 6.0, xAcceleration: -2.0, yAcceleration: 2.0)
+            cell(AstraParticleImages.crystal, color: UIColor(white: 1.0, alpha: 0.95), birthRate: 1.3, lifetime: fallLifetime, velocity: 54.0, velocityRange: 16.0, scale: 0.42, scaleRange: 0.12, spin: 0.25, spinRange: 0.9, emissionRange: .pi / 9.0, xAcceleration: 4.0, yAcceleration: 3.0),
+            cell(AstraParticleImages.snowflake, color: UIColor(white: 1.0, alpha: 0.9), birthRate: 3.0, lifetime: fallLifetime, velocity: 42.0, velocityRange: 16.0, scale: 0.3, scaleRange: 0.12, emissionRange: .pi / 8.0, xAcceleration: 3.0, yAcceleration: 3.0),
+            cell(AstraParticleImages.snowflake, color: UIColor(white: 1.0, alpha: 0.5), birthRate: 3.5, lifetime: fallLifetime * 1.4, velocity: 26.0, velocityRange: 10.0, scale: 0.15, scaleRange: 0.06, emissionRange: .pi / 6.0, xAcceleration: -2.0, yAcceleration: 2.0)
         ]
     case .sakura:
         let pinks: [UInt32] = [0xffc4d6, 0xff9ebb, 0xffe0ea, 0xffb3c9]
         layer.emitterCells = pinks.map { rgb in
-            cell(AstraParticleImages.petal, color: UIColor(rgb: rgb, alpha: 0.95), birthRate: 0.9, lifetime: fallLifetime, velocity: 50.0, velocityRange: 20.0, scale: 0.85, scaleRange: 0.3, spin: 1.1, spinRange: 2.6, emissionRange: .pi / 5.0, xAcceleration: 10.0, yAcceleration: 4.0)
+            cell(AstraParticleImages.petal, color: UIColor(rgb: rgb, alpha: 0.95), birthRate: 0.9, lifetime: fallLifetime, velocity: 50.0, velocityRange: 20.0, scale: 0.36, scaleRange: 0.12, spin: 1.1, spinRange: 2.6, emissionRange: .pi / 5.0, xAcceleration: 10.0, yAcceleration: 4.0)
         }
     case .leaves:
         let autumn: [UInt32] = [0xe5622a, 0xf2a93b, 0xc1392b, 0xd98e32]
         layer.emitterCells = autumn.map { rgb in
-            cell(AstraParticleImages.leaf, color: UIColor(rgb: rgb, alpha: 0.97), birthRate: 0.6, lifetime: fallLifetime, velocity: 56.0, velocityRange: 22.0, scale: 0.95, scaleRange: 0.3, spin: 1.0, spinRange: 3.0, emissionRange: .pi / 4.0, xAcceleration: -8.0, yAcceleration: 6.0)
+            cell(AstraParticleImages.leaf, color: UIColor(rgb: rgb, alpha: 0.97), birthRate: 0.6, lifetime: fallLifetime, velocity: 56.0, velocityRange: 22.0, scale: 0.4, scaleRange: 0.12, spin: 1.0, spinRange: 3.0, emissionRange: .pi / 4.0, xAcceleration: -8.0, yAcceleration: 6.0)
         }
     case .stars:
         let tints: [UInt32] = [0xffffff, 0xfff2c4, 0xcfe3ff]
         layer.emitterCells = tints.map { rgb in
-            cell(AstraParticleImages.sparkle, color: UIColor(rgb: rgb, alpha: 0.95), birthRate: 1.4, lifetime: 3.4, velocity: 3.0, velocityRange: 2.0, scale: 0.75, scaleRange: 0.35, spin: 0.4, spinRange: 0.8, emissionRange: .pi * 2.0, alphaRange: 0.3, alphaSpeed: -0.3)
+            cell(AstraParticleImages.sparkle, color: UIColor(rgb: rgb, alpha: 0.95), birthRate: 1.4, lifetime: 3.4, velocity: 3.0, velocityRange: 2.0, scale: 0.38, scaleRange: 0.16, spin: 0.4, spinRange: 0.8, emissionRange: .pi * 2.0, alphaRange: 0.3, alphaSpeed: -0.3)
         }
     case .hearts:
         let reds: [UInt32] = [0xff4f81, 0xff8fb1, 0xe0245e]
         layer.emitterCells = reds.map { rgb in
-            cell(AstraParticleImages.heart, color: UIColor(rgb: rgb, alpha: 0.9), birthRate: 0.6, lifetime: fallLifetime, velocity: 46.0, velocityRange: 16.0, scale: 0.9, scaleRange: 0.35, spin: 0.0, spinRange: 0.8, emissionLongitude: 0.0, emissionRange: .pi / 6.0, alphaSpeed: -0.04)
+            cell(AstraParticleImages.heart, color: UIColor(rgb: rgb, alpha: 0.9), birthRate: 0.6, lifetime: fallLifetime, velocity: 46.0, velocityRange: 16.0, scale: 0.38, scaleRange: 0.14, spin: 0.0, spinRange: 0.8, emissionLongitude: 0.0, emissionRange: .pi / 6.0, alphaSpeed: -0.04)
         }
     case .fireflies:
         let warm: [UInt32] = [0xfff3a3, 0xd9ff8a, 0xffd36e]
         layer.emitterCells = warm.map { rgb in
-            cell(AstraParticleImages.glow, color: UIColor(rgb: rgb, alpha: 0.95), birthRate: 1.0, lifetime: fallLifetime * 1.2, velocity: 22.0, velocityRange: 14.0, scale: 0.75, scaleRange: 0.35, emissionLongitude: 0.0, emissionRange: .pi / 3.0, xAcceleration: 4.0, alphaRange: 0.5, alphaSpeed: -0.05)
+            cell(AstraParticleImages.glow, color: UIColor(rgb: rgb, alpha: 0.95), birthRate: 1.0, lifetime: fallLifetime * 1.2, velocity: 22.0, velocityRange: 14.0, scale: 0.4, scaleRange: 0.18, emissionLongitude: 0.0, emissionRange: .pi / 3.0, xAcceleration: 4.0, alphaRange: 0.5, alphaSpeed: -0.05)
         }
     case .custom:
         let settings = AstraGramSettings.current
@@ -318,7 +318,7 @@ func astraConfigureEmitter(_ layer: CAEmitterLayer, effect: AstraScreenEffect, s
             layer.emitterPosition = CGPoint(x: size.width / 2.0, y: size.height + 30.0)
         }
         layer.emitterCells = symbols.map { symbol in
-            cell(astraSymbolImage(symbol), color: .white, birthRate: 2.2 / Float(symbols.count), lifetime: fallLifetime / Float(speed), velocity: 50.0 * speed, velocityRange: 18.0 * speed, scale: 0.55 * symbolScale, scaleRange: 0.2 * symbolScale, spin: settings.customEffectSpin ? 0.8 : 0.0, spinRange: settings.customEffectSpin ? 2.0 : 0.0, emissionLongitude: settings.customEffectRise ? 0.0 : .pi, emissionRange: .pi / 7.0, xAcceleration: 30.0 * wind, yAcceleration: settings.customEffectRise ? -3.0 : 4.0)
+            cell(astraSymbolImage(symbol), color: .white, birthRate: 2.2 / Float(symbols.count), lifetime: fallLifetime / Float(speed), velocity: 50.0 * speed, velocityRange: 18.0 * speed, scale: 0.3 * symbolScale, scaleRange: 0.1 * symbolScale, spin: settings.customEffectSpin ? 0.8 : 0.0, spinRange: settings.customEffectSpin ? 2.0 : 0.0, emissionLongitude: settings.customEffectRise ? 0.0 : .pi, emissionRange: .pi / 7.0, xAcceleration: 30.0 * wind, yAcceleration: settings.customEffectRise ? -3.0 : 4.0)
         }
     case .off, .auto:
         break
