@@ -130,29 +130,6 @@ public final class AstraEffectsPickerController: UIViewController {
         self.intensityControl.heightAnchor.constraint(equalToConstant: 40.0).isActive = true
         self.stack.addArrangedSubview(self.intensityControl)
 
-        // Keyboard
-        let keyboardHeader = self.sectionHeader(ru ? "Клавиатура" : "Keyboard")
-        self.stack.setCustomSpacing(28.0, after: self.intensityControl)
-        self.stack.addArrangedSubview(keyboardHeader)
-        let keyboardNote = UILabel()
-        keyboardNote.text = ru ? "iOS рисует клавиатуру сам, поэтому выбрать можно её светлый или тёмный вид — независимо от темы. Применяется, когда клавиатура откроется снова." : "iOS draws the keyboard itself, so the choice is its light or dark look, whatever the theme. Applies the next time the keyboard opens."
-        keyboardNote.font = UIFont.systemFont(ofSize: 13.0)
-        keyboardNote.textColor = UIColor(white: 1.0, alpha: 0.5)
-        keyboardNote.numberOfLines = 0
-        self.stack.addArrangedSubview(keyboardNote)
-        let keyboardRow = UIStackView()
-        keyboardRow.axis = .horizontal
-        keyboardRow.spacing = 10.0
-        keyboardRow.distribution = .fillEqually
-        for style in AstraKeyboardStyle.allCases {
-            let card = AstraKeyboardCardView(style: style, isRussian: ru)
-            card.addTarget(self, action: #selector(self.keyboardCardPressed(_:)), for: .touchUpInside)
-            self.keyboardCards[style] = card
-            keyboardRow.addArrangedSubview(card)
-        }
-        keyboardRow.heightAnchor.constraint(equalToConstant: 128.0).isActive = true
-        self.stack.addArrangedSubview(keyboardRow)
-
         self.updateSelection(animated: false)
     }
 
@@ -179,6 +156,16 @@ public final class AstraEffectsPickerController: UIViewController {
 
     @objc private func effectCardPressed(_ sender: AstraEffectCardView) {
         UISelectionFeedbackGenerator().selectionChanged()
+        if sender.effect == .custom {
+            // The user's own effect opens its designer; it is turned on from there.
+            let designer = AstraCustomEffectController(isRussian: self.isRussian)
+            designer.onApply = { [weak self] in
+                self?.effectCards[.custom]?.refreshPreview()
+                self?.updateSelection(animated: true)
+            }
+            self.present(designer, animated: true)
+            return
+        }
         AstraGramSettings.update { $0.screenEffect = sender.effect.rawValue }
         self.updateSelection(animated: true)
     }
@@ -210,8 +197,11 @@ final class AstraEffectCardView: UIControl {
     private let check = UIImageView()
     private var configuredSize: CGSize = .zero
 
+    private let isRussianValue: Bool
+
     init(effect: AstraScreenEffect, isRussian: Bool) {
         self.effect = effect
+        self.isRussianValue = isRussian
         super.init(frame: .zero)
         self.layer.cornerRadius = 24.0
         self.layer.cornerCurve = .continuous
@@ -249,6 +239,13 @@ final class AstraEffectCardView: UIControl {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// Redraws the card's effect (the custom one changes with its settings).
+    func refreshPreview() {
+        self.configuredSize = .zero
+        self.subtitleLabel.text = self.effect.subtitle(isRussian: self.isRussianValue)
+        self.setNeedsLayout()
     }
 
     override func layoutSubviews() {

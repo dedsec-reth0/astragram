@@ -191,6 +191,43 @@ public enum AstraKeyboardThemes {
     }
 }
 
+// MARK: - Languages
+
+/// A letter layout of AstraGram's keyboard: three rows of letters (the third between shift and delete).
+public struct AstraKeyboardLanguage {
+    public let id: String
+    public let name: String
+    public let short: String
+    public let rows: [String]
+    public let space: String
+
+    public static let all: [AstraKeyboardLanguage] = [
+        AstraKeyboardLanguage(id: "ru", name: "Русский", short: "RU", rows: ["йцукенгшщзх", "фывапролджэ", "ячсмитьбю"], space: "пробел"),
+        AstraKeyboardLanguage(id: "en", name: "English", short: "EN", rows: ["qwertyuiop", "asdfghjkl", "zxcvbnm"], space: "space"),
+        AstraKeyboardLanguage(id: "uk", name: "Українська", short: "UK", rows: ["йцукенгшщзхї", "фівапролджє", "ячсмитьбю"], space: "пробіл"),
+        AstraKeyboardLanguage(id: "be", name: "Беларуская", short: "BE", rows: ["йцукенгшўзх", "фывапролджэ", "ячсмітьбю"], space: "прабел"),
+        AstraKeyboardLanguage(id: "kk", name: "Қазақша", short: "KK", rows: ["әіңғүұқөһ", "йцукенгшщзх", "фывапролджэ", "ячсмитьбю"], space: "бос орын"),
+        AstraKeyboardLanguage(id: "hy", name: "Հայերեն", short: "HY", rows: ["էթփձջւևրչճժ", "քոեռտըիօպխծ", "ասդֆգհյկլշ", "զղցվբնմ"], space: "բացատ"),
+        AstraKeyboardLanguage(id: "ka", name: "ქართული", short: "KA", rows: ["ქწერტყუიოპ", "ასდფგჰჯკლ", "ზხცვბნმ"], space: "გამოტოვება"),
+        AstraKeyboardLanguage(id: "de", name: "Deutsch", short: "DE", rows: ["qwertzuiopü", "asdfghjklöä", "yxcvbnmß"], space: "Leerzeichen"),
+        AstraKeyboardLanguage(id: "fr", name: "Français", short: "FR", rows: ["azertyuiop", "qsdfghjklm", "wxcvbnéèà"], space: "espace"),
+        AstraKeyboardLanguage(id: "es", name: "Español", short: "ES", rows: ["qwertyuiop", "asdfghjklñ", "zxcvbnmá"], space: "espacio"),
+        AstraKeyboardLanguage(id: "it", name: "Italiano", short: "IT", rows: ["qwertyuiop", "asdfghjklè", "zxcvbnmàò"], space: "spazio"),
+        AstraKeyboardLanguage(id: "pt", name: "Português", short: "PT", rows: ["qwertyuiop", "asdfghjklç", "zxcvbnmãé"], space: "espaço"),
+        AstraKeyboardLanguage(id: "pl", name: "Polski", short: "PL", rows: ["qwertyuiop", "asdfghjklł", "zxcvbnmąęś"], space: "spacja"),
+        AstraKeyboardLanguage(id: "tr", name: "Türkçe", short: "TR", rows: ["qwertyuıopğü", "asdfghjklşi", "zxcvbnmöç"], space: "boşluk"),
+        AstraKeyboardLanguage(id: "az", name: "Azərbaycan", short: "AZ", rows: ["qüertyuiopöğ", "asdfghjklıə", "zxcvbnmçş"], space: "boşluq"),
+        AstraKeyboardLanguage(id: "uz", name: "Oʻzbek", short: "UZ", rows: ["qwertyuiop", "asdfghjkl", "zxcvbnmʻ"], space: "boʻsh joy"),
+        AstraKeyboardLanguage(id: "el", name: "Ελληνικά", short: "EL", rows: ["ςερτυθιοπ", "ασδφγηξκλ", "ζχψωβνμ"], space: "διάστημα"),
+        AstraKeyboardLanguage(id: "he", name: "עברית", short: "HE", rows: ["קראטוןםפ", "שדגכעיחלךף", "זסבהנמצתץ"], space: "רווח"),
+        AstraKeyboardLanguage(id: "ar", name: "العربية", short: "AR", rows: ["ضصثقفغعهخحج", "شسيبلاتنمكط", "ئءؤرىةوزظد"], space: "مسافة")
+    ]
+
+    public static func language(id: String) -> AstraKeyboardLanguage {
+        return all.first(where: { $0.id == id }) ?? all[0]
+    }
+}
+
 // MARK: - Keyboard
 
 private enum AstraKeyKind: Equatable {
@@ -206,9 +243,8 @@ private enum AstraKeyKind: Equatable {
     case systemKeyboard
 }
 
-private enum AstraKeyboardLayout: Int {
-    case russian
-    case english
+private enum AstraKeyboardPage: Equatable {
+    case letters
     case numbers
     case symbols
 }
@@ -225,7 +261,17 @@ public final class AstraKeyboardView: UIInputView, UIInputViewAudioFeedback {
 
     private var theme: AstraKeyboardTheme
     private let isPreview: Bool
-    private var layoutKind: AstraKeyboardLayout
+    private var page: AstraKeyboardPage = .letters
+    private var languageIndex = 0
+    private var languages: [AstraKeyboardLanguage] {
+        let ids = AstraGramSettings.current.keyboardLanguages
+        let list = ids.map { AstraKeyboardLanguage.language(id: $0) }
+        return list.isEmpty ? [AstraKeyboardLanguage.all[0]] : list
+    }
+    private var language: AstraKeyboardLanguage {
+        let languages = self.languages
+        return languages[min(self.languageIndex, languages.count - 1)]
+    }
     private var shifted = false
     private var capsLocked = false
     private var lastShiftTap: CFTimeInterval = 0.0
@@ -239,10 +285,9 @@ public final class AstraKeyboardView: UIInputView, UIInputViewAudioFeedback {
     public init(theme: AstraKeyboardTheme, isPreview: Bool = false) {
         self.theme = theme
         self.isPreview = isPreview
-        let language = Locale.preferredLanguages.first ?? "en"
-        self.layoutKind = ["ru", "uk", "be"].contains(where: { language.hasPrefix($0) }) ? .russian : .english
-        if let saved = UserDefaults.standard.object(forKey: "astragram.keyboard.layout") as? Int, let kind = AstraKeyboardLayout(rawValue: saved), kind == .russian || kind == .english {
-            self.layoutKind = kind
+        if let saved = UserDefaults.standard.string(forKey: "astragram.keyboard.language") {
+            let ids = AstraGramSettings.current.keyboardLanguages
+            self.languageIndex = ids.firstIndex(of: saved) ?? 0
         }
         super.init(frame: CGRect(x: 0.0, y: 0.0, width: 375.0, height: 262.0), inputViewStyle: .keyboard)
         self.allowsSelfSizing = true
@@ -301,11 +346,14 @@ public final class AstraKeyboardView: UIInputView, UIInputViewAudioFeedback {
         func chars(_ string: String) -> [AstraKeyKind] {
             return string.map { .character(String($0)) }
         }
-        switch self.layoutKind {
-        case .russian:
-            return [chars("йцукенгшщзх"), chars("фывапролджэ"), [.shift] + chars("ячсмитьбю") + [.delete], [.numbers, .language, .space, .returnKey]]
-        case .english:
-            return [chars("qwertyuiop"), chars("asdfghjkl"), [.shift] + chars("zxcvbnm") + [.delete], [.numbers, .language, .space, .returnKey]]
+        let globe: AstraKeyKind = self.languages.count > 1 ? .language : .systemKeyboard
+        switch self.page {
+        case .letters:
+            var rows = self.language.rows.map(chars)
+            let last = rows.removeLast()
+            rows.append([.shift] + last + [.delete])
+            rows.append([.numbers, globe, .space, .returnKey])
+            return rows
         case .numbers:
             return [chars("1234567890"), chars("-/:;()₽&@\""), [.symbols] + chars(".,?!'") + [.delete], [.letters, .systemKeyboard, .space, .returnKey]]
         case .symbols:
@@ -314,28 +362,22 @@ public final class AstraKeyboardView: UIInputView, UIInputViewAudioFeedback {
     }
 
     private func title(for kind: AstraKeyKind) -> (String?, String?) {
-        let ru = self.layoutKind == .russian
         switch kind {
         case let .character(c):
             return ((self.shifted || self.capsLocked) ? c.uppercased() : c, nil)
         case .shift: return (nil, self.capsLocked ? "capslock.fill" : (self.shifted ? "shift.fill" : "shift"))
         case .delete: return (nil, "delete.left")
-        case .space: return (self.layoutKind == .english ? "space" : (ru ? "пробел" : "пробел"), nil)
+        case .space: return (self.language.space, nil)
         case .returnKey: return (nil, "return")
         case .numbers: return ("123", nil)
         case .symbols: return ("#+=", nil)
-        case .letters: return (self.lastLetters == .english ? "ABC" : "АБВ", nil)
-        case .language: return (nil, "globe")
+        case .letters: return (String(self.language.rows[0].prefix(3)).uppercased(), nil)
+        case .language: return (self.language.short, nil)
         case .systemKeyboard: return (nil, "keyboard")
         }
     }
 
-    private var lastLetters: AstraKeyboardLayout = .russian
-
     private func rebuildKeys() {
-        if self.layoutKind == .russian || self.layoutKind == .english {
-            self.lastLetters = self.layoutKind
-        }
         for (_, button) in self.keyViews {
             button.removeFromSuperview()
         }
@@ -431,9 +473,11 @@ public final class AstraKeyboardView: UIInputView, UIInputViewAudioFeedback {
         let rowGap: CGFloat = 11.0
         let top: CGFloat = 8.0
         let usable = self.bounds.height - self.safeAreaInsets.bottom - top - 4.0
-        let keyHeight = max(30.0, min(44.0, (usable - rowGap * 3.0) / 4.0))
+        let rowCount = CGFloat(rows.count)
+        let keyHeight = max(28.0, min(44.0, (usable - rowGap * (rowCount - 1.0)) / rowCount))
         let width = self.bounds.width
-        let unit = (width - side * 2.0 - gap * 10.0) / 11.0
+        let maxLetters = CGFloat(max(10, rows.map { $0.count }.max() ?? 10))
+        let unit = (width - side * 2.0 - gap * (maxLetters - 1.0)) / maxLetters
         var index = 0
         for (rowIndex, row) in rows.enumerated() {
             let y = top + CGFloat(rowIndex) * (keyHeight + rowGap)
@@ -453,7 +497,7 @@ public final class AstraKeyboardView: UIInputView, UIInputViewAudioFeedback {
                 if let spaceIndex = row.firstIndex(of: .space) {
                     widths[spaceIndex] = max(unit * 3.0, width - side * 2.0 - fixed)
                 }
-            } else if rowIndex == 2 {
+            } else if rowIndex == rows.count - 2 {
                 // The shift and delete keys sit at the edges; the letters are centered between them.
                 let letters = row.filter { if case .character = $0 { return true } else { return false } }.count
                 let lettersWidth = unit * CGFloat(letters) + gap * CGFloat(letters - 1)
@@ -555,8 +599,8 @@ public final class AstraKeyboardView: UIInputView, UIInputViewAudioFeedback {
             }
         case .space:
             self.insert(" ")
-            if self.layoutKind == .numbers || self.layoutKind == .symbols {
-                self.layoutKind = self.lastLetters
+            if self.page != .letters {
+                self.page = .letters
                 self.rebuildKeys()
             }
         case .returnKey:
@@ -577,17 +621,17 @@ public final class AstraKeyboardView: UIInputView, UIInputViewAudioFeedback {
             self.lastShiftTap = now
             self.rebuildKeys()
         case .numbers:
-            self.layoutKind = .numbers
+            self.page = .numbers
             self.rebuildKeys()
         case .symbols:
-            self.layoutKind = .symbols
+            self.page = .symbols
             self.rebuildKeys()
         case .letters:
-            self.layoutKind = self.lastLetters
+            self.page = .letters
             self.rebuildKeys()
         case .language:
-            self.layoutKind = self.layoutKind == .russian ? .english : .russian
-            UserDefaults.standard.set(self.layoutKind.rawValue, forKey: "astragram.keyboard.layout")
+            self.languageIndex = (self.languageIndex + 1) % self.languages.count
+            UserDefaults.standard.set(self.language.id, forKey: "astragram.keyboard.language")
             self.shifted = false
             self.capsLocked = false
             self.rebuildKeys()

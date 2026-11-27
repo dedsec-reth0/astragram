@@ -192,11 +192,20 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     /// 6 hearts, 7 fireflies) and how much of it (0 light, 1 medium, 2 heavy).
     public var screenEffect: Int = 0
     public var screenEffectIntensity: Int = 1
+    /// The user's own effect ("custom", 8): up to three emoji or characters that fall, and how.
+    public var customEffectSymbols: String = "❄️"
+    public var customEffectSize: Int = 100
+    public var customEffectSpeed: Int = 100
+    public var customEffectWind: Int = 0
+    public var customEffectRise: Bool = false
+    public var customEffectSpin: Bool = true
     /// The keyboard's look: 0 like the theme, 1 dark, 2 light.
     public var keyboardStyle: Int = 0
     /// AstraGram's own themed keyboard in the chat input field, and its theme.
     public var customKeyboard: Bool = false
     public var keyboardThemeId: String = "astra"
+    /// The languages AstraGram's keyboard switches between with its globe key (AstraKeyboardLanguage ids).
+    public var keyboardLanguages: [String] = ["ru", "en"]
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -553,9 +562,16 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.hideAppBadge = try container.decodeIfPresent(Bool.self, forKey: .hideAppBadge) ?? d.hideAppBadge
         self.screenEffect = try container.decodeIfPresent(Int.self, forKey: .screenEffect) ?? d.screenEffect
         self.screenEffectIntensity = try container.decodeIfPresent(Int.self, forKey: .screenEffectIntensity) ?? d.screenEffectIntensity
+        self.customEffectSymbols = try container.decodeIfPresent(String.self, forKey: .customEffectSymbols) ?? d.customEffectSymbols
+        self.customEffectSize = try container.decodeIfPresent(Int.self, forKey: .customEffectSize) ?? d.customEffectSize
+        self.customEffectSpeed = try container.decodeIfPresent(Int.self, forKey: .customEffectSpeed) ?? d.customEffectSpeed
+        self.customEffectWind = try container.decodeIfPresent(Int.self, forKey: .customEffectWind) ?? d.customEffectWind
+        self.customEffectRise = try container.decodeIfPresent(Bool.self, forKey: .customEffectRise) ?? d.customEffectRise
+        self.customEffectSpin = try container.decodeIfPresent(Bool.self, forKey: .customEffectSpin) ?? d.customEffectSpin
         self.keyboardStyle = try container.decodeIfPresent(Int.self, forKey: .keyboardStyle) ?? d.keyboardStyle
         self.customKeyboard = try container.decodeIfPresent(Bool.self, forKey: .customKeyboard) ?? d.customKeyboard
         self.keyboardThemeId = try container.decodeIfPresent(String.self, forKey: .keyboardThemeId) ?? d.keyboardThemeId
+        self.keyboardLanguages = try container.decodeIfPresent([String].self, forKey: .keyboardLanguages) ?? d.keyboardLanguages
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

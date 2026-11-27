@@ -11,6 +11,7 @@ public final class AstraKeyboardStoreController: UIViewController {
     private let installedStack = UIStackView()
     private let storeStack = UIStackView()
     private let storeStatus = UILabel()
+    private let languagesFlow = UIStackView()
     private var storeThemes: [AstraKeyboardTheme] = []
 
     public init(isRussian: Bool) {
@@ -106,6 +107,13 @@ public final class AstraKeyboardStoreController: UIViewController {
         ])
         self.stack.addArrangedSubview(toggleRow)
 
+        // Languages: the globe key cycles through the chosen ones, in the order chosen.
+        self.stack.addArrangedSubview(self.header(ru ? "Языки (🌐 переключает по очереди)" : "Languages (🌐 cycles through them)"))
+        self.languagesFlow.axis = .vertical
+        self.languagesFlow.spacing = 8.0
+        self.stack.addArrangedSubview(self.languagesFlow)
+        self.reloadLanguages()
+
         // Installed
         self.stack.addArrangedSubview(self.header(ru ? "Мои темы" : "My Themes"))
         self.installedStack.axis = .vertical
@@ -141,6 +149,57 @@ public final class AstraKeyboardStoreController: UIViewController {
             self.storeThemes = themes
             self.reloadStore()
         })
+    }
+
+    private func reloadLanguages() {
+        self.languagesFlow.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let chosen = AstraGramSettings.current.keyboardLanguages
+        let all = AstraKeyboardLanguage.all
+        var index = 0
+        while index < all.count {
+            let row = UIStackView()
+            row.axis = .horizontal
+            row.spacing = 8.0
+            row.distribution = .fillEqually
+            for language in all[index ..< min(index + 3, all.count)] {
+                let button = UIButton(type: .system)
+                let position = chosen.firstIndex(of: language.id)
+                button.setTitle(position.map { "\($0 + 1). \(language.name)" } ?? language.name, for: .normal)
+                button.titleLabel?.font = UIFont.systemFont(ofSize: 14.0, weight: .semibold)
+                button.titleLabel?.adjustsFontSizeToFitWidth = true
+                button.titleLabel?.minimumScaleFactor = 0.7
+                button.setTitleColor(position != nil ? .black : .white, for: .normal)
+                button.backgroundColor = position != nil ? .white : UIColor(white: 1.0, alpha: 0.08)
+                button.layer.cornerRadius = 17.0
+                button.heightAnchor.constraint(equalToConstant: 34.0).isActive = true
+                button.accessibilityIdentifier = language.id
+                button.addTarget(self, action: #selector(self.languagePressed(_:)), for: .touchUpInside)
+                row.addArrangedSubview(button)
+            }
+            while row.arrangedSubviews.count < 3 {
+                row.addArrangedSubview(UIView())
+            }
+            self.languagesFlow.addArrangedSubview(row)
+            index += 3
+        }
+    }
+
+    @objc private func languagePressed(_ sender: UIButton) {
+        guard let id = sender.accessibilityIdentifier else {
+            return
+        }
+        UISelectionFeedbackGenerator().selectionChanged()
+        AstraGramSettings.update { settings in
+            if let index = settings.keyboardLanguages.firstIndex(of: id) {
+                // At least one language stays.
+                if settings.keyboardLanguages.count > 1 {
+                    settings.keyboardLanguages.remove(at: index)
+                }
+            } else {
+                settings.keyboardLanguages.append(id)
+            }
+        }
+        self.reloadLanguages()
     }
 
     private func header(_ text: String) -> UILabel {

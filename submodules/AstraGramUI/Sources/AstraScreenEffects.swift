@@ -15,6 +15,7 @@ public enum AstraScreenEffect: Int, CaseIterable {
     case stars = 5
     case hearts = 6
     case fireflies = 7
+    case custom = 8
 
     /// What `auto` shows today: snow in winter, sakura in spring, fireflies in summer, leaves in autumn.
     public static func seasonal(date: Date = Date()) -> AstraScreenEffect {
@@ -44,6 +45,7 @@ public enum AstraScreenEffect: Int, CaseIterable {
         case .stars: return ru ? "Звёзды" : "Stars"
         case .hearts: return ru ? "Сердечки" : "Hearts"
         case .fireflies: return ru ? "Светлячки" : "Fireflies"
+        case .custom: return ru ? "Своё" : "Custom"
         }
     }
 
@@ -57,6 +59,7 @@ public enum AstraScreenEffect: Int, CaseIterable {
         case .stars: return ru ? "Мерцающее небо" : "A twinkling sky"
         case .hearts: return ru ? "Плывут вверх" : "Floating up"
         case .fireflies: return ru ? "Тёплые огоньки" : "Warm glows"
+        case .custom: return ru ? "Любые эмодзи: \(AstraGramSettings.current.customEffectSymbols)" : "Any emoji: \(AstraGramSettings.current.customEffectSymbols)"
         }
     }
 
@@ -71,6 +74,7 @@ public enum AstraScreenEffect: Int, CaseIterable {
         case .stars: return [UIColor(rgb: 0x07071a), UIColor(rgb: 0x2b2160)]
         case .hearts: return [UIColor(rgb: 0x3a0f2a), UIColor(rgb: 0xd1457a)]
         case .fireflies: return [UIColor(rgb: 0x0b1f17), UIColor(rgb: 0x1f5244)]
+        case .custom: return [UIColor(rgb: 0x1e1b4b), UIColor(rgb: 0x7c3aed), UIColor(rgb: 0xdb2777)]
         }
     }
 }
@@ -304,9 +308,50 @@ func astraConfigureEmitter(_ layer: CAEmitterLayer, effect: AstraScreenEffect, s
         layer.emitterCells = warm.map { rgb in
             cell(AstraParticleImages.glow, color: UIColor(rgb: rgb, alpha: 0.95), birthRate: 1.0, lifetime: fallLifetime * 1.2, velocity: 22.0, velocityRange: 14.0, scale: 0.75, scaleRange: 0.35, emissionLongitude: 0.0, emissionRange: .pi / 3.0, xAcceleration: 4.0, alphaRange: 0.5, alphaSpeed: -0.05)
         }
+    case .custom:
+        let settings = AstraGramSettings.current
+        let symbolScale = CGFloat(max(30, min(300, settings.customEffectSize))) / 100.0
+        let speed = CGFloat(max(20, min(300, settings.customEffectSpeed))) / 100.0
+        let wind = CGFloat(max(-100, min(100, settings.customEffectWind))) / 100.0
+        let symbols = astraCustomEffectSymbols(settings.customEffectSymbols)
+        if settings.customEffectRise {
+            layer.emitterPosition = CGPoint(x: size.width / 2.0, y: size.height + 30.0)
+        }
+        layer.emitterCells = symbols.map { symbol in
+            cell(astraSymbolImage(symbol), color: .white, birthRate: 2.2 / Float(symbols.count), lifetime: fallLifetime / Float(speed), velocity: 50.0 * speed, velocityRange: 18.0 * speed, scale: 0.55 * symbolScale, scaleRange: 0.2 * symbolScale, spin: settings.customEffectSpin ? 0.8 : 0.0, spinRange: settings.customEffectSpin ? 2.0 : 0.0, emissionLongitude: settings.customEffectRise ? 0.0 : .pi, emissionRange: .pi / 7.0, xAcceleration: 30.0 * wind, yAcceleration: settings.customEffectRise ? -3.0 : 4.0)
+        }
     case .off, .auto:
         break
     }
+}
+
+/// Up to three symbols (emoji or characters) of the user's own effect.
+func astraCustomEffectSymbols(_ text: String) -> [String] {
+    let symbols = text.filter { !$0.isWhitespace }.map(String.init)
+    return symbols.isEmpty ? ["❄️"] : Array(symbols.prefix(3))
+}
+
+private var astraSymbolImageCache: [String: CGImage] = [:]
+
+/// An emoji or a character drawn as a particle image (big, so it stays sharp when scaled up).
+func astraSymbolImage(_ symbol: String) -> CGImage? {
+    if let image = astraSymbolImageCache[symbol] {
+        return image
+    }
+    let size = CGSize(width: 64.0, height: 64.0)
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 2.0
+    format.opaque = false
+    let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+        let attributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 48.0), .foregroundColor: UIColor.white]
+        let string = NSAttributedString(string: symbol, attributes: attributes)
+        let bounds = string.boundingRect(with: size, options: [.usesLineFragmentOrigin], context: nil)
+        string.draw(at: CGPoint(x: (size.width - bounds.width) / 2.0, y: (size.height - bounds.height) / 2.0))
+    }.cgImage
+    if let image {
+        astraSymbolImageCache[symbol] = image
+    }
+    return image
 }
 
 // MARK: - The chat overlay
@@ -329,7 +374,7 @@ public final class AstraChatEffectsView: UIView {
         self.layer.addSublayer(self.emitter)
         self.disposable = (AstraGramSettings.signal
         |> map { settings -> [Int] in
-            return [settings.screenEffect, settings.screenEffectIntensity]
+            return [settings.screenEffect, settings.screenEffectIntensity, settings.customEffectSize, settings.customEffectSpeed, settings.customEffectWind, settings.customEffectRise ? 1 : 0, settings.customEffectSpin ? 1 : 0, settings.customEffectSymbols.hashValue]
         }
         |> distinctUntilChanged
         |> deliverOnMainQueue).start(next: { [weak self] values in
@@ -360,9 +405,6 @@ public final class AstraChatEffectsView: UIView {
         var effect = AstraScreenEffect(rawValue: rawEffect) ?? .off
         if ProcessInfo.processInfo.isLowPowerModeEnabled {
             effect = .off
-        }
-        guard effect != self.effect || intensity != self.intensity else {
-            return
         }
         self.effect = effect
         self.intensity = intensity
