@@ -536,7 +536,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, longTapAction: astraLongTap, action: {
                     arguments.openTool(kind)
                 })
-            case .screenEffects:
+            case .screenEffects, .keyboards:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, longTapAction: astraLongTap, action: {
                     arguments.openTool(kind)
                 })
@@ -565,6 +565,7 @@ private enum AstraGramSettingsButtonKind: Equatable {
     case doubleTapAction
     case stickerSize
     case screenEffects
+    case keyboards
     case videoSeek
     case chatListTitle
     case lockedChats
@@ -801,7 +802,7 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.flag(id: 114, section: .look, title: strings.contactsTab, value: settings.contactsTab, enabled: true, keyPath: \.contactsTab))
     entries.append(.flag(id: 115, section: .look, title: strings.callsTab, value: settings.callsTab, enabled: true, keyPath: \.callsTab))
     entries.append(.button(id: 184, section: .look, title: strings.screenEffects, label: (AstraScreenEffect(rawValue: settings.screenEffect) ?? .off).title(isRussian: strings.isRussian), kind: .screenEffects))
-    entries.append(.button(id: 185, section: .look, title: strings.keyboardLook, label: (AstraKeyboardStyle(rawValue: settings.keyboardStyle) ?? .theme).title(isRussian: strings.isRussian), kind: .screenEffects))
+    entries.append(.button(id: 185, section: .look, title: strings.keyboardLook, label: settings.customKeyboard ? AstraKeyboardThemes.theme(id: settings.keyboardThemeId).name : (strings.isRussian ? "iOS" : "iOS"), kind: .keyboards))
     entries.append(.button(id: 119, section: .look, title: strings.glassMaterial, label: [strings.glassMaterialStandard, strings.glassMaterialClear, strings.glassMaterialMatte][max(0, min(2, settings.glassMaterial))], kind: .glassMaterial))
     entries.append(.flag(id: 120, section: .look, title: strings.springPresses, value: settings.springPresses, enabled: true, keyPath: \.springPresses))
     entries.append(.flag(id: 142, section: .look, title: strings.showAstraGiftRibbon, value: settings.showAstraGiftRibbon, enabled: true, keyPath: \.showAstraGiftRibbon))
@@ -947,6 +948,8 @@ public func astraGramSettingsController(context: AccountContext, page: AstraGram
                 presentControllerImpl?(actionSheet)
             case .screenEffects:
                 presentNativeControllerImpl?(AstraEffectsPickerController(isRussian: strings.isRussian))
+            case .keyboards:
+                presentNativeControllerImpl?(AstraKeyboardStoreController(isRussian: strings.isRussian))
             case .stickerSize:
                 let actionSheet = ActionSheetController(presentationData: presentationData)
                 let current = AstraGramSettings.current.stickerSizePercent

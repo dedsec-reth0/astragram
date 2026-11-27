@@ -194,6 +194,9 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var screenEffectIntensity: Int = 1
     /// The keyboard's look: 0 like the theme, 1 dark, 2 light.
     public var keyboardStyle: Int = 0
+    /// AstraGram's own themed keyboard in the chat input field, and its theme.
+    public var customKeyboard: Bool = false
+    public var keyboardThemeId: String = "astra"
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -551,6 +554,8 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.screenEffect = try container.decodeIfPresent(Int.self, forKey: .screenEffect) ?? d.screenEffect
         self.screenEffectIntensity = try container.decodeIfPresent(Int.self, forKey: .screenEffectIntensity) ?? d.screenEffectIntensity
         self.keyboardStyle = try container.decodeIfPresent(Int.self, forKey: .keyboardStyle) ?? d.keyboardStyle
+        self.customKeyboard = try container.decodeIfPresent(Bool.self, forKey: .customKeyboard) ?? d.customKeyboard
+        self.keyboardThemeId = try container.decodeIfPresent(String.self, forKey: .keyboardThemeId) ?? d.keyboardThemeId
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

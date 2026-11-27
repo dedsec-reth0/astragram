@@ -89,7 +89,7 @@ public final class AstraEffectsPickerController: UIViewController {
         title.font = UIFont.systemFont(ofSize: 34.0, weight: .heavy)
         title.textColor = .white
         let subtitle = UILabel()
-        subtitle.text = ru ? "Падают поверх всего приложения и не мешают нажатиям. В режиме энергосбережения отключаются сами." : "They drift over the whole app and never get in the way of taps. Low Power Mode pauses them."
+        subtitle.text = ru ? "Падают в чатах, поверх сообщений, и не мешают нажатиям. В режиме энергосбережения отключаются сами." : "They drift over the messages in chats and never get in the way of taps. Low Power Mode pauses them."
         subtitle.font = UIFont.systemFont(ofSize: 15.0)
         subtitle.textColor = UIColor(white: 1.0, alpha: 0.6)
         subtitle.numberOfLines = 0

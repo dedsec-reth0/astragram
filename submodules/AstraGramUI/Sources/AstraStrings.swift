@@ -317,7 +317,7 @@ public struct AstraStrings {
     public var copyPhoto: String { t("Копировать фото", "Copy Photo") }
     public var hideAppBadge: String { t("Без цифры на иконке приложения", "No Badge on App Icon") }
     public var screenEffects: String { t("Эффекты на экране", "Screen Effects") }
-    public var keyboardLook: String { t("Вид клавиатуры", "Keyboard Look") }
+    public var keyboardLook: String { t("Клавиатуры", "Keyboards") }
     public var saveToSavedMessages: String { t("В Избранное", "Save to Saved Messages") }
     public var savedToSavedMessages: String { t("Сохранено в Избранное", "Saved to Saved Messages") }
     public var monochromePlainBackground: String { t("Однотонный фон чатов", "Plain Chat Background") }

@@ -91,6 +91,35 @@ private enum AstraParticleImages {
         }
     }
 
+    /// A six-armed crystal with side branches, for the big flakes in front.
+    static let crystal: CGImage? = render(size: CGSize(width: 40.0, height: 40.0)) { context, rect in
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let r = rect.width / 2.0 - 2.0
+        context.setStrokeColor(UIColor.white.cgColor)
+        context.setLineCap(.round)
+        context.setShadow(offset: .zero, blur: 2.5, color: UIColor.white.withAlphaComponent(0.8).cgColor)
+        for i in 0 ..< 6 {
+            let angle = CGFloat(i) * .pi / 3.0
+            let dx = cos(angle), dy = sin(angle)
+            context.setLineWidth(2.2)
+            context.move(to: c)
+            context.addLine(to: CGPoint(x: c.x + dx * r, y: c.y + dy * r))
+            context.strokePath()
+            context.setLineWidth(1.6)
+            for (along, length) in [(0.45, 0.28), (0.72, 0.2)] as [(CGFloat, CGFloat)] {
+                let base = CGPoint(x: c.x + dx * r * along, y: c.y + dy * r * along)
+                for side in [-1.0, 1.0] as [CGFloat] {
+                    let branch = angle + side * .pi / 4.0
+                    context.move(to: base)
+                    context.addLine(to: CGPoint(x: base.x + cos(branch) * r * length, y: base.y + sin(branch) * r * length))
+                }
+            }
+            context.strokePath()
+        }
+        context.setFillColor(UIColor.white.cgColor)
+        context.fillEllipse(in: CGRect(x: c.x - 2.5, y: c.y - 2.5, width: 5.0, height: 5.0))
+    }
+
     static let petal: CGImage? = render(size: CGSize(width: 26.0, height: 30.0)) { context, rect in
         let w = rect.width, h = rect.height
         let path = UIBezierPath()
@@ -245,67 +274,93 @@ func astraConfigureEmitter(_ layer: CAEmitterLayer, effect: AstraScreenEffect, s
     switch effect {
     case .snow:
         layer.emitterCells = [
-            cell(AstraParticleImages.snowflake, color: UIColor(white: 1.0, alpha: 0.9), birthRate: 4.0, lifetime: fallLifetime, velocity: 46.0, velocityRange: 18.0, scale: 0.3, scaleRange: 0.14, emissionRange: .pi / 8.0, xAcceleration: 3.0, yAcceleration: 3.0),
-            cell(AstraParticleImages.snowflake, color: UIColor(white: 1.0, alpha: 0.55), birthRate: 5.0, lifetime: fallLifetime * 1.4, velocity: 28.0, velocityRange: 10.0, scale: 0.16, scaleRange: 0.07, emissionRange: .pi / 6.0, xAcceleration: -2.0, yAcceleration: 2.0)
+            // Big crystals in front, slowly turning; soft flakes behind them.
+            cell(AstraParticleImages.crystal, color: UIColor(white: 1.0, alpha: 0.95), birthRate: 1.3, lifetime: fallLifetime, velocity: 54.0, velocityRange: 16.0, scale: 0.75, scaleRange: 0.25, spin: 0.25, spinRange: 0.9, emissionRange: .pi / 9.0, xAcceleration: 4.0, yAcceleration: 3.0),
+            cell(AstraParticleImages.snowflake, color: UIColor(white: 1.0, alpha: 0.9), birthRate: 3.0, lifetime: fallLifetime, velocity: 42.0, velocityRange: 16.0, scale: 0.6, scaleRange: 0.25, emissionRange: .pi / 8.0, xAcceleration: 3.0, yAcceleration: 3.0),
+            cell(AstraParticleImages.snowflake, color: UIColor(white: 1.0, alpha: 0.5), birthRate: 3.5, lifetime: fallLifetime * 1.4, velocity: 26.0, velocityRange: 10.0, scale: 0.3, scaleRange: 0.12, emissionRange: .pi / 6.0, xAcceleration: -2.0, yAcceleration: 2.0)
         ]
     case .sakura:
-        let pinks: [UInt32] = [0xffc4d6, 0xff9ebb, 0xffe0ea]
+        let pinks: [UInt32] = [0xffc4d6, 0xff9ebb, 0xffe0ea, 0xffb3c9]
         layer.emitterCells = pinks.map { rgb in
-            cell(AstraParticleImages.petal, color: UIColor(rgb: rgb, alpha: 0.92), birthRate: 1.6, lifetime: fallLifetime, velocity: 52.0, velocityRange: 20.0, scale: 0.42, scaleRange: 0.16, spin: 1.2, spinRange: 2.4, emissionRange: .pi / 5.0, xAcceleration: 9.0, yAcceleration: 4.0)
+            cell(AstraParticleImages.petal, color: UIColor(rgb: rgb, alpha: 0.95), birthRate: 0.9, lifetime: fallLifetime, velocity: 50.0, velocityRange: 20.0, scale: 0.85, scaleRange: 0.3, spin: 1.1, spinRange: 2.6, emissionRange: .pi / 5.0, xAcceleration: 10.0, yAcceleration: 4.0)
         }
     case .leaves:
         let autumn: [UInt32] = [0xe5622a, 0xf2a93b, 0xc1392b, 0xd98e32]
         layer.emitterCells = autumn.map { rgb in
-            cell(AstraParticleImages.leaf, color: UIColor(rgb: rgb, alpha: 0.95), birthRate: 1.0, lifetime: fallLifetime, velocity: 58.0, velocityRange: 22.0, scale: 0.46, scaleRange: 0.18, spin: 1.0, spinRange: 3.0, emissionRange: .pi / 4.0, xAcceleration: -7.0, yAcceleration: 6.0)
+            cell(AstraParticleImages.leaf, color: UIColor(rgb: rgb, alpha: 0.97), birthRate: 0.6, lifetime: fallLifetime, velocity: 56.0, velocityRange: 22.0, scale: 0.95, scaleRange: 0.3, spin: 1.0, spinRange: 3.0, emissionRange: .pi / 4.0, xAcceleration: -8.0, yAcceleration: 6.0)
         }
     case .stars:
         let tints: [UInt32] = [0xffffff, 0xfff2c4, 0xcfe3ff]
         layer.emitterCells = tints.map { rgb in
-            cell(AstraParticleImages.sparkle, color: UIColor(rgb: rgb, alpha: 0.95), birthRate: 1.8, lifetime: 3.2, velocity: 2.0, velocityRange: 2.0, scale: 0.34, scaleRange: 0.2, spin: 0.4, spinRange: 0.8, emissionRange: .pi * 2.0, alphaRange: 0.3, alphaSpeed: -0.32)
+            cell(AstraParticleImages.sparkle, color: UIColor(rgb: rgb, alpha: 0.95), birthRate: 1.4, lifetime: 3.4, velocity: 3.0, velocityRange: 2.0, scale: 0.75, scaleRange: 0.35, spin: 0.4, spinRange: 0.8, emissionRange: .pi * 2.0, alphaRange: 0.3, alphaSpeed: -0.3)
         }
     case .hearts:
         let reds: [UInt32] = [0xff4f81, 0xff8fb1, 0xe0245e]
         layer.emitterCells = reds.map { rgb in
-            cell(AstraParticleImages.heart, color: UIColor(rgb: rgb, alpha: 0.85), birthRate: 0.9, lifetime: fallLifetime, velocity: 44.0, velocityRange: 16.0, scale: 0.44, scaleRange: 0.2, spin: 0.0, spinRange: 0.8, emissionLongitude: 0.0, emissionRange: .pi / 6.0, alphaSpeed: -0.04)
+            cell(AstraParticleImages.heart, color: UIColor(rgb: rgb, alpha: 0.9), birthRate: 0.6, lifetime: fallLifetime, velocity: 46.0, velocityRange: 16.0, scale: 0.9, scaleRange: 0.35, spin: 0.0, spinRange: 0.8, emissionLongitude: 0.0, emissionRange: .pi / 6.0, alphaSpeed: -0.04)
         }
     case .fireflies:
         let warm: [UInt32] = [0xfff3a3, 0xd9ff8a, 0xffd36e]
         layer.emitterCells = warm.map { rgb in
-            cell(AstraParticleImages.glow, color: UIColor(rgb: rgb, alpha: 0.9), birthRate: 1.2, lifetime: fallLifetime * 1.2, velocity: 22.0, velocityRange: 14.0, scale: 0.36, scaleRange: 0.22, emissionLongitude: 0.0, emissionRange: .pi / 3.0, xAcceleration: 4.0, alphaRange: 0.5, alphaSpeed: -0.05)
+            cell(AstraParticleImages.glow, color: UIColor(rgb: rgb, alpha: 0.95), birthRate: 1.0, lifetime: fallLifetime * 1.2, velocity: 22.0, velocityRange: 14.0, scale: 0.75, scaleRange: 0.35, emissionLongitude: 0.0, emissionRange: .pi / 3.0, xAcceleration: 4.0, alphaRange: 0.5, alphaSpeed: -0.05)
         }
     case .off, .auto:
         break
     }
 }
 
-// MARK: - The overlay
+// MARK: - The chat overlay
 
-/// The full-screen overlay. It takes no touches, and sits above the window's content by `zPosition`.
-final class AstraScreenEffectsView: UIView {
+/// The effect over a chat's messages: placed by the chat screen above the history and below its header and input
+/// panel. It takes no touches and follows the settings by itself. Low Power Mode pauses it.
+public final class AstraChatEffectsView: UIView {
     private let emitter = CAEmitterLayer()
     private var effect: AstraScreenEffect = .off
     private var intensity: Int = 1
     private var configuredSize: CGSize = .zero
+    private var disposable: Disposable?
+    private var lowPowerObserver: NSObjectProtocol?
 
-    override init(frame: CGRect) {
+    override public init(frame: CGRect) {
         super.init(frame: frame)
         self.isUserInteractionEnabled = false
         self.backgroundColor = .clear
-        self.layer.zPosition = 10000.0
+        self.clipsToBounds = true
         self.layer.addSublayer(self.emitter)
-        // The particles start already spread over the screen, not all at its top edge.
-        self.emitter.beginTime = CACurrentMediaTime()
+        self.disposable = (AstraGramSettings.signal
+        |> map { settings -> [Int] in
+            return [settings.screenEffect, settings.screenEffectIntensity]
+        }
+        |> distinctUntilChanged
+        |> deliverOnMainQueue).start(next: { [weak self] values in
+            self?.apply(effect: values[0], intensity: values[1])
+        })
+        self.lowPowerObserver = NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main, using: { [weak self] _ in
+            let settings = AstraGramSettings.current
+            self?.apply(effect: settings.screenEffect, intensity: settings.screenEffectIntensity)
+        })
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    deinit {
+        self.disposable?.dispose()
+        if let lowPowerObserver = self.lowPowerObserver {
+            NotificationCenter.default.removeObserver(lowPowerObserver)
+        }
+    }
+
+    override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         return nil
     }
 
-    func update(effect: AstraScreenEffect, intensity: Int) {
+    private func apply(effect rawEffect: Int, intensity: Int) {
+        var effect = AstraScreenEffect(rawValue: rawEffect) ?? .off
+        if ProcessInfo.processInfo.isLowPowerModeEnabled {
+            effect = .off
+        }
         guard effect != self.effect || intensity != self.intensity else {
             return
         }
@@ -315,61 +370,18 @@ final class AstraScreenEffectsView: UIView {
         self.setNeedsLayout()
     }
 
-    override func layoutSubviews() {
+    override public func layoutSubviews() {
         super.layoutSubviews()
         self.emitter.frame = self.bounds
         if self.configuredSize != self.bounds.size {
             self.configuredSize = self.bounds.size
-            let density: Float = [0.3, 0.65, 1.3][max(0, min(2, self.intensity))]
+            let density: Float = [0.45, 0.9, 1.7][max(0, min(2, self.intensity))]
             astraConfigureEmitter(self.emitter, effect: self.effect, size: self.bounds.size, density: density, particleScale: 1.0)
             if self.effect != .off {
-                // Fast-forward so the screen is already filled when the effect is turned on.
+                // Fast-forward so the chat is already filled when it opens.
                 self.emitter.beginTime = CACurrentMediaTime() - CFTimeInterval(self.bounds.height / 40.0)
             }
         }
         self.isHidden = self.effect == .off
-    }
-}
-
-public final class AstraScreenEffects {
-    public static let shared = AstraScreenEffects()
-
-    private weak var view: AstraScreenEffectsView?
-    private var disposable: Disposable?
-    private var lowPowerObserver: NSObjectProtocol?
-
-    /// Puts the overlay on `window` and keeps it in step with the settings. Low Power Mode pauses it.
-    public func attach(to window: UIWindow) {
-        guard self.view == nil else {
-            return
-        }
-        let view = AstraScreenEffectsView(frame: window.bounds)
-        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        window.addSubview(view)
-        self.view = view
-
-        self.disposable = (AstraGramSettings.signal
-        |> map { settings -> (Int, Int) in
-            return (settings.screenEffect, settings.screenEffectIntensity)
-        }
-        |> distinctUntilChanged(isEqual: { $0 == $1 })
-        |> deliverOnMainQueue).start(next: { [weak self] effect, intensity in
-            self?.apply(effect: effect, intensity: intensity)
-        })
-        self.lowPowerObserver = NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main, using: { [weak self] _ in
-            let settings = AstraGramSettings.current
-            self?.apply(effect: settings.screenEffect, intensity: settings.screenEffectIntensity)
-        })
-    }
-
-    private func apply(effect rawEffect: Int, intensity: Int) {
-        var effect = AstraScreenEffect(rawValue: rawEffect) ?? .off
-        if ProcessInfo.processInfo.isLowPowerModeEnabled {
-            effect = .off
-        }
-        self.view?.update(effect: effect, intensity: intensity)
-        if let view = self.view, let superview = view.superview {
-            superview.bringSubviewToFront(view)
-        }
     }
 }

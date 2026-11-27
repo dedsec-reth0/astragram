@@ -943,6 +943,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.contentContainerNode.contentNode.addSubnode(self.historyNodeContainer)
         
         self.contentContainerNode.contentNode.addSubnode(self.messageTransitionNode)
+        // AstraGram: snow, sakura and the other effects over the messages, below the header and the input panel.
+        let astraEffectsView = AstraChatEffectsView(frame: CGRect())
+        self.contentContainerNode.contentNode.view.addSubview(astraEffectsView)
+        self.astraEffectsView = astraEffectsView
+        
         
         self.contentContainerNode.contentNode.addSubnode(self.floatingTopicsPanelContainer)
         
@@ -1298,6 +1303,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.wrappingNode.update(size: layout.size, cornerRadius: layout.deviceMetrics.screenCornerRadius, transition: .immediate)
     }
     
+    /// AstraGram: the screen effect (snow, sakura…) over the messages.
+    private var astraEffectsView: AstraChatEffectsView?
+    
     func containerLayoutUpdated(_ layout: ContainerViewLayout, navigationBarHeight: CGFloat, transition protoTransition: ContainedViewLayoutTransition, listViewTransaction: (ListViewUpdateSizeAndInsets, CGFloat, Bool, @escaping () -> Void) -> Void, updateExtraNavigationBarBackgroundHeight: (CGFloat, CGFloat, ContainedViewLayoutTransition) -> Void) {
         let transition: ContainedViewLayoutTransition
         if let _ = self.scheduledAnimateInAsOverlayFromNode {
@@ -1353,6 +1361,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
 
         self.messageTransitionNode.frame = CGRect(origin: CGPoint(), size: layout.size)
         self.contentContainerNode.frame = CGRect(origin: CGPoint(), size: layout.size)
+        self.astraEffectsView?.frame = CGRect(origin: CGPoint(), size: layout.size)
         
         let isOverlay: Bool
         switch self.chatPresentationInterfaceState.mode {
@@ -3816,10 +3825,37 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     }
 
     private let emptyInputView = EmptyKeyboardInputView()
+    /// AstraGram: its own themed keyboard for the message field; the user can switch back to the iOS one for this chat.
+    private var astraKeyboardView: AstraKeyboardView?
+    private var astraUsesSystemKeyboard = false
+    
+    private func astraCustomKeyboard() -> UIView? {
+        let settings = AstraGramSettings.current
+        guard settings.customKeyboard, !self.astraUsesSystemKeyboard else {
+            return nil
+        }
+        let theme = AstraKeyboardThemes.theme(id: settings.keyboardThemeId)
+        if let astraKeyboardView = self.astraKeyboardView {
+            astraKeyboardView.update(theme: theme)
+            return astraKeyboardView
+        }
+        let keyboardView = AstraKeyboardView(theme: theme)
+        keyboardView.switchToSystemKeyboard = { [weak self] in
+            guard let self, let richTextInputNode = self.textInputPanelNode?.richTextInputNode else {
+                return
+            }
+            self.astraUsesSystemKeyboard = true
+            richTextInputNode.keyboardInputView = nil
+            richTextInputNode.reloadInputViews()
+        }
+        self.astraKeyboardView = keyboardView
+        return keyboardView
+    }
+    
     private func chatPresentationInterfaceStateInputView(_ state: ChatPresentationInterfaceState) -> UIView? {
         switch state.inputMode {
         case .text:
-            return nil
+            return self.astraCustomKeyboard()
         case .media:
             return self.emptyInputView
         default:

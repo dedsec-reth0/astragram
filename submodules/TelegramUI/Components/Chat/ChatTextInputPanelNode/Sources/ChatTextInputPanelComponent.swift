@@ -901,7 +901,9 @@ public final class ChatTextInputPanelComponent: Component {
                         richTextInputNode.keyboardInputView = EmptyInputView()
                         richTextInputNode.reloadInputViews()
                     }
-                } else if richTextInputNode.keyboardInputView != nil {
+                } else if richTextInputNode.keyboardInputView is EmptyInputView {
+                    // AstraGram: only the placeholder this component put there is taken away; AstraGram's own
+                    // keyboard (set by the chat) stays.
                     richTextInputNode.keyboardInputView = nil
                     richTextInputNode.reloadInputViews()
                 }
