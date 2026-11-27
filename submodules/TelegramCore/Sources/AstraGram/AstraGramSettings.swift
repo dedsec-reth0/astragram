@@ -188,6 +188,12 @@ public struct AstraGramSettingsValues: Codable, Equatable {
     public var hidePremiumStatuses: Bool = false
     /// No unread count on the app icon.
     public var hideAppBadge: Bool = false
+    /// The effect drawn over the app (AstraScreenEffect: 0 off, 1 by season, 2 snow, 3 sakura, 4 leaves, 5 stars,
+    /// 6 hearts, 7 fireflies) and how much of it (0 light, 1 medium, 2 heavy).
+    public var screenEffect: Int = 0
+    public var screenEffectIntensity: Int = 1
+    /// The keyboard's look: 0 like the theme, 1 dark, 2 light.
+    public var keyboardStyle: Int = 0
     /// Hide stickers sent by other people.
     public var hideStickersFromOthers: Bool
     /// Hide GIFs sent by other people.
@@ -542,6 +548,9 @@ public struct AstraGramSettingsValues: Codable, Equatable {
         self.sendSilentlyByDefault = try container.decodeIfPresent(Bool.self, forKey: .sendSilentlyByDefault) ?? d.sendSilentlyByDefault
         self.hidePremiumStatuses = try container.decodeIfPresent(Bool.self, forKey: .hidePremiumStatuses) ?? d.hidePremiumStatuses
         self.hideAppBadge = try container.decodeIfPresent(Bool.self, forKey: .hideAppBadge) ?? d.hideAppBadge
+        self.screenEffect = try container.decodeIfPresent(Int.self, forKey: .screenEffect) ?? d.screenEffect
+        self.screenEffectIntensity = try container.decodeIfPresent(Int.self, forKey: .screenEffectIntensity) ?? d.screenEffectIntensity
+        self.keyboardStyle = try container.decodeIfPresent(Int.self, forKey: .keyboardStyle) ?? d.keyboardStyle
         self.hideStickersFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideStickersFromOthers) ?? d.hideStickersFromOthers
         self.hideGifsFromOthers = try container.decodeIfPresent(Bool.self, forKey: .hideGifsFromOthers) ?? d.hideGifsFromOthers
         self.messageTemplates = try container.decodeIfPresent([String].self, forKey: .messageTemplates) ?? d.messageTemplates

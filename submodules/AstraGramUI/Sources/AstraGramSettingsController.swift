@@ -359,7 +359,7 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
             60, 61, 62, 63, 64, 65, 73, 74, 75, 76, 77, 78, 66, 67, 68, 69, 100, 101, 102, 103, 104, 70, 71, 72,
             80, 81, 82, 85, 105, 106, 90, 91, 92,
             130, 139, 134, 133, 131, 132, 135, 136, 137, 138, 140, 141,
-            110, 111, 121, 112, 113, 114, 115, 119, 120, 122, 123, 124, 116, 117, 118, 199, 200
+            110, 184, 185, 111, 121, 112, 113, 114, 115, 119, 120, 122, 123, 124, 116, 117, 118, 199, 200
         ]
         var order: [Int32: Int] = [:]
         for (index, id) in ids.enumerated() {
@@ -536,6 +536,10 @@ private enum AstraGramSettingsEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, longTapAction: astraLongTap, action: {
                     arguments.openTool(kind)
                 })
+            case .screenEffects:
+                return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, longTapAction: astraLongTap, action: {
+                    arguments.openTool(kind)
+                })
             case .unhideMessages:
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: section, style: .blocks, disclosureStyle: .none, longTapAction: astraLongTap, action: {
                     arguments.unhideMessages()
@@ -560,6 +564,7 @@ private enum AstraGramSettingsButtonKind: Equatable {
     case glassMaterial
     case doubleTapAction
     case stickerSize
+    case screenEffects
     case videoSeek
     case chatListTitle
     case lockedChats
@@ -795,6 +800,8 @@ private func astraGramAllSettingsEntries(strings: AstraStrings, settings: AstraG
     entries.append(.flag(id: 113, section: .look, title: strings.profileMusicCapsule, value: settings.musicCapsule, enabled: true, keyPath: \.musicCapsule))
     entries.append(.flag(id: 114, section: .look, title: strings.contactsTab, value: settings.contactsTab, enabled: true, keyPath: \.contactsTab))
     entries.append(.flag(id: 115, section: .look, title: strings.callsTab, value: settings.callsTab, enabled: true, keyPath: \.callsTab))
+    entries.append(.button(id: 184, section: .look, title: strings.screenEffects, label: (AstraScreenEffect(rawValue: settings.screenEffect) ?? .off).title(isRussian: strings.isRussian), kind: .screenEffects))
+    entries.append(.button(id: 185, section: .look, title: strings.keyboardLook, label: (AstraKeyboardStyle(rawValue: settings.keyboardStyle) ?? .theme).title(isRussian: strings.isRussian), kind: .screenEffects))
     entries.append(.button(id: 119, section: .look, title: strings.glassMaterial, label: [strings.glassMaterialStandard, strings.glassMaterialClear, strings.glassMaterialMatte][max(0, min(2, settings.glassMaterial))], kind: .glassMaterial))
     entries.append(.flag(id: 120, section: .look, title: strings.springPresses, value: settings.springPresses, enabled: true, keyPath: \.springPresses))
     entries.append(.flag(id: 142, section: .look, title: strings.showAstraGiftRibbon, value: settings.showAstraGiftRibbon, enabled: true, keyPath: \.showAstraGiftRibbon))
@@ -938,6 +945,8 @@ public func astraGramSettingsController(context: AccountContext, page: AstraGram
                     })
                 ])])
                 presentControllerImpl?(actionSheet)
+            case .screenEffects:
+                presentNativeControllerImpl?(AstraEffectsPickerController(isRussian: strings.isRussian))
             case .stickerSize:
                 let actionSheet = ActionSheetController(presentationData: presentationData)
                 let current = AstraGramSettings.current.stickerSizePercent

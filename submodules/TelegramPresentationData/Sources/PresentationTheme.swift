@@ -1137,6 +1137,15 @@ public enum PresentationThemeKeyboardColor: Int32 {
     case dark = 1
     
     public var keyboardAppearance: UIKeyboardAppearance {
+        // AstraGram: the keyboard's look can be chosen apart from the theme (Settings → AstraGram → Appearance).
+        switch AstraGramSettings.current.keyboardStyle {
+        case 1:
+            return .dark
+        case 2:
+            return .light
+        default:
+            break
+        }
         switch self {
         case .light:
             return .light

@@ -524,6 +524,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             GlassBackgroundView.astraMonochrome = monochrome
         })
         let astraWindowLayer = window.layer
+        // AstraGram: snow, sakura and the other screen effects, drawn over the app.
+        AstraScreenEffects.shared.attach(to: window)
         let _ = (AstraGramSettings.signal
         |> map { settings -> (Bool, Bool) in
             return (settings.allowScreenshots, settings.streamerMode)
